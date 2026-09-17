@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="using:Sentrychan.UI.Converters"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             x:Class="Sentrychan.UI.Views.DownloadsView"
+             x:DataType="vm:DownloadsViewModel">
+    <Grid RowDefinitions="Auto,*">
+        <!-- Header -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Margin="16">
+            <TextBlock Grid.Column="0" Text="Downloads" FontSize="24" FontWeight="Bold" VerticalAlignment="Center"/>
+
+            <!-- Live aggregate throughput — only while something is actually running -->
+            <Border Grid.Column="1" Margin="12,0,0,0" Padding="8,4" CornerRadius="4"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource AccentSubtleBrush}"
+                    IsVisible="{Binding HasActiveDownloads}">
+                <TextBlock Text="{Binding TotalSpeedDisplay}" FontSize="11" FontWeight="600"
+                           Foreground="{DynamicResource AccentLightBrush}"/>
+            </Border>
+
+            <ComboBox Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center" Width="150"
+                      ItemsSource="{Binding StatusOptions}" SelectedItem="{Binding StatusFilter}">
+            </ComboBox>
+
+            <Button Grid.Column="3" Content="Pause All" Classes="ghost" Margin="0,0,8,0"
+                    Command="{Binding PauseAllCommand}" VerticalAlignment="Center"/>
+            <Button Grid.Column="4" Content="Resume All" Classes="ghost" Margin="0,0,8,0"
+                    Command="{Binding ResumeAllCommand}" VerticalAlignment="Center"/>
+            <Button Grid.Column="5" Content="Clear Failed" Classes="ghost" Margin="0,0,8,0"
+                    Command="{Binding ClearFailedCommand}" VerticalAlignment="Center"/>
+            <Button Grid.Column="6" Content="Clear Completed" Classes="ghost" Margin="0,0,8,0"
+                    Command="{Binding ClearCompletedCommand}" VerticalAlignment="Center"/>
+            <Button Grid.Column="7" Classes="ghost"
+                    Command="{Binding LoadJobsCommand}" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource RefreshRegular}" Width="11" Height="11"/>
+                    <TextBlock Text="Refresh" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- Empty State -->
+        <TextBlock Grid.Row="1" Text="No downloads yet" FontSize="16" Foreground="{DynamicResource TextSecondaryBrush}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   IsVisible="{Binding !FilteredJobs.Count}"/>
+
+        <!-- List -->
+        <ScrollViewer Grid.Row="1" IsVisible="{Binding !!FilteredJobs.Count}">
+            <ItemsControl ItemsSource="{Binding FilteredJobs}" Margin="16">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DownloadJobRowVm">
+                        <Border Background="{DynamicResource CardBackgroundBrush}" CornerRadius="8" Padding="16" Margin="0,0,0,8">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Open File"
+                                              IsEnabled="{Binding CanOpenFolder}"
+                                              Command="{Binding $parent[ItemsControl].((vm:DownloadsViewModel)DataContext).OpenFileCommand}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="Show in Folder"
+                                              IsEnabled="{Binding CanOpenFolder}"
+                                              Command="{Binding $parent[ItemsControl].((vm:DownloadsViewModel)DataContext).OpenFolderCommand}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="Copy Download Link"
+                                              Command="{Binding $parent[ItemsControl].((vm:DownloadsViewModel)DataContext).CopyLinkCommand}"
+                                              CommandParameter="{Binding}"/>
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                                <!-- Info -->
+                                <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding SeriesTitle}" FontWeight="Bold" FontSize="16"
+                                               TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="{Binding EpisodeLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        <TextBlock Text="{Binding SpeedDisplay}" Foreground="{DynamicResource AccentBrush}" FontSize="12"
+                                                   VerticalAlignment="Center" IsVisible="{Binding HasLiveStatus}"/>
+                                        <TextBlock Text="{Binding EtaDisplay}" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12"
+                                                   VerticalAlignment="Center" IsVisible="{Binding HasLiveStatus}"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding CreatedAt, StringFormat='G'}" Foreground="{DynamicResource TextMutedBrush}" FontSize="12"/>
+                                </StackPanel>
+
+                                <!-- Status Badge -->
+                                <Border Grid.Row="0" Grid.Column="1" Padding="8,4" CornerRadius="4" VerticalAlignment="Center" Margin="16,0"
+                                        Background="{Binding Status, Converter={x:Static converters:JobStatusToColorConverter.Instance}}">
+                                    <TextBlock Text="{Binding Status}" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                                </Border>
+
+                                <!-- Pause / Resume (live downloads only) -->
+                                <Button Grid.Row="0" Grid.Column="2" Classes="ghost"
+                                        VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12"
+                                        Command="{Binding $parent[UserControl].((vm:DownloadsViewModel)DataContext).TogglePauseCommand}"
+                                        CommandParameter="{Binding}"
+                                        IsVisible="{Binding HasLiveStatus}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <PathIcon Data="{StaticResource PauseRegular}" Width="10" Height="10"
+                                                  IsVisible="{Binding !IsPaused}"/>
+                                        <PathIcon Data="{StaticResource PlayRegular}" Width="10" Height="10"
+                                                  IsVisible="{Binding IsPaused}"/>
+                                        <TextBlock Text="{Binding PauseButtonText}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Retry (failed only) -->
+                                <Button Grid.Row="0" Grid.Column="3" Content="Retry" Classes="accent" VerticalAlignment="Center" Margin="0,0,8,0"
+                                        Command="{Binding $parent[UserControl].((vm:DownloadsViewModel)DataContext).RetryCommand}"
+                                        CommandParameter="{Binding Id}"
+                                        IsVisible="{Binding Status, Converter={x:Static converters:JobStatusToRetryVisibleConverter.Instance}}"/>
+
+                                <!-- Remove -->
+                                <Button Grid.Row="0" Grid.Column="4" VerticalAlignment="Center"
+                                        Background="Transparent" BorderThickness="0" Padding="6"
+                                        ToolTip.Tip="Remove (cancels the download if active)"
+                                        Command="{Binding $parent[UserControl].((vm:DownloadsViewModel)DataContext).RemoveCommand}"
+                                        CommandParameter="{Binding}">
+                                    <PathIcon Data="{StaticResource DismissRegular}" Width="11" Height="11"
+                                              Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                </Button>
+
+                                <!-- Live progress bar -->
+                                <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" ColumnDefinitions="*,Auto"
+                                      Margin="0,10,0,0" IsVisible="{Binding HasLiveStatus}">
+                                    <ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Height="6" CornerRadius="3"
+                                                 Value="{Binding ProgressFraction}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding ProgressDisplay}" FontSize="12" FontWeight="Bold"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" Margin="10,0,0,0"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

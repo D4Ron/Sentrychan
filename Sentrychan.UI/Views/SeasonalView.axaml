@@ -1,0 +1,92 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:api="using:Sentrychan.Core.Models.Api"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             x:Class="Sentrychan.UI.Views.SeasonalView"
+             x:DataType="vm:SeasonalViewModel"
+             x:CompileBindings="False">
+    <DockPanel Margin="24">
+        <!-- Header -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,20">
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Seasonal Anime" FontSize="22" FontWeight="Bold"/>
+                <TextBlock Text="Browse upcoming and currently airing anime" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="13"/>
+        </StackPanel>
+        
+        <ComboBox Grid.Column="1" ItemsSource="{Binding YearOptions}" SelectedItem="{Binding SelectedYear}" Width="100" Margin="0,0,8,0"/>
+        <ComboBox Grid.Column="2" ItemsSource="{Binding SeasonOptions}" SelectedItem="{Binding SelectedSeason}" Width="120" Margin="0,0,8,0"/>
+        <Button Grid.Column="3" Content="Browse" Command="{Binding LoadCommand}" Classes="accent"/>
+    </Grid>
+
+    <!-- Airing-day tabs -->
+    <ListBox DockPanel.Dock="Top"
+             ItemsSource="{Binding DayOptions}"
+             SelectedItem="{Binding SelectedDay}"
+             Background="Transparent" Margin="0,0,0,14">
+        <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="4"/>
+            </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+        <ListBox.Styles>
+            <Style Selector="ListBoxItem">
+                <Setter Property="Padding" Value="14,6"/>
+                <Setter Property="CornerRadius" Value="16"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+            <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="CornerRadius" Value="16"/>
+            </Style>
+        </ListBox.Styles>
+    </ListBox>
+
+    <!-- Loading Overlay -->
+    <Panel>
+        <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" 
+                     IsHitTestVisible="False" VerticalAlignment="Top"/>
+        
+        <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding AnimeList}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel HorizontalAlignment="Center"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SeasonalAnimeVm">
+                        <Border Width="160" Margin="10" Background="{DynamicResource CardBackgroundBrush}" 
+                                CornerRadius="8" BoxShadow="0 4 10 0 #40000000"
+                                DoubleTapped="OnDoubleTapped">
+                            <StackPanel>
+                                <Border Height="220" CornerRadius="8,8,0,0" ClipToBounds="True">
+                                    <Panel>
+                                        <controls:AsyncImage Url="{Binding Anime.LargeImageUrl}" Stretch="UniformToFill"/>
+                                        <Border CornerRadius="12" Background="#00C853" Margin="8" Width="24" Height="24" HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding IsInLibrary}">
+                                            <Path Data="M3 8l3 3 6-6" Stroke="White" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </Panel>
+                                </Border>
+                                <Border Padding="10">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Anime.DisplayTitle}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" Height="40" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                        <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="{Binding Anime.Status}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding Anime.Broadcast.Formatted}" FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="+" Classes="accent" Command="{Binding AddToLibraryCommand}" Width="32" Height="32" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" IsVisible="{Binding !IsInLibrary}"/>
+                                            <ProgressBar Grid.Column="1" IsIndeterminate="True" Width="24" Height="24" VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding IsAdding}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Panel>
+    </DockPanel>
+</UserControl>

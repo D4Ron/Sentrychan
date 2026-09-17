@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+/publish/
+/releases/
+.vs/
+
+# Credentials - never commit.
+/Secrets/
+*client_secret*.json
+
+# Logs and local noise
+*.log
+
+# Bundled binary that is not ours to redistribute
+Sentrychan.App/Assets/frpc.exe
+# Internal working notes: monetization strategy, security posture, unfinished work.
+# Deliberately not published - see the note in the first commit's review.
+CLAUDE.md

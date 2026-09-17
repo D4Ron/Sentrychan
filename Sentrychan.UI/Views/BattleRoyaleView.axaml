@@ -1,0 +1,111 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             x:Class="Sentrychan.UI.Views.BattleRoyaleView"
+             x:DataType="vm:BattleRoyaleViewModel"
+             x:CompileBindings="False">
+    <UserControl.Styles>
+        <Style Selector="Button.count">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="22,12"/><Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="600"/><Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel Margin="24">
+
+        <!-- SETUP -->
+        <StackPanel IsVisible="{Binding IsSetup}" Spacing="16" MaxWidth="460" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Text="🏆  OP Battle Royale" FontSize="26" FontWeight="Bold" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock TextWrapping="Wrap" TextAlignment="Center" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="A bracket of random openings. Listen to two at a time and keep the one you like more — until a single favourite is crowned."/>
+            <TextBlock Text="Bracket size" FontSize="13" FontWeight="600" HorizontalAlignment="Center"
+                       Margin="0,4,0,0" Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <ItemsControl ItemsSource="{Binding SizeOptions}" HorizontalAlignment="Center">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Classes="count" Content="{Binding}"
+                                Command="{Binding $parent[ItemsControl].DataContext.StartCommand}" CommandParameter="{Binding}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Classes="accent" Content="⚡  Quick Start  (16)" HorizontalAlignment="Center"
+                    HorizontalContentAlignment="Center" Padding="26,12" FontSize="15" Command="{Binding QuickStartCommand}"/>
+            <Button Classes="ghost" Content="🎬  Switch to Timed Quiz" HorizontalAlignment="Center"
+                    Padding="18,9" Command="{Binding OpenQuizCommand}"/>
+        </StackPanel>
+
+        <!-- LOADING -->
+        <StackPanel IsVisible="{Binding IsLoadingPhase}" Spacing="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <ProgressBar IsIndeterminate="True" Width="200" Height="4"/>
+            <TextBlock Text="{Binding LoadStatus}" FontSize="13" HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+
+        <!-- BRACKET -->
+        <Grid IsVisible="{Binding IsBracket}" RowDefinitions="Auto,*,Auto">
+            <StackPanel Grid.Row="0" Spacing="1" Margin="0,0,0,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="{Binding RoundName}" FontSize="18" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <Button Grid.Column="1" Classes="ghost" Content="Quit" Padding="12,6" Command="{Binding QuitCommand}"/>
+                </Grid>
+                <TextBlock Text="{Binding MatchLabel}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}"/>
+            </StackPanel>
+
+            <!-- Now-playing video/audio host -->
+            <Border Grid.Row="1" CornerRadius="12" ClipToBounds="True" Background="#000000" MinHeight="180">
+                <Panel>
+                    <controls:VideoPlayerControl x:Name="Player"/>
+                    <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="🎧" FontSize="46" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding NowPlaying}" FontSize="14" FontWeight="600" HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="520" Foreground="#E0E0E0"/>
+                    </StackPanel>
+                </Panel>
+            </Border>
+
+            <!-- The two contenders -->
+            <Grid Grid.Row="2" ColumnDefinitions="*,Auto,*" Margin="0,14,0,0">
+                <Border Grid.Column="0" Background="{DynamicResource CardBackgroundBrush}" CornerRadius="12" Padding="14">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="{Binding LeftName}" FontSize="14" FontWeight="600" TextWrapping="Wrap"
+                                   TextAlignment="Center" Height="42" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <Button Classes="ghost" Content="▶ Play" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" Command="{Binding PlayLeftCommand}"/>
+                        <Button Classes="accent" Content="Pick this ♥" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" Command="{Binding PickLeftCommand}"/>
+                    </StackPanel>
+                </Border>
+                <TextBlock Grid.Column="1" Text="VS" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"
+                           Margin="16,0" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                <Border Grid.Column="2" Background="{DynamicResource CardBackgroundBrush}" CornerRadius="12" Padding="14">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="{Binding RightName}" FontSize="14" FontWeight="600" TextWrapping="Wrap"
+                                   TextAlignment="Center" Height="42" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <Button Classes="ghost" Content="▶ Play" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" Command="{Binding PlayRightCommand}"/>
+                        <Button Classes="accent" Content="Pick this ♥" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" Command="{Binding PickRightCommand}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- CHAMPION -->
+        <StackPanel IsVisible="{Binding IsChampion}" Spacing="14" MaxWidth="460" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Text="🏆  Your favourite opening" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock Text="{Binding ChampionName}" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center"
+                       TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource AccentBrush}"/>
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,6,0,0">
+                <Button Classes="accent" Content="New bracket" Padding="22,10" Command="{Binding QuickStartCommand}"/>
+                <Button Classes="ghost" Content="Change size" Padding="18,10" Command="{Binding PlayAgainCommand}"/>
+            </StackPanel>
+        </StackPanel>
+    </Panel>
+</UserControl>

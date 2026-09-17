@@ -1,0 +1,622 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:Sentrychan.UI.ViewModels"
+        xmlns:views="clr-namespace:Sentrychan.UI.Views"
+        xmlns:controls="clr-namespace:Sentrychan.UI.Controls"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="720"
+        x:Class="Sentrychan.UI.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Sentrychan"
+        Icon="avares://Sentrychan.UI/Assets/icon.ico"
+        Background="{DynamicResource AppBackgroundBrush}"
+        MinWidth="860" MinHeight="560"
+        Width="1200" Height="720"
+        xmlns:models="using:Sentrychan.Core.Models"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <!-- Converter for sidebar width -->
+        <!-- In a real app we'd use a BoolToDoubleConverter, but we can do it with a simple binding or style -->
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid" ColumnDefinitions="Auto,*">
+        <!-- 5.3 Sidebar -->
+        <Border Grid.Column="0"
+                Width="{Binding SidebarWidth}"
+                Background="{DynamicResource SurfaceBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,1,0"
+                ClipToBounds="True">
+            <Border.Transitions>
+                <Transitions>
+                    <DoubleTransition Property="Width" Duration="0:0:0.22" Easing="CubicEaseInOut"/>
+                </Transitions>
+            </Border.Transitions>
+            
+            <Grid RowDefinitions="Auto,*,Auto">
+                <!-- Logo Row -->
+                <Border Height="64" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="8,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+                        <Border x:Name="LogoMark"
+                                Classes="logo-breathing"
+                                Width="40" Height="40" CornerRadius="20"
+                                Background="#0B0D14" ClipToBounds="True"
+                                PointerPressed="LogoMark_PointerPressed">
+                            <Grid>
+                                <TextBlock x:Name="LogoInitial" Text="S"
+                                           FontSize="14" FontWeight="Bold" Foreground="White"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           IsVisible="False"/>
+                                <Image x:Name="LogoImage" Source="avares://Sentrychan.UI/Assets/logo.png"
+                                       Width="40" Height="40" Stretch="UniformToFill"/>
+                            </Grid>
+                        </Border>
+                        <TextBlock x:Name="LogoText" Text="Sentrychan" IsVisible="{Binding IsSidebarExpanded}"
+                                   FontSize="17" FontWeight="700" Foreground="{DynamicResource TextPrimaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="v1" IsVisible="{Binding IsSidebarExpanded}"
+                                   FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="2,5,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Nav Area -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden">
+                    <StackPanel Spacing="3" Margin="8,14">
+                        <!-- Navigation Items -->
+                        <controls:NavItem Icon="LibraryRegular" Label="Library" IsActive="True"
+                                          Command="{Binding ShowSeriesCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="MangaRegular" Label="Manga"
+                                          Command="{Binding ShowMangaCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="BookRegular" Label="Novels"
+                                          Command="{Binding ShowNovelsCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="PlayRegular" Label="Quiz"
+                                          Command="{Binding ShowQuizCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="SparkleRegular" Label="Latest"
+                                          Command="{Binding ShowLatestCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="SearchRegular" Label="Search"
+                                          Command="{Binding ShowDownloadHubCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="FolderRegular" Label="Files"
+                                          Command="{Binding ShowFilesCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="CalendarRegular" Label="Seasonal"
+                                          Command="{Binding ShowSeasonalCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="NewsRegular" Label="News"
+                                          Command="{Binding ShowNewsCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <!-- Watch Party temporarily hidden (feature kept, nav removed) —
+                             re-enable by restoring this NavItem:
+                        <controls:NavItem Icon="PeopleRegular" Label="Watch Party"
+                                          Command="{Binding ShowWatchPartyCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        -->
+                        <controls:NavItem Icon="SettingsRegular" Label="Settings"
+                                          Command="{Binding ShowSettingsCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Monitor Strip + Support -->
+                <Border Grid.Row="2" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="11,10">
+                    <StackPanel Spacing="8">
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <Border Classes="breathing" Width="6" Height="6" CornerRadius="3" Background="{DynamicResource StatusGreenBrush}"/>
+                                <TextBlock Text="Monitoring Active" IsVisible="{Binding IsSidebarExpanded}"
+                                           FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding LastCheckText}" IsVisible="{Binding IsSidebarExpanded}"
+                                       FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Main Content area 5.2 -->
+        <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+
+            <!-- Top Bar layout: horizontal navigation (alternative to the sidebar) -->
+            <Border Grid.Row="0" Height="52" Background="{DynamicResource SurfaceBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                    IsVisible="{Binding IsTopBarLayout}">
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="14,0">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+                        <Border Width="30" Height="30" CornerRadius="15" ClipToBounds="True" Background="#0B0D14">
+                            <Image Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
+                        </Border>
+                        <TextBlock Text="Sentrychan" FontSize="15" FontWeight="700"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <controls:NavItem Icon="LibraryRegular" Label="Library" Command="{Binding ShowSeriesCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="MangaRegular" Label="Manga" Command="{Binding ShowMangaCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="BookRegular" Label="Novels" Command="{Binding ShowNovelsCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="PlayRegular" Label="Quiz" Command="{Binding ShowQuizCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="SparkleRegular" Label="Latest" Command="{Binding ShowLatestCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="SearchRegular" Label="Search" Command="{Binding ShowDownloadHubCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="FolderRegular" Label="Files" Command="{Binding ShowFilesCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="CalendarRegular" Label="Seasonal" Command="{Binding ShowSeasonalCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="NewsRegular" Label="News" Command="{Binding ShowNewsCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="SettingsRegular" Label="Settings" Command="{Binding ShowSettingsCommand}" IsExpanded="True"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- 5.4 Topbar -->
+            <Border Grid.Row="1" Height="46" Background="{DynamicResource SurfaceBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="16,0">
+                    <!-- Col 0: Hide sidebar (sidebar layout only) -->
+                    <Button Grid.Column="0" Width="28" Height="28" Click="OnHideSidebar"
+                            IsVisible="{Binding IsSidebarLayout}"
+                            Background="{DynamicResource AccentSubtleBrush}"
+                            BorderBrush="{DynamicResource BorderEmphasisBrush}" BorderThickness="1"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            ToolTip.Tip="Hide sidebar">
+                        <Path Fill="{DynamicResource TextSecondaryBrush}" Data="{StaticResource ChevronRight}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Path.RenderTransform>
+                                <RotateTransform Angle="180"/>
+                            </Path.RenderTransform>
+                        </Path>
+                    </Button>
+
+                    <!-- Col 1: Section Title + Count -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8" Margin="16,0,0,0">
+                        <TextBlock Text="{Binding CurrentPageTitle}" FontSize="17" FontWeight="700" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Text="{Binding CurrentPageCountText}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Bottom" Margin="0,0,0,2"/>
+                    </StackPanel>
+
+                    <!-- Col 2: Spacer (*) -->
+
+                    <!-- Col 3: Search Box -->
+                    <TextBox Grid.Column="3" MaxWidth="240" Width="200" Height="28" Watermark="Search library..."
+                             Text="{Binding LibrarySearchText}"
+                             IsVisible="{Binding IsShowingLibrary}"
+                             VerticalAlignment="Center" Margin="0,0,16,0"/>
+
+                    <!-- Col 4: Rescan Library -->
+                    <Button Grid.Column="4" Content="Scan" Classes="ghost"
+                            Command="{Binding RescanLibraryCommand}"
+                            IsVisible="{Binding IsShowingLibrary}"
+                            ToolTip.Tip="Rescan the anime folder: sync progress with files on disk, detect deleted or unknown folders"
+                            Height="28" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                    <!-- Col 5: Add Series Button -->
+                    <Button Grid.Column="5" Content="+ Add Series" Classes="accent"
+                            Command="{Binding AddSeriesCommand}" Height="28" FontSize="12" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- 5.5 Content Area -->
+                <Grid Grid.Row="2" RowDefinitions="*">
+                <Panel Grid.Row="0">
+                    <!-- Switchable Views -->
+                    <ContentControl Content="{Binding WatchPartyVm}"
+                                    IsVisible="{Binding IsShowingWatchParty}">
+                        <ContentControl.DataTemplates>
+                            <DataTemplate DataType="vm:WatchPartyViewModel">
+                                <views:WatchPartyView/>
+                            </DataTemplate>
+                        </ContentControl.DataTemplates>
+                    </ContentControl>
+                    <Panel IsVisible="{Binding IsShowingFiles}">
+                        <views:FileManagementView DataContext="{Binding FileManagementVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingSeasonal}">
+                        <views:SeasonalView DataContext="{Binding SeasonalVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingLatest}">
+                        <views:LatestArrivalsView DataContext="{Binding LatestArrivalsVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingNews}">
+                        <views:NewsView DataContext="{Binding NewsVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingManga}">
+                        <views:MangaLibraryView DataContext="{Binding MangaLibraryVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingNovels}">
+                        <views:MangaLibraryView DataContext="{Binding NovelLibraryVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingQuiz}">
+                        <views:AnimeQuizView DataContext="{Binding AnimeQuizVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingBattle}">
+                        <views:BattleRoyaleView DataContext="{Binding BattleRoyaleVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingMangaDetail}">
+                        <views:MangaDetailView DataContext="{Binding MangaDetailVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingDownloadHub}">
+                        <views:DownloadHubView DataContext="{Binding DownloadHubVm}"/>
+                    </Panel>
+
+                    <!-- Library view: grid + Airing Today rail (drag the divider to resize) -->
+                    <Grid IsVisible="{Binding IsShowingLibrary}" ColumnDefinitions="*,4,320">
+                    <ScrollViewer Grid.Column="0"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="24" Margin="24,16">
+
+                            <!-- Category filter chips -->
+                            <ListBox ItemsSource="{Binding LibraryCategories}"
+                                     SelectedItem="{Binding LibraryCategory}"
+                                     Background="Transparent" Padding="0" Margin="0,0,0,-8">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="6"/>
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.Styles>
+                                    <Style Selector="ListBoxItem">
+                                        <Setter Property="Padding" Value="14,6"/>
+                                        <Setter Property="CornerRadius" Value="16"/>
+                                        <Setter Property="FontSize" Value="12"/>
+                                    </Style>
+                                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                                        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                        <Setter Property="CornerRadius" Value="16"/>
+                                    </Style>
+                                </ListBox.Styles>
+                            </ListBox>
+
+                            <!-- S2: Recently Added Section (first) -->
+                            <StackPanel Spacing="12" IsVisible="{Binding ShowRecentSection}">
+                                <TextBlock Text="Recently Added" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <ItemsControl ItemsSource="{Binding RecentList}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:Series">
+                                            <controls:SeriesCard Margin="0,0,16,16"
+                                                OpenDetailRequested="OnSeriesDetailRequested"
+                                                OpenDetailCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).OpenSeriesDetailsCommand}"
+                                                OpenPosterOptionsCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ChangePosterCommand}"
+                                                DownloadPosterCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadPosterCommand}"
+                                                LookForEpisodeCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).LookForEpisodeCommand}"
+                                                DownloadAllCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadAllMissingCommand}"
+                                                RemoveSeriesCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveSeriesCommand}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- S2: Currently Airing Section -->
+                            <StackPanel Spacing="12" IsVisible="{Binding ShowAiringSection}">
+                                <TextBlock Text="Currently Airing" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <ItemsControl ItemsSource="{Binding AiringList}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:Series">
+                                            <controls:SeriesCard Margin="0,0,16,16"
+                                                OpenDetailRequested="OnSeriesDetailRequested"
+                                                OpenDetailCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).OpenSeriesDetailsCommand}"
+                                                OpenPosterOptionsCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ChangePosterCommand}"
+                                                DownloadPosterCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadPosterCommand}"
+                                                LookForEpisodeCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).LookForEpisodeCommand}"
+                                                DownloadAllCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadAllMissingCommand}"
+                                                RemoveSeriesCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveSeriesCommand}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- S2: Completed Section -->
+                            <StackPanel Spacing="12" IsVisible="{Binding ShowCompletedSection}">
+                                <TextBlock Text="Completed" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <ItemsControl ItemsSource="{Binding CompletedList}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:Series">
+                                            <controls:SeriesCard Margin="0,0,16,16"
+                                                OpenDetailRequested="OnSeriesDetailRequested"
+                                                OpenDetailCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).OpenSeriesDetailsCommand}"
+                                                OpenPosterOptionsCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ChangePosterCommand}"
+                                                DownloadPosterCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadPosterCommand}"
+                                                LookForEpisodeCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).LookForEpisodeCommand}"
+                                                DownloadAllCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadAllMissingCommand}"
+                                                RemoveSeriesCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveSeriesCommand}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Other — upcoming/unknown status. Catch-all so a series
+                                 can never vanish from the library just because its
+                                 AiringStatus is null or unrecognised. -->
+                            <StackPanel Spacing="12" IsVisible="{Binding ShowOtherSection}">
+                                <TextBlock Text="Other" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <ItemsControl ItemsSource="{Binding OtherList}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:Series">
+                                            <controls:SeriesCard Margin="0,0,16,16"
+                                                OpenDetailRequested="OnSeriesDetailRequested"
+                                                OpenDetailCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).OpenSeriesDetailsCommand}"
+                                                OpenPosterOptionsCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ChangePosterCommand}"
+                                                DownloadPosterCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadPosterCommand}"
+                                                LookForEpisodeCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).LookForEpisodeCommand}"
+                                                DownloadAllCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadAllMissingCommand}"
+                                                RemoveSeriesCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveSeriesCommand}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- S2: Censored Section -->
+                            <StackPanel Spacing="12" IsVisible="{Binding ShowCensoredSection}">
+                                <TextBlock Text="Censored " FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource SM_AccentBrush}"/>
+                                <ItemsControl ItemsSource="{Binding CensoredList}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:Series">
+                                            <controls:SeriesCard Margin="0,0,16,16"
+                                                OpenDetailRequested="OnSeriesDetailRequested"
+                                                OpenDetailCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).OpenSeriesDetailsCommand}"
+                                                OpenPosterOptionsCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ChangePosterCommand}"
+                                                DownloadPosterCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadPosterCommand}"
+                                                LookForEpisodeCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).LookForEpisodeCommand}"
+                                                DownloadAllCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadAllMissingCommand}"
+                                                RemoveSeriesCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveSeriesCommand}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- S2: Fallback: All Series (if others empty) -->
+                            <StackPanel Spacing="12" IsVisible="{Binding ShowAllSeriesFallback}">
+                                <TextBlock Text="My Collection" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <ItemsControl ItemsSource="{Binding FilteredSeriesList}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:CompileBindings="False" x:DataType="models:Series">
+                                            <controls:SeriesCard Margin="0,0,16,16"
+                                                OpenDetailRequested="OnSeriesDetailRequested"
+                                                OpenDetailCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).OpenSeriesDetailsCommand}"
+                                                OpenPosterOptionsCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ChangePosterCommand}"
+                                                DownloadPosterCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadPosterCommand}"
+                                                LookForEpisodeCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).LookForEpisodeCommand}"
+                                                DownloadAllCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DownloadAllMissingCommand}"
+                                                RemoveSeriesCommand="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).RemoveSeriesCommand}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Draggable divider -->
+                    <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"
+                                  Background="{DynamicResource BorderSubtleBrush}"/>
+
+                    <!-- Airing Today rail -->
+                    <Border Grid.Column="2"
+                            Background="{DynamicResource SurfaceBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            BorderThickness="1,0,0,0">
+                        <Grid RowDefinitions="Auto,*">
+                            <StackPanel Grid.Row="0" Margin="16,16,16,10" Spacing="2">
+                                <TextBlock Text="Airing Today" FontSize="15" FontWeight="Bold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding TodayLabel}" FontSize="11"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            </StackPanel>
+
+                            <!-- Empty / loading state -->
+                            <TextBlock Grid.Row="1" Text="{Binding AiringTodayStatus}"
+                                       IsVisible="{Binding !HasAiringToday}"
+                                       Margin="16,8,16,0" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+
+                            <ScrollViewer Grid.Row="1" Padding="10,0,10,12"
+                                          IsVisible="{Binding HasAiringToday}">
+                                <ItemsControl ItemsSource="{Binding AiringTodayList}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:AiringTodayRowVm">
+                                            <Button Command="{Binding OpenCommand}"
+                                                    Background="Transparent" BorderThickness="0"
+                                                    Padding="6" Margin="0,0,0,2" HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left" Cursor="Hand">
+                                                <Grid ColumnDefinitions="Auto,*,Auto" >
+                                                    <Border Grid.Column="0" Width="34" Height="46" CornerRadius="4"
+                                                            ClipToBounds="True" Margin="0,0,10,0"
+                                                            Background="{DynamicResource CardBackgroundBrush}">
+                                                        <Panel>
+                                                            <controls:AsyncImage Url="{Binding PosterUrl}" Stretch="UniformToFill"/>
+                                                            <Border Background="#00C853" Width="14" Height="14" CornerRadius="7"
+                                                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                                    Margin="0,-3,-3,0" IsVisible="{Binding InLibrary}">
+                                                                <Path Data="M2.5,6 L5,8.5 L9.5,3.5" Stroke="White" StrokeThickness="1.4"
+                                                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                        </Panel>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12"
+                                                               VerticalAlignment="Center" TextWrapping="Wrap" MaxLines="2"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                    <Border Grid.Column="2" Background="{DynamicResource AccentSubtleBrush}"
+                                                            CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                        <TextBlock Text="{Binding AirTime}" FontSize="11" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource AccentLightBrush}"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                    </Grid>
+
+                    <!-- S3: Empty State Messaging -->
+                    <Panel IsVisible="{Binding IsShowingLibraryEmptyState}" IsHitTestVisible="False" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <StackPanel Spacing="16" HorizontalAlignment="Center">
+                            <Image Source="avares://Sentrychan.UI/Assets/logo.png" Width="88" Height="88"
+                                   Opacity="0.35" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Your library is empty" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Text="Search and add your favorite anime to start monitoring episodes." 
+                                       FontSize="14" HorizontalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" TextAlignment="Center"/>
+                            <Button Content="+ Add My First Series" Classes="accent" Command="{Binding AddSeriesCommand}" 
+                                    HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Panel>
+
+                    <!-- Fix 3: Series Detail View -->
+                    <views:SeriesDetailView IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsShowingSeriesDetail}" 
+                                           DataContext="{Binding SeriesDetailVm}"/>
+                </Panel>
+                </Grid>
+        </Grid>
+
+        <!-- New Episodes inbox — floating, non-blocking. Anchored bottom-right so the
+             library stays fully visible. Collapses to its header; scrolls when many. -->
+        <Border Grid.ColumnSpan="2"
+                IsVisible="{Binding InboxVisible}"
+                ZIndex="500"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,20,20" Width="380"
+                Background="{DynamicResource SurfaceBackgroundBrush}"
+                BorderBrush="{DynamicResource AccentBrush}"
+                BorderThickness="1" CornerRadius="12"
+                BoxShadow="0 10 30 0 #66000000">
+            <Grid RowDefinitions="Auto,Auto">
+                <!-- Header -->
+                <Border Grid.Row="0" Background="{DynamicResource AccentSubtleBrush}"
+                        CornerRadius="11,11,0,0" Padding="14,10">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="New Episodes" FontSize="13" FontWeight="Bold"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <Border Background="{DynamicResource AccentBrush}" CornerRadius="9"
+                                    Padding="6,1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding PendingConfirms.Count}" FontSize="11"
+                                           FontWeight="Bold" Foreground="White"/>
+                            </Border>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Download all" Classes="accent"
+                                FontSize="11" Padding="9,4" Margin="0,0,6,0"
+                                Click="OnDownloadAllPending"
+                                ToolTip.Tip="Download every pending episode"/>
+                        <Button Grid.Column="2" Width="26" Height="26" Padding="0"
+                                Background="Transparent" BorderThickness="0"
+                                Click="OnTogglePendingInbox"
+                                ToolTip.Tip="Collapse / expand">
+                            <Path HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Fill="{DynamicResource TextSecondaryBrush}"
+                                  Data="{StaticResource ChevronRight}">
+                                <Path.RenderTransform>
+                                    <RotateTransform Angle="{Binding IsPendingInboxExpanded, Converter={StaticResource BoolToDoubleConverter}, ConverterParameter=90|270}"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </Button>
+                        <Button Grid.Column="3" Width="26" Height="26" Padding="0"
+                                Background="Transparent" BorderThickness="0"
+                                Click="OnHideInbox" ToolTip.Tip="Hide">
+                            <PathIcon Data="{StaticResource DismissRegular}" Width="10" Height="10"
+                                      Foreground="{DynamicResource TextTertiaryBrush}"/>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- Scrollable compact list -->
+                <ScrollViewer Grid.Row="1" MaxHeight="380"
+                              IsVisible="{Binding IsPendingInboxExpanded}"
+                              VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding PendingConfirms}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DownloadConfirmVm">
+                                <Border Padding="12,10"
+                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                        BorderThickness="0,0,0,1">
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <Border Grid.Column="0" Width="42" Height="58" CornerRadius="4"
+                                                ClipToBounds="True" Margin="0,0,10,0">
+                                            <Image Source="{Binding PosterPath, Converter={StaticResource PathToBitmapConverter}}" Stretch="UniformToFill"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding SeriesTitle}" FontSize="12.5" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis" MaxLines="1"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding EpisodeLabel}" FontSize="11" Foreground="{DynamicResource AccentBrush}"/>
+                                                <Border Background="{DynamicResource AccentSubtleBrush}" CornerRadius="3" Padding="5,1"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding ReleaseGroup}" FontSize="9.5"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,3,0,0">
+                                                <Button Content="&#x2B07; Get" Command="{Binding DownloadCommand}" Classes="accent" FontSize="11" Padding="9,3"/>
+                                                <Button Content="Skip" Command="{Binding SkipOnceCommand}" Background="Transparent" Foreground="{DynamicResource TextSecondaryBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="4" FontSize="11" Padding="9,3" ToolTip.Tip="Skip this episode once"/>
+                                                <Button Content="Auto" Command="{Binding AutoDownloadCommand}" Background="Transparent" Foreground="{DynamicResource TextSecondaryBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="4" FontSize="11" Padding="9,3" ToolTip.Tip="Always auto-download this series"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- Reopen pill — shown when the inbox is hidden but episodes are pending -->
+        <Button Grid.ColumnSpan="2" IsVisible="{Binding InboxPillVisible}" ZIndex="500"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,20"
+                Background="{DynamicResource AccentBrush}" Foreground="White"
+                CornerRadius="18" Padding="14,9" Cursor="Hand"
+                Click="OnShowInbox" ToolTip.Tip="Show pending episodes">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="New episodes" FontSize="12.5" FontWeight="SemiBold"/>
+                <Border Background="#40FFFFFF" CornerRadius="9" Padding="6,1">
+                    <TextBlock Text="{Binding PendingConfirms.Count}" FontSize="11" FontWeight="Bold"/>
+                </Border>
+            </StackPanel>
+        </Button>
+
+        <!-- Sidebar reveal tab — shown when the sidebar is fully hidden -->
+        <Button Grid.Column="0" IsVisible="{Binding ShowSidebarReveal}" ZIndex="400"
+                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,8,0,0"
+                Width="20" Height="46" Padding="0" Click="OnRevealSidebar"
+                Background="{DynamicResource AccentSubtleBrush}"
+                BorderBrush="{DynamicResource BorderEmphasisBrush}" BorderThickness="0,1,1,1"
+                CornerRadius="0,6,6,0" ToolTip.Tip="Show sidebar" Content="⟩"/>
+
+        <!-- Toast host — top-right, non-blocking transient feedback -->
+        <controls:NotificationToast Grid.ColumnSpan="2" x:Name="Toast"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Margin="0,56,20,0" ZIndex="600" IsHitTestVisible="False"/>
+
+        <!-- Manga reader — full-window takeover (covers the sidebar too) -->
+        <Panel Grid.Column="0" Grid.ColumnSpan="2" ZIndex="500"
+               IsVisible="{Binding IsShowingMangaReader}">
+            <views:MangaReaderView DataContext="{Binding MangaReaderVm}"/>
+        </Panel>
+
+        <!-- Overlays -->
+        <controls:WelcomeOverlay Grid.ColumnSpan="2" x:Name="WelcomeOverlay" IsVisible="False" ZIndex="999"/>
+    </Grid>
+</Window>

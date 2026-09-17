@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- This assembly is the loadable "source pack": it is NOT referenced by the app,
+         so the shipped app contains no sources unless this DLL is placed in a sources
+         folder (bundled for beta, user-imported for the public build). -->
+    <AssemblyName>Sentrychan.Sources</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sentrychan.Core\Sentrychan.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sentrychan.Core\Sentrychan.Core.csproj" />
+    <ProjectReference Include="..\Sentrychan.UI\Sentrychan.UI.csproj" />
+  </ItemGroup>
+
+  <!-- The source pack is built but NOT referenced (its types are never compiled in), so the
+       app carries no sources. When IncludeSources != false (default: dev + beta), its DLL is
+       bundled into sources/ next to the exe and auto-seeds the user folder on first run.
+       Public build: `dotnet publish -p:IncludeSources=false` → nothing bundled, source-less app. -->
+  <ItemGroup Condition="'$(IncludeSources)' != 'false'">
+    <ProjectReference Include="..\Sentrychan.Sources\Sentrychan.Sources.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="BundleSourcePack" AfterTargets="Build" Condition="'$(IncludeSources)' != 'false'">
+    <ItemGroup>
+      <_SourcePackDll Include="$(MSBuildThisFileDirectory)..\Sentrychan.Sources\bin\$(Configuration)\net9.0\Sentrychan.Sources.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)sources" />
+    <Copy SourceFiles="@(_SourcePackDll)" DestinationFolder="$(OutDir)sources" SkipUnchangedFiles="true"
+          Condition="Exists('%(_SourcePackDll.Identity)')" />
+  </Target>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <Content Include="Assets\frpc.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.3.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="8.0.0" />
+    <PackageReference Include="Refit" Version="7.2.22" />
+    <PackageReference Include="Refit.HttpClientFactory" Version="7.2.22" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Product>Sentrychan</Product>
+  </PropertyGroup>
+
+</Project>

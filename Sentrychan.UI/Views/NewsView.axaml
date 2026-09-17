@@ -1,0 +1,92 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             x:Class="Sentrychan.UI.Views.NewsView"
+             x:DataType="vm:NewsViewModel">
+
+    <UserControl.Styles>
+        <!-- Hover lift for article cards -->
+        <Style Selector="Border.newscard">
+            <Setter Property="RenderTransform" Value="none"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="CubicEaseOut"/>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.18"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.newscard:pointerover">
+            <Setter Property="RenderTransform" Value="translateY(-2px)"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel Margin="24">
+        <!-- Header -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="News" FontSize="22" FontWeight="Bold"/>
+                <TextBlock Text="Latest from the anime world · Anime News Network · click a card to expand"
+                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="13"/>
+            </StackPanel>
+            <Button Grid.Column="1" Command="{Binding RefreshCommand}"
+                    Content="Refresh"
+                    Classes="ghost" IsEnabled="{Binding !IsLoading}" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Loading / status -->
+        <Panel DockPanel.Dock="Top" Margin="0,0,0,12" IsVisible="{Binding IsLoading}">
+            <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+                <ProgressBar IsIndeterminate="True" Width="100"/>
+                <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Panel>
+        <TextBlock DockPanel.Dock="Top" Text="{Binding StatusMessage}"
+                   Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center"
+                   IsVisible="{Binding !IsLoading}"/>
+
+        <!-- Article cards -->
+        <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Items}" MaxWidth="820" HorizontalAlignment="Center">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NewsItemVm">
+                        <Border Classes="newscard"
+                                Background="{DynamicResource CardBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
+                                CornerRadius="10" Padding="18,14" Margin="0,0,0,10"
+                                Tapped="OnCardTapped">
+                            <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="{Binding Title}"
+                                               FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    <StackPanel Grid.Column="1" Spacing="2" Margin="12,2,0,0"
+                                                HorizontalAlignment="Right">
+                                        <TextBlock Text="{Binding TimeAgo}" FontSize="11"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"
+                                                   HorizontalAlignment="Right"/>
+                                        <TextBlock Text="{Binding ExpandHint}" FontSize="10"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"
+                                                   HorizontalAlignment="Right"
+                                                   IsVisible="{Binding HasSummary}"/>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="{Binding Summary}" FontSize="12.5" TextWrapping="Wrap"
+                                           MaxLines="{Binding SummaryMaxLines}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           IsVisible="{Binding HasSummary}"/>
+                                <Button Content="Read full article →" Classes="ghost" FontSize="12" Padding="0,2"
+                                        Background="Transparent" BorderThickness="0"
+                                        Foreground="{DynamicResource AccentBrush}"
+                                        Command="{Binding OpenCommand}"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

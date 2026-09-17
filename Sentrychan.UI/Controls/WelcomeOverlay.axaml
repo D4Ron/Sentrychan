@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="Sentrychan.UI.Controls.WelcomeOverlay">
+    <Grid Name="RootGrid" Background="{DynamicResource AppBackgroundBrush}">
+        <!-- Scanlines -->
+        <Border Height="2" Background="{DynamicResource AccentBrush}" Opacity="0.05" IsHitTestVisible="False" VerticalAlignment="Top" Margin="0,100,0,0">
+            <Border.RenderTransform>
+                <RotateTransform Angle="-0.5"/>
+            </Border.RenderTransform>
+        </Border>
+        <Border Height="2" Background="{DynamicResource AccentBrush}" Opacity="0.05" IsHitTestVisible="False" VerticalAlignment="Top" Margin="0,250,0,0">
+            <Border.RenderTransform>
+                <RotateTransform Angle="0.8"/>
+            </Border.RenderTransform>
+        </Border>
+        <Border Height="2" Background="{DynamicResource AccentBrush}" Opacity="0.05" IsHitTestVisible="False" VerticalAlignment="Bottom" Margin="0,0,0,150">
+            <Border.RenderTransform>
+                <RotateTransform Angle="0.3"/>
+            </Border.RenderTransform>
+        </Border>
+        
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="0">
+            <Grid Width="100" Height="100">
+                <Image Name="LogoImage" 
+                       Source="avares://Sentrychan.UI/Assets/sentrykun_logo.png" 
+                       Width="80" Height="80" 
+                       VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <Image.RenderTransform>
+                        <ScaleTransform ScaleX="0.7" ScaleY="0.7"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Grid>
+            
+            <TextBlock Text="Sentrykun" 
+                       FontSize="26" FontWeight="Bold" 
+                       Foreground="{DynamicResource TextPrimaryBrush}" 
+                       HorizontalAlignment="Center" Margin="0,18,0,0"/>
+            
+            <TextBlock Text="Welcome back, you degenerate~" 
+                       FontSize="14" 
+                       Foreground="{DynamicResource AccentLightBrush}" 
+                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
+            
+            <TextBlock Name="QuoteText" 
+                       FontSize="12" FontStyle="Italic" 
+                       Foreground="{DynamicResource TextSecondaryBrush}" 
+                       TextWrapping="Wrap" TextAlignment="Center" 
+                       MaxWidth="360" HorizontalAlignment="Center" 
+                       Margin="0,16,0,0" Opacity="0"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

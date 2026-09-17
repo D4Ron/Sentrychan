@@ -1,0 +1,112 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             xmlns:converters="using:Sentrychan.UI.Converters"
+             x:Class="Sentrychan.UI.Views.MangaDetailView"
+             x:DataType="vm:MangaDetailViewModel"
+             x:CompileBindings="False">
+    <Grid RowDefinitions="Auto,*" Margin="24">
+
+        <!-- Header: cover + meta + actions -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="0,0,0,18">
+            <Border Grid.Column="0" Width="150" Height="215" CornerRadius="8" ClipToBounds="True"
+                    Background="{DynamicResource SurfaceBackgroundBrush}">
+                <Panel>
+                    <Image Source="avares://Sentrychan.UI/Assets/logo.png" Width="52" Height="52"
+                           Opacity="0.18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <controls:AsyncImage Url="{Binding CoverUrl}" SourceName="{Binding Manga.Source}" Stretch="UniformToFill"/>
+                </Panel>
+            </Border>
+
+            <StackPanel Grid.Column="1" Margin="18,0,0,0" Spacing="8">
+                <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding StatusLine}" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Border Background="{DynamicResource AccentSubtleBrush}" CornerRadius="5" Padding="9,4"
+                        HorizontalAlignment="Left">
+                    <TextBlock Text="{Binding ProgressText}" FontSize="12" FontWeight="600"
+                               Foreground="{DynamicResource AccentLightBrush}"/>
+                </Border>
+                <TextBlock Text="{Binding Description}" FontSize="12" TextWrapping="Wrap" MaxLines="4"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                    <Button Classes="ghost" Content="Back" Command="{Binding BackCommand}"/>
+                    <Button Classes="accent" Content="{Binding ContinueLabel}" Command="{Binding ContinueCommand}"
+                            IsEnabled="{Binding CanContinue}"/>
+                    <Button Classes="ghost" Content="Download all" Command="{Binding DownloadAllCommand}"
+                            IsVisible="{Binding !IsNovel}"/>
+                    <Button Classes="ghost" Content="Mark all read" Command="{Binding MarkAllReadCommand}"/>
+                    <Button Classes="ghost" Content="Refresh" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <!-- Chapter list -->
+        <Border Grid.Row="1" Background="{DynamicResource CardBackgroundBrush}" CornerRadius="8">
+            <Grid RowDefinitions="Auto,*">
+                <Border Grid.Row="0" Padding="14,10"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Chapters" FontSize="13" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1">
+                    <ItemsControl ItemsSource="{Binding Chapters}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MangaChapterVm">
+                                <Border Padding="14,9" BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                        BorderThickness="0,0,0,1">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <!-- Read dot -->
+                                        <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4"
+                                                Margin="0,0,12,0" VerticalAlignment="Center"
+                                                Background="{Binding IsRead, Converter={x:Static converters:BoolToBrushConverter.Instance}}"/>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="{Binding Heading}" FontSize="12.5"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding SubLine}" FontSize="10.5"
+                                                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                                    VerticalAlignment="Center">
+                                            <Button Classes="accent" FontSize="11" Padding="12,4"
+                                                    Content="Read" Command="{Binding ReadCommand}"/>
+                                            <!-- Download / downloading / downloaded (manga only; novels have no offline path yet) -->
+                                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                                                        IsVisible="{Binding CanDownload}">
+                                                <Button Classes="ghost" FontSize="11" Padding="10,4"
+                                                        Content="Download"
+                                                        IsVisible="{Binding !IsDownloaded}"
+                                                        IsEnabled="{Binding !IsDownloading}"
+                                                        Command="{Binding DownloadCommand}"/>
+                                                <ProgressBar IsIndeterminate="True" Width="18" Height="18"
+                                                             VerticalAlignment="Center"
+                                                             IsVisible="{Binding IsDownloading}"/>
+                                                <TextBlock Text="Offline" FontSize="10.5" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource StatusGreenBrush}"
+                                                           IsVisible="{Binding IsDownloaded}"/>
+                                            </StackPanel>
+                                            <Button Classes="ghost" FontSize="11" Padding="10,4"
+                                                    Content="Mark read"
+                                                    IsVisible="{Binding !IsRead}"
+                                                    Command="{Binding MarkReadCommand}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

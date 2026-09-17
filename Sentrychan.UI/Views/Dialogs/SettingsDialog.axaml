@@ -1,0 +1,624 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        xmlns:views="using:Sentrychan.UI.Views"
+        xmlns:converters="using:Sentrychan.UI.Converters"
+        xmlns:models="using:Sentrychan.Core.Models"
+        x:Class="Sentrychan.UI.Views.Dialogs.SettingsDialog"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings"
+        Width="720" Height="620"
+        CanResize="True" MinWidth="560" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Window.Resources>
+        <converters:StringContainsConverter x:Key="StringContainsConverter"/>
+    </Window.Resources>
+
+    <Window.Styles>
+        <!-- Left-nav settings: vertical tab strip styled as a sidebar list -->
+        <Style Selector="TabControl:left > ItemsPresenter">
+            <Setter Property="Margin" Value="0,0,18,0"/>
+        </Style>
+        <Style Selector="TabControl:left TabItem">
+            <Setter Property="Width" Value="150"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="TabControl:left TabItem:selected">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="TabControl:left TabItem:selected /template/ Border#PART_SelectedPipe">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+
+        <!-- Footer status line: green by default, red when the save was rejected. -->
+        <Style Selector="TextBlock.status">
+            <Setter Property="Foreground" Value="{DynamicResource StatusGreenBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.status.error">
+            <Setter Property="Foreground" Value="{DynamicResource StatusRedBrush}"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Settings"
+                       FontSize="22" FontWeight="Bold"
+                       Margin="0,0,0,4"/>
+            <TextBlock Text="Configure download manager and monitoring preferences"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="13"/>
+        </StackPanel>
+
+        <!-- Left-nav tab control -->
+        <TabControl Grid.Row="1" TabStripPlacement="Left">
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- Tab 1 — General                                         -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <TabItem Header="General">
+                <ScrollViewer Padding="0,0,12,0">
+                    <StackPanel Spacing="16" Margin="0,8,0,0">
+
+                        <!-- Download Folder -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Download Folder"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding DownloadPath}"
+                                         Watermark="C:\Downloads\Anime"
+                                         Margin="0,0,8,0"/>
+                                <Button Grid.Column="1"
+                                        Content="Browse"
+                                        Classes="ghost"
+                                        Command="{Binding BrowseDownloadCommand}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Library Folder -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Library Folder"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="Completed downloads move here"
+                                       FontSize="10"
+                                       Foreground="{StaticResource TextMutedBrush}"/>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding LibraryPath}"
+                                         Watermark="C:\Anime"
+                                         Margin="0,0,8,0"/>
+                                <Button Grid.Column="1"
+                                        Content="Browse"
+                                        Classes="ghost"
+                                        Command="{Binding BrowseLibraryCommand}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Check Interval -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Check Interval (minutes)"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding CheckInterval}"
+                                     Watermark="15"
+                                     Width="80"
+                                     HorizontalAlignment="Left"/>
+                        </StackPanel>
+
+                        <!-- Quality Preference -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Quality Preference"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <ComboBox ItemsSource="{Binding QualityOptions}"
+                                      SelectedItem="{Binding QualityPreference}"
+                                      Width="120"
+                                      HorizontalAlignment="Left"/>
+                        </StackPanel>
+
+                        <!-- Notifications -->
+                        <TextBlock Text="NOTIFICATIONS" FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,10,0,0"/>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="When to notify" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <ComboBox ItemsSource="{Binding NotificationLevels}"
+                                      SelectedItem="{Binding NotificationLevel}"
+                                      Width="140" HorizontalAlignment="Left"/>
+                            <TextBlock FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       Text="Off = no notifications · Important = only episode/chapter added &amp; downloads (default) · All = also routine check summaries."/>
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <CheckBox IsChecked="{Binding WindowsNotifications}"
+                                      Content="Use Windows notifications"/>
+                            <TextBlock FontSize="11" TextWrapping="Wrap" Margin="28,0,0,0"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       Text="On: important events pop as Windows toasts. Off: everything stays as quiet in-app messages instead."/>
+                        </StackPanel>
+
+                        <!-- Preferred Release Groups -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Preferred Release Groups"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding PreferredReleaseGroups}"
+                                     Watermark="SubsPlease,Erai-raws — comma separated, highest priority first"
+                                     HorizontalAlignment="Stretch"/>
+                            <TextBlock Text="When several groups release the same episode, the monitor picks the one highest in this list."
+                                       FontSize="10.5" Foreground="{StaticResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <!-- Auto-download Groups -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Auto-download Only From These Groups"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding AutoDownloadGroups}"
+                                     Watermark="Leave empty to auto-download from any group"
+                                     HorizontalAlignment="Stretch"/>
+                            <TextBlock Text="For series with auto-download on: only releases from these groups download automatically; anything else waits for your confirmation. Empty = no restriction."
+                                       FontSize="10.5" Foreground="{StaticResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- Tab 2 — Downloads                                       -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <TabItem Header="Downloads">
+                <ScrollViewer Padding="0,0,12,0">
+                    <StackPanel Spacing="16" Margin="0,8,0,0">
+
+                        <!-- Download-folder organizing -->
+                        <StackPanel Spacing="4">
+                            <CheckBox IsChecked="{Binding WatchFolderMode}"
+                                      Content="Watch-folder mode"/>
+                            <TextBlock FontSize="11" TextWrapping="Wrap" Margin="28,0,0,0"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       Text="Off (default): only files Sentrychan downloaded — or that match a series in your library — are organized; anything else in the download folder is left untouched. On: treat the whole download folder as an anime dropzone and file/flag every video. Only turn this on if your download folder is dedicated to anime."/>
+                        </StackPanel>
+
+                        <!-- Active Backend -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Active Backend"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <ComboBox ItemsSource="{Binding BackendOptions}"
+                                      SelectedItem="{Binding SelectedDownloadBackend}"
+                                      Width="200"
+                                      HorizontalAlignment="Left"/>
+                        </StackPanel>
+
+                        <!-- Speed limits (integrated MonoTorrent engine) -->
+                        <StackPanel Spacing="8"
+                                    IsVisible="{Binding SelectedDownloadBackend,
+                                        Converter={StaticResource StringContainsConverter},
+                                        ConverterParameter='MonoTorrent'}">
+
+                            <TextBlock Text="SPEED LIMITS"
+                                       FontSize="10" FontWeight="Bold"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Margin="0,16,0,0"/>
+                            <TextBlock Text="Leave blank for unlimited. Applies immediately — no restart needed."
+                                       FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{StaticResource TextTertiaryBrush}"/>
+
+                            <Grid ColumnDefinitions="*,12,*,12,*">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock Text="Max download (KB/s)" FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBox Text="{Binding MaxDownloadRate}" Watermark="Unlimited"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="4">
+                                    <TextBlock Text="Max upload (KB/s)" FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBox Text="{Binding MaxUploadRate}" Watermark="Unlimited"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="4" Spacing="4">
+                                    <TextBlock Text="Max simultaneous" FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               ToolTip.Tip="Extra downloads wait as Pending and start automatically when a slot frees."/>
+                                    <TextBox Text="{Binding MaxConcurrentDownloads}" Watermark="Unlimited"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock TextWrapping="Wrap" FontSize="11"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       Text="Tip: capping upload keeps torrents from saturating your connection, but please leave some upload available — seeding is what keeps releases alive."/>
+                        </StackPanel>
+
+                        <!-- qBittorrent section -->
+                        <StackPanel Spacing="8"
+                                    IsVisible="{Binding SelectedDownloadBackend,
+                                        Converter={StaticResource StringContainsConverter},
+                                        ConverterParameter='QBittorrent'}">
+
+                            <TextBlock Text="QBITTORRENT"
+                                       FontSize="10" FontWeight="Bold"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Margin="0,16,0,8"/>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="URL"
+                                           FontSize="12"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBox Text="{Binding QBitUrl}"
+                                         Watermark="http://localhost:8080"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="*, *">
+                                <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                                    <TextBlock Text="Username"
+                                               FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBox Text="{Binding QBitUsername}" Watermark="admin"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="Password"
+                                               FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBox Text="{Binding QBitPassword}"
+                                             PasswordChar="*"
+                                             Watermark="adminadmin"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Test Connection"
+                                        Command="{Binding TestQBitConnectionCommand}"
+                                        Classes="ghost" FontSize="11"/>
+                                <TextBlock Text="{Binding QBitTestResult}"
+                                           VerticalAlignment="Center"
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- FDM section -->
+                        <StackPanel Spacing="8"
+                                    IsVisible="{Binding SelectedDownloadBackend,
+                                        Converter={StaticResource StringContainsConverter},
+                                        ConverterParameter='SystemDefault'}">
+
+                            <TextBlock Text="FREE DOWNLOAD MANAGER"
+                                       FontSize="10" FontWeight="Bold"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Margin="0,16,0,8"/>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="FDM Executable"
+                                           FontSize="12"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBox Grid.Column="0"
+                                             Text="{Binding FdmPath}"
+                                             Margin="0,0,8,0"/>
+                                    <Button Grid.Column="1"
+                                            Content="Browse"
+                                            Classes="ghost"
+                                            Command="{Binding BrowseFdmCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- RSS Feeds -->
+                        <TextBlock Text="RSS FEEDS"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="0,16,0,8"/>
+
+                        <Border IsVisible="{Binding RssFeedsVm, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                MaxHeight="240"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6">
+                            <views:RssFeedsView DataContext="{Binding RssFeedsVm}"/>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- Tab 3 — Player                                          -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <TabItem Header="Player">
+                <ScrollViewer Padding="0,0,12,0">
+                    <StackPanel Spacing="16" Margin="0,8,0,0">
+
+                        <!-- Player selector -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Preferred Video Player"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <ComboBox ItemsSource="{Binding PlayerOptions}"
+                                      SelectedItem="{Binding SelectedPlayer}"
+                                      Width="200"
+                                      HorizontalAlignment="Left"/>
+                        </StackPanel>
+
+                        <!-- VLC path — visible only when VLC selected -->
+                        <StackPanel Spacing="4"
+                                    IsVisible="{Binding SelectedPlayer,
+                                        Converter={StaticResource StringContainsConverter},
+                                        ConverterParameter='VLC'}">
+                            <TextBlock Text="VLC Executable Path"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding VlcPath}"
+                                     Watermark="C:\Program Files\VideoLAN\VLC\vlc.exe"/>
+                        </StackPanel>
+
+                        <!-- MAL Import -->
+                        <TextBlock Text="MYANIMELIST IMPORT"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="0,16,0,8"/>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="MAL Username"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding MalUsername}"
+                                     Watermark="username"
+                                     Width="200"
+                                     HorizontalAlignment="Left"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Import Watching List"
+                                    Command="{Binding ImportMalWatchingCommand}"
+                                    Classes="ghost" FontSize="11"/>
+                            <TextBlock Text="{Binding MalImportResult}"
+                                       VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- Export / Import Library -->
+                        <TextBlock Text="LIBRARY"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="0,16,0,8"/>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Export Library"
+                                    Command="{Binding ExportLibraryCommand}"
+                                    Classes="ghost" FontSize="11"/>
+                            <Button Content="Import Library"
+                                    Command="{Binding ImportLibraryCommand}"
+                                    Classes="ghost" FontSize="11"/>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- Tab 4 — Appearance                                      -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <TabItem Header="Appearance">
+                <ScrollViewer Padding="0,0,12,0">
+                    <StackPanel Spacing="16" Margin="0,8,0,0">
+
+                        <!-- Layout -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Navigation layout"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <ComboBox ItemsSource="{Binding LayoutOptions}" SelectedItem="{Binding LayoutMode}"
+                                      Width="200" HorizontalAlignment="Left"/>
+                            <TextBlock FontSize="10" Foreground="{StaticResource TextMutedBrush}"
+                                       Text="Sidebar = left rail (collapsible / hideable) · Top Bar = horizontal nav"/>
+                        </StackPanel>
+
+                        <!-- Theme -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Theme"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <ComboBox SelectedItem="{Binding SelectedTheme}"
+                                      Width="200"
+                                      HorizontalAlignment="Left">
+                                <x:String>Yoru</x:String>
+                                <x:String>Shiro</x:String>
+                                <x:String>Sakura</x:String>
+                                <x:String>Neon</x:String>
+                            </ComboBox>
+                            <TextBlock FontSize="10"
+                                       Foreground="{StaticResource TextMutedBrush}">
+                                Yoru = dark violet · Shiro = light · Sakura = pink · Neon = cyber green
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Background Image -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Background Image"
+                                       FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding BackgroundImagePath}"
+                                         Watermark="None"
+                                         IsReadOnly="True"/>
+                                <Button Grid.Column="1"
+                                        Content="Browse"
+                                        Classes="ghost" FontSize="11"
+                                        Command="{Binding BrowseBackgroundImageCommand}"/>
+                                <Button Grid.Column="2"
+                                        Content="Clear"
+                                        Classes="ghost" FontSize="11"
+                                        Command="{Binding ClearBackgroundImageCommand}"/>
+                            </Grid>
+                            <TextBlock Text="Blurred overlay behind library"
+                                       FontSize="10"
+                                       Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- Tab 5 — Library &amp; Danger                            -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <TabItem Header="Library &amp; Danger">
+                <ScrollViewer Padding="0,0,12,0">
+                    <StackPanel Spacing="16" Margin="0,8,0,0">
+
+                        <!-- Library Management -->
+                        <TextBlock Text="LIBRARY MANAGEMENT"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="0,16,0,8"/>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Export Library"
+                                    Command="{Binding ExportLibraryCommand}"
+                                    Classes="ghost" FontSize="11"/>
+                            <Button Content="Import Library"
+                                    Command="{Binding ImportLibraryCommand}"
+                                    Classes="ghost" FontSize="11"/>
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <CheckBox IsChecked="{Binding AutoRemoveCompleted}"
+                                      Content="Auto-remove finished series"/>
+                            <TextBlock FontSize="11" TextWrapping="Wrap" Margin="28,0,0,0"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       Text="Once a series has finished airing AND every episode is downloaded, drop it from the library automatically. Your files are never touched — only the library entry is removed."/>
+                        </StackPanel>
+
+                        <StackPanel Spacing="4" Margin="0,8,0,0">
+                            <TextBlock Text="Local manga folder" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding LocalMangaPath}"
+                                     Watermark="e.g. D:\Manga  (folders of chapter images)"/>
+                            <TextBlock FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       Text="Read manga you already have on disk with the 'Local' source. Each subfolder is a manga; chapter subfolders hold the page images — the same layout downloaded chapters use."/>
+                        </StackPanel>
+
+                        <!-- Source packs (installable online sources) -->
+                        <StackPanel Spacing="6" Margin="0,10,0,0">
+                            <TextBlock Text="Online sources (source packs)" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       Text="Sentrychan ships as a reader with no online sources built in. Import a source pack (.dll) to add sources; they load on the next restart. Use the folder to back them up or share them."/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Import source pack…" Classes="ghost"
+                                        Command="{Binding ImportSourcePackCommand}"/>
+                                <Button Content="Open sources folder" Classes="ghost"
+                                        Command="{Binding OpenSourcesFolderCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Gap -->
+                        <Border Height="1"
+                                Background="{DynamicResource BorderSubtleBrush}"
+                                Margin="0,8,0,8"/>
+
+                        <!-- Danger Zone -->
+                        <TextBlock Text="DANGER ZONE"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="#F44336"
+                                   Margin="0,0,0,8"/>
+
+                        <Button Content="Reset Library Database"
+                                Command="{Binding ResetLibraryCommand}"
+                                Background="#33F44336"
+                                Foreground="#F44336"
+                                HorizontalAlignment="Left"
+                                FontSize="11"/>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- Tab — About                                             -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <TabItem Header="About">
+                <ScrollViewer Padding="0,0,12,0">
+                    <StackPanel Spacing="16" Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="14">
+                            <Border Width="56" Height="56" CornerRadius="28" ClipToBounds="True" Background="#0B0D14">
+                                <Image Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
+                            </Border>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="Sentrychan" FontSize="20" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding AppVersion}" FontSize="13"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <TextBlock Text="Your self-driving library for anime, manga and novels — monitor, auto-download, organize and read."
+                                   FontSize="12.5" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Check for updates" Classes="ghost"
+                                        Command="{Binding CheckForUpdatesCommand}"
+                                        IsEnabled="{Binding !IsCheckingUpdate}" HorizontalAlignment="Left"/>
+                                <Button Content="Download &amp; restart" Classes="accent"
+                                        Command="{Binding ApplyUpdateCommand}"
+                                        IsVisible="{Binding UpdateAvailable}" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding UpdateStatus}" FontSize="11.5" TextWrapping="Wrap"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       IsVisible="{Binding UpdateStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            <Button Content="Show tutorial" Classes="ghost"
+                                    Command="{Binding ShowTutorialCommand}" HorizontalAlignment="Left"/>
+                            <Button Content="Open logs folder" Classes="ghost"
+                                    Command="{Binding OpenLogsCommand}" HorizontalAlignment="Left"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Made by D4Ron. Uses Jikan (MyAnimeList), AnitomySharp and the anime-offline-database."
+                                   FontSize="10.5" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- Footer. The status line lives HERE, next to Save, not on one tab: validation
+             failures abort the save, and an error the user can't see reads as a dead button. -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
+            <TextBlock Grid.Column="0"
+                       Text="{Binding StatusMessage}"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Classes="status" Classes.error="{Binding IsStatusError}"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="0,0,16,0"
+                       FontSize="12"/>
+            <Button Grid.Column="1"
+                    Content="Cancel"
+                    Classes="ghost"
+                    Margin="0,0,8,0"
+                    Click="CancelButton_Click"/>
+            <Button Grid.Column="2"
+                    Content="Save"
+                    Classes="accent"
+                    Command="{Binding SaveCommand}"/>
+        </Grid>
+    </Grid>
+</Window>

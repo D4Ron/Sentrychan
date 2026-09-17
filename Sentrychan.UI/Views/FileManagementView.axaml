@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:views="using:Sentrychan.UI.Views"
+             x:Class="Sentrychan.UI.Views.FileManagementView"
+             x:Name="Root"
+             x:DataType="vm:FileManagementViewModel"
+             Background="{DynamicResource AppBackgroundBrush}">
+
+    <UserControl.Styles>
+        <Style Selector="Button.subtab">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Padding" Value="18,10"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.subtab:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+        </Style>
+        <Style Selector="Button.subtab.active">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- Sub-tab header bar -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SurfaceBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="0" Margin="16,0">
+                <Button Classes="subtab"
+                        Classes.active="{Binding IsDownloadsTabActive}"
+                        Command="{Binding SelectDownloadsTabCommand}">
+                    <TextBlock Text="Active Downloads"/>
+                </Button>
+                <Button Classes="subtab"
+                        Classes.active="{Binding IsUnmatchedTabActive}"
+                        Command="{Binding SelectUnmatchedTabCommand}">
+                    <TextBlock Text="Unmatched Files"/>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- Sub-tab content panels -->
+        <Panel Grid.Row="1">
+            <views:DownloadsView DataContext="{Binding Downloads}"
+                                 IsVisible="{Binding #Root.((vm:FileManagementViewModel)DataContext).IsDownloadsTabActive}"/>
+            <views:UnmatchedResolverView DataContext="{Binding UnmatchedResolver}"
+                                         IsVisible="{Binding #Root.((vm:FileManagementViewModel)DataContext).IsUnmatchedTabActive}"/>
+        </Panel>
+
+    </Grid>
+</UserControl>

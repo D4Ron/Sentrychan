@@ -1,0 +1,46 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        NEON THEME
+        Near-black surfaces, electric green accent — cyberpunk aesthetic.
+    -->
+
+    <!-- Backgrounds -->
+    <SolidColorBrush x:Key="AppBackgroundBrush"       Color="#060608"/>
+    <SolidColorBrush x:Key="SurfaceBackgroundBrush"   Color="#0A0C0E"/>
+    <SolidColorBrush x:Key="CardBackgroundBrush"      Color="#0E1214"/>
+    <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#141A1C"/>
+    <SolidColorBrush x:Key="CardHoverOverlayBrush"    Color="#90000000"/>
+
+    <!-- Accent -->
+    <SolidColorBrush x:Key="AccentBrush"       Color="#00FF88"/>
+    <SolidColorBrush x:Key="AccentLightBrush"  Color="#40FFAA"/>
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#002218"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextPrimaryBrush"   Color="#E8FFF2"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#70CC90"/>
+    <SolidColorBrush x:Key="TextTertiaryBrush"  Color="#3A6A4A"/>
+    <SolidColorBrush x:Key="TextMutedBrush"     Color="#1E3428"/>
+
+    <!-- Borders -->
+    <SolidColorBrush x:Key="BorderBrush"         Color="#1A3422"/>
+    <SolidColorBrush x:Key="BorderSubtleBrush"   Color="#102018"/>
+    <SolidColorBrush x:Key="BorderEmphasisBrush" Color="#00FF88"/>
+
+    <!-- Status -->
+    <SolidColorBrush x:Key="StatusGreenBrush"  Color="#00FF88"/>
+    <SolidColorBrush x:Key="StatusRedBrush"    Color="#FF4466"/>
+    <SolidColorBrush x:Key="StatusAmberBrush"  Color="#FFDD00"/>
+    <SolidColorBrush x:Key="AccentOrangeBrush" Color="#FF8800"/>
+
+    <!-- Poster placeholders (dark tinted) -->
+    <SolidColorBrush x:Key="PosterPlaceholderA" Color="#0A1A0C"/>
+    <SolidColorBrush x:Key="PosterPlaceholderB" Color="#0A0C1A"/>
+    <SolidColorBrush x:Key="PosterPlaceholderC" Color="#0C1A0C"/>
+    <SolidColorBrush x:Key="PosterPlaceholderD" Color="#1A120A"/>
+    <SolidColorBrush x:Key="PosterPlaceholderE" Color="#1A0A12"/>
+    <SolidColorBrush x:Key="PosterPlaceholderF" Color="#121A0A"/>
+
+</ResourceDictionary>

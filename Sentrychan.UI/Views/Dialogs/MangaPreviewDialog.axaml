@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        xmlns:controls="using:Sentrychan.UI.Controls"
+        x:Class="Sentrychan.UI.Views.Dialogs.MangaPreviewDialog"
+        x:DataType="vm:MangaResultVm"
+        x:CompileBindings="False"
+        Title="Manga"
+        Width="560" Height="440"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+        <!-- Header -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="0,0,0,16">
+            <Border Grid.Column="0" Width="130" Height="186" CornerRadius="8" ClipToBounds="True"
+                    Background="{DynamicResource SurfaceBackgroundBrush}">
+                <Panel>
+                    <Image Source="avares://Sentrychan.UI/Assets/logo.png" Width="46" Height="46"
+                           Opacity="0.18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <controls:AsyncImage Url="{Binding CoverUrl}" SourceName="{Binding SourceName}" Stretch="UniformToFill"/>
+                </Panel>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="16,0,0,0" Spacing="8" VerticalAlignment="Top">
+                <TextBlock Text="{Binding Title}" FontSize="19" FontWeight="Bold" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock Text="{Binding Meta}" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding SourceName}" FontSize="11"
+                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Description -->
+        <ScrollViewer Grid.Row="1">
+            <TextBlock x:Name="DescriptionText" TextWrapping="Wrap" FontSize="13" LineHeight="20"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="Loading details…"/>
+        </ScrollViewer>
+
+        <!-- Actions -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Close" Classes="ghost" Click="OnClose"/>
+            <TextBlock Text="In library" VerticalAlignment="Center" FontSize="12" Margin="0,0,4,0"
+                       Foreground="{DynamicResource StatusGreenBrush}" IsVisible="{Binding IsInLibrary}"/>
+            <!-- Read straight away without committing it to the library -->
+            <Button Content="Read" Classes="ghost" Click="OnRead"/>
+            <Button Content="Add to Library" Classes="accent"
+                    Command="{Binding AddCommand}" IsVisible="{Binding !IsInLibrary}"/>
+        </StackPanel>
+    </Grid>
+</Window>

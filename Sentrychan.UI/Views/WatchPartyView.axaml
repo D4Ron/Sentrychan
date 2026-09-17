@@ -1,0 +1,353 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:ctrls="using:Sentrychan.UI.Controls"
+             x:Class="Sentrychan.UI.Views.WatchPartyView"
+             x:DataType="vm:WatchPartyViewModel"
+             KeyDown="OnKeyDown" Focusable="True">
+    <Grid x:DataType="vm:WatchPartyViewModel" x:CompileBindings="False">
+        <!-- State 1: No active session - show entry point -->
+        <Grid IsVisible="{Binding IsShowingEntry}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+                <TextBlock Text="Watch Party"
+                           FontSize="22" FontWeight="Bold"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="Watch anime together with friends in real time."
+                           FontSize="13" HorizontalAlignment="Center"
+                           TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                    <Button Content="Create Party"
+                            Command="{Binding OpenCreatePartyCommand}" />
+                    <Button Content="Join Party"
+                            Command="{Binding OpenJoinPartyCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <!-- State 3: In lobby, waiting for others -->
+        <Grid IsVisible="{Binding IsInLobby}" ColumnDefinitions="*, 300">
+            <!-- Left side: Status and Controls -->
+            <StackPanel Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="20">
+                <Border Width="80" Height="80" CornerRadius="40" Background="{DynamicResource AccentSubtleBrush}">
+                    <TextBlock Text="🕒" FontSize="40" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="{Binding CurrentSeries.Title, StringFormat='{}Lobby: {0}'}"
+                           FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock Text="Waiting for host to begin the watch party..."
+                           FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+                    <Button Content="Ready" Command="{Binding ToggleReadyCommand}" Classes.success="{Binding IsReady}" Width="120" Height="40"/>
+                    <Button Content="Start Watch Party" Command="{Binding StartCommand}" IsVisible="{Binding IsHost}" Classes="accent" Width="140" Height="40"/>
+                    <Button Content="Leave Setup" Command="{Binding LeaveCommand}" Classes="danger" Width="120" Height="40"/>
+                </StackPanel>
+            </StackPanel>
+            
+            <!-- Right side: Participants and Chat -->
+            <Border Grid.Column="1" Background="{DynamicResource SurfaceBackgroundBrush}" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderSubtleBrush}">
+                <Grid RowDefinitions="*, *">
+                    <!-- Participants -->
+                    <Grid Grid.Row="0" RowDefinitions="Auto, *">
+                        <Border Grid.Row="0" Padding="16,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderSubtleBrush}">
+                            <TextBlock Text="PARTICIPANTS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ScrollViewer Grid.Row="1">
+                            <ItemsControl ItemsSource="{Binding Participants}" Margin="8">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="12,8" CornerRadius="4">
+                                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                                <Border Grid.Column="0" Width="24" Height="24" CornerRadius="12" Background="{DynamicResource AccentSubtleBrush}" Margin="0,0,10,0">
+                                                    <TextBlock Text="{Binding Username, Converter={StaticResource StringToInitialConverter}}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="1" Text="{Binding Username}" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                <Border Grid.Column="2" Width="8" Height="8" CornerRadius="4" Background="{Binding IsReady, Converter={StaticResource BoolToBrushConverter}}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                    <!-- Chat -->
+                    <Grid Grid.Row="1" RowDefinitions="Auto, *, Auto">
+                        <Border Grid.Row="0" Padding="16,12" BorderThickness="0,1,0,1" BorderBrush="{DynamicResource BorderSubtleBrush}">
+                            <TextBlock Text="LOBBY CHAT" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                        </Border>
+                        <ScrollViewer Grid.Row="1">
+                            <ItemsControl ItemsSource="{Binding ChatMessages}" Padding="8">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="8,4" Margin="0,0,0,4">
+                                            <StackPanel Spacing="1">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Sender}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Timestamp, StringFormat=\{0:HH:mm\}}" FontSize="9" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Bottom"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding Content}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="18"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <Border Grid.Row="2" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderSubtleBrush}">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBox Grid.Column="0" Text="{Binding MessageInput}" Watermark="Message..." AcceptsReturn="False" Height="32" FontSize="12">
+                                    <TextBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding SendMessageCommand}"/>
+                                    </TextBox.KeyBindings>
+                                </TextBox>
+                                <Button Grid.Column="1" Content="Send" Command="{Binding SendMessageCommand}" Classes="accent" Margin="8,0,0,0" Height="32" Width="50"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- State 2: Active session -->
+        <Grid IsVisible="{Binding IsInSession}" ColumnDefinitions="*, 280">
+            <!-- 7.4 Main Video Area -->
+            <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
+                <Border Grid.Row="0" Background="{DynamicResource SurfaceBackgroundBrush}" 
+                        BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="20,16">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="{Binding CurrentSeries.Title}" FontSize="20" FontWeight="Bold" 
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Border Classes="breathing" Width="6" Height="6" CornerRadius="3" Background="{DynamicResource StatusRedBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Text="LIVE WATCH PARTY" FontSize="11" FontWeight="Bold" 
+                                           Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                        
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <Button Content="Share Download" Command="{Binding ShareDownloadCommand}" 
+                                    IsVisible="{Binding IsHost}" Classes="ghost" Height="32"/>
+                            <Button Content="Download Episode" Command="{Binding OpenSharedDownloadCommand}" 
+                                    IsVisible="{Binding SharedDownloadUrl, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" 
+                                    Classes="accent" Height="32"/>
+                            <Button Content="Leave Party" Command="{Binding LeaveCommand}" Classes="danger" Height="32"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1" Background="Black" ClipToBounds="True">
+                    <Grid PointerMoved="OnVideoAreaPointerMoved">
+                        <!-- Child 1: VideoView -->
+                        <ctrls:VideoPlayerControl x:Name="PlayerHost" IsVisible="{Binding IsInSession}" />
+                        
+                        <Border Background="#FF000000" IsVisible="{Binding !IsInSession}">
+                            <TextBlock Text="Video will appear here when the session starts"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontSize="12"
+                                       Foreground="#44FFFFFF" />
+                        </Border>
+
+                        <!-- Child 2: Buffering overlay -->
+                        <Border Background="#A0000000" IsVisible="{Binding IsBuffering}" IsHitTestVisible="False">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                                <TextBlock Text="Buffering..." FontSize="16" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Child 3: Syncing overlay -->
+                        <Border Background="#A0000000" IsVisible="{Binding IsSyncing}" IsHitTestVisible="False">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                                <TextBlock Text="Syncing..." FontSize="16" FontWeight="Bold" Foreground="#FFEC4899" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Child 4: Reaction canvas -->
+                        <Canvas x:Name="ReactionCanvas" IsHitTestVisible="False" Background="Transparent" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"/>
+
+                        <!-- Child 5: Controls overlay Border -->
+                        <Border VerticalAlignment="Bottom"
+                                Background="#CC000000"
+                                Padding="12 10 12 12"
+                                Opacity="{Binding AreControlsVisible, Converter={StaticResource BoolToVisibleOpacity}}"
+                                IsHitTestVisible="{Binding AreControlsVisible}"
+                                PointerMoved="OnControlsPointerMoved">
+                            
+                            <StackPanel Spacing="8">
+                                <!-- Seek bar row (host only) -->
+                                <Grid IsVisible="{Binding IsHost}" ColumnDefinitions="*,Auto">
+                                    <Slider Grid.Column="0"
+                                            Minimum="0" Maximum="100"
+                                            Value="{Binding PositionPercent, Mode=OneWay}"
+                                            IsEnabled="{Binding IsHost}"
+                                            PointerReleased="OnSeekBarReleased" />
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal" Spacing="4"
+                                                VerticalAlignment="Center" Margin="8 0 0 0">
+                                        <TextBlock Text="{Binding FormattedPosition}" FontSize="11" Foreground="White" />
+                                        <TextBlock Text="/" FontSize="11" Foreground="#80FFFFFF" />
+                                        <TextBlock Text="{Binding FormattedDuration}" FontSize="11" Foreground="#80FFFFFF" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Main controls row -->
+                                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
+                                
+                                    <!-- Skip back (host only) -->
+                                    <Button Grid.Column="0" Command="{Binding SkipBackCommand}" IsVisible="{Binding IsHost}" ToolTip.Tip="-10s" Classes="player-btn">
+                                        <TextBlock Text="&#x23EE;" FontSize="16" Foreground="White" />
+                                    </Button>
+                                
+                                    <!-- Play/Pause (host only) -->
+                                    <Button Grid.Column="1" Command="{Binding PlayPauseCommand}" IsVisible="{Binding IsHost}" Classes="player-btn">
+                                        <Panel>
+                                            <TextBlock Text="&#x23F8;" FontSize="18" Foreground="White" IsVisible="{Binding IsPlaying}" />
+                                            <TextBlock Text="&#x25B6;" FontSize="18" Foreground="White" IsVisible="{Binding !IsPlaying}" />
+                                        </Panel>
+                                    </Button>
+                                
+                                    <!-- Skip forward (host only) -->
+                                    <Button Grid.Column="2" Command="{Binding SkipForwardCommand}" IsVisible="{Binding IsHost}" ToolTip.Tip="+10s" Classes="player-btn">
+                                        <TextBlock Text="&#x23ED;" FontSize="16" Foreground="White" />
+                                    </Button>
+                                
+                                    <!-- Spacer -->
+                                    <Grid Grid.Column="3" />
+                                
+                                    <!-- Volume slider (all) -->
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <Button Command="{Binding ToggleMuteCommand}" Classes="player-btn">
+                                            <Panel>
+                                                <TextBlock Text="&#x1F507;" FontSize="14" Foreground="White" IsVisible="{Binding IsMuted}" />
+                                                <TextBlock Text="&#x1F50A;" FontSize="14" Foreground="White" IsVisible="{Binding !IsMuted}" />
+                                            </Panel>
+                                        </Button>
+                                        <Slider Minimum="0" Maximum="100" Value="{Binding Volume}" Width="80" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                
+                                    <!-- Fullscreen (all) -->
+                                    <Button Grid.Column="5" Command="{Binding ToggleFullscreenCommand}" Classes="player-btn" ToolTip.Tip="Fullscreen">
+                                        <TextBlock Text="&#x26F6;" FontSize="14" Foreground="White" />
+                                    </Button>
+                                
+                                    <!-- Leave button (all) -->
+                                    <Button Grid.Column="6" Command="{Binding LeaveCommand}" Classes="player-btn" ToolTip.Tip="Leave party">
+                                        <TextBlock Text="&#x274C;" FontSize="12" Foreground="#FFaaaaaa" />
+                                    </Button>
+                                
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- Participant status bar (non-host only) -->
+                        <Border IsVisible="{Binding !IsHost}"
+                                Background="#40000000" CornerRadius="4"
+                                Padding="10 6" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="&#x1F3A5;" FontSize="12" />
+                                <TextBlock Text="Synced to host" FontSize="11" Foreground="#CCFFFFFF" IsVisible="{Binding !IsSyncing}" />
+                                <TextBlock Text="Syncing..." FontSize="11" Foreground="#FFEC4899" IsVisible="{Binding IsSyncing}" />
+                            </StackPanel>
+                        </Border>
+
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="2" Background="{DynamicResource SurfaceBackgroundBrush}" 
+                        BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="12">
+                    <Grid ColumnDefinitions="*,Auto,*">
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                            <Button Content="❤️" Command="{Binding SendReactionCommand}" CommandParameter="heart" Classes="ghost" FontSize="18"/>
+                            <Button Content="🔥" Command="{Binding SendReactionCommand}" CommandParameter="fire" Classes="ghost" FontSize="18"/>
+                            <Button Content="😮" Command="{Binding SendReactionCommand}" CommandParameter="wow" Classes="ghost" FontSize="18"/>
+                            <Rectangle Width="1" Height="24" Fill="{DynamicResource BorderSubtleBrush}" Margin="8,0"/>
+                            <Button Content="Ready" Command="{Binding ToggleReadyCommand}" 
+                                    Classes.success="{Binding IsReady}" Width="80" Height="34"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- 7.5 Side Panel (Chat & Participants) -->
+            <Border Grid.Column="1" Background="{DynamicResource SurfaceBackgroundBrush}" 
+                    BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderSubtleBrush}">
+                <Grid RowDefinitions="*, *">
+                    <!-- Participants -->
+                    <Grid Grid.Row="0" RowDefinitions="Auto, *">
+                        <Border Grid.Row="0" Padding="16,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderSubtleBrush}">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBlock Text="PARTICIPANTS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="Join Discord" Command="{Binding OpenDiscordCommand}" 
+                                        Background="#5865F2" Foreground="White" FontSize="9" Padding="6,2" Height="20"/>
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1">
+                            <ItemsControl ItemsSource="{Binding Participants}" Margin="8">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="12,8" CornerRadius="4">
+                                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                                <Border Grid.Column="0" Width="24" Height="24" CornerRadius="12" 
+                                                        Background="{DynamicResource AccentSubtleBrush}" Margin="0,0,10,0">
+                                                    <TextBlock Text="{Binding Username, Converter={StaticResource StringToInitialConverter}}" 
+                                                               FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}" 
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="1" Text="{Binding Username}" VerticalAlignment="Center" 
+                                                           FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                <Border Grid.Column="2" Width="8" Height="8" CornerRadius="4" 
+                                                        Background="{Binding IsReady, Converter={StaticResource BoolToBrushConverter}}" 
+                                                        VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- Chat -->
+                    <Grid Grid.Row="1" RowDefinitions="Auto, *, Auto">
+                        <Border Grid.Row="0" Padding="16,12" BorderThickness="0,1,0,1" BorderBrush="{DynamicResource BorderSubtleBrush}">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBlock Text="LIVE CHAT" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <Button Grid.Column="1" Content="Export" Command="{Binding ExportChatCommand}"
+                                        Classes="ghost" FontSize="9" Padding="6,2" Height="20"/>
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" x:Name="ChatScroll">
+                            <ItemsControl ItemsSource="{Binding ChatMessages}" Padding="8">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="8,4" Margin="0,0,0,4">
+                                            <StackPanel Spacing="1">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Sender}" FontSize="10.5" FontWeight="Bold" 
+                                                               Foreground="{DynamicResource AccentLightBrush}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Timestamp, StringFormat=\{0:HH:mm\}}" 
+                                                               FontSize="9" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Bottom"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding Content}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" 
+                                                           TextWrapping="Wrap" LineHeight="18"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <Border Grid.Row="2" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderSubtleBrush}">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBox Grid.Column="0" Text="{Binding MessageInput}" Watermark="Message..." 
+                                         AcceptsReturn="False" Height="32" FontSize="12">
+                                    <TextBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding SendMessageCommand}"/>
+                                    </TextBox.KeyBindings>
+                                </TextBox>
+                                <Button Grid.Column="1" Content="Send" Command="{Binding SendMessageCommand}" 
+                                        Classes="accent" Margin="8,0,0,0" Height="32" Width="50"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,42 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sentrychan.UI.Views.Dialogs.TutorialDialog"
+        Title="How to use Sentrychan"
+        Width="560" Height="440"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="*,Auto" Margin="0">
+        <!-- Step content -->
+        <StackPanel Grid.Row="0" Margin="40,36,40,0" Spacing="18" VerticalAlignment="Center">
+            <Border Width="72" Height="72" CornerRadius="20" HorizontalAlignment="Center"
+                    Background="{DynamicResource AccentSubtleBrush}">
+                <PathIcon x:Name="StepIcon" Width="34" Height="34"
+                          Foreground="{DynamicResource AccentLightBrush}"/>
+            </Border>
+            <TextBlock x:Name="StepTitle" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center"
+                       TextAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock x:Name="StepBody" FontSize="13.5" TextWrapping="Wrap" TextAlignment="Center"
+                       MaxWidth="440" HorizontalAlignment="Center" LineHeight="21"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+
+        <!-- Footer: progress dots + navigation -->
+        <Border Grid.Row="1" Padding="24,16" BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0" x:Name="SkipButton" Content="Skip tour" Classes="ghost"
+                        Click="OnSkip" VerticalAlignment="Center"/>
+
+                <StackPanel Grid.Column="1" x:Name="DotsPanel" Orientation="Horizontal" Spacing="6"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="BackButton" Content="Back" Classes="ghost" Click="OnBack"/>
+                    <Button x:Name="NextButton" Content="Next" Classes="accent" Click="OnNext"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

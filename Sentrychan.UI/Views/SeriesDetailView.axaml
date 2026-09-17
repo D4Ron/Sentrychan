@@ -1,0 +1,312 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:ctrls="using:Sentrychan.UI.Controls"
+             xmlns:models="using:Sentrychan.Core.Models"
+             xmlns:api="using:Sentrychan.Core.Models.Api"
+             x:Class="Sentrychan.UI.Views.SeriesDetailView"
+             x:DataType="vm:SeriesDetailViewModel"
+             Background="{DynamicResource AppBackgroundBrush}">
+    
+    <Grid ColumnDefinitions="300, *">
+        <!-- Left Column: Fixed Sidebar -->
+        <Border Grid.Column="0" Background="{DynamicResource SurfaceBackgroundBrush}" 
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
+            <ScrollViewer>
+                <Border Padding="24">
+                    <StackPanel Spacing="20">
+                    <!-- Back Button -->
+                    <Button Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).GoBackToLibraryCommand}" Classes="ghost" HorizontalAlignment="Left" Padding="8,4">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{StaticResource ChevronRight}" Width="12" Height="12">
+                                <PathIcon.RenderTransform>
+                                    <RotateTransform Angle="180"/>
+                                </PathIcon.RenderTransform>
+                            </PathIcon>
+                            <TextBlock Text="Back to Library" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Large Poster -->
+                    <Border CornerRadius="12" ClipToBounds="True" BoxShadow="0 8 24 0 #40000000">
+                        <ctrls:AsyncImage Url="{Binding Series.PosterPath}" Height="400" Stretch="UniformToFill"/>
+                    </Border>
+
+                    <!-- Title & Basic Info -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding Series.Title}" FontSize="24" FontWeight="Bold" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Metadata.TitleJapanese}" FontSize="14" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <!-- Monitoring Status Card -->
+                    <Border Background="{DynamicResource CardBackgroundBrush}" Padding="16" CornerRadius="8" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="MONITORING STATUS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <Grid ColumnDefinitions="*, Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="{Binding Series.MonitoringState}" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Text="Automatic RSS Tracking" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                </StackPanel>
+                                <ToggleSwitch Grid.Column="1" IsChecked="{Binding Series.MonitoringState, Converter={StaticResource MonitoringStateToBoolConverter}, Mode=OneWay}" 
+                                              Command="{Binding ToggleMonitoringCommand}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Metadata Highlights -->
+                    <Grid RowDefinitions="Auto, Auto, Auto" ColumnDefinitions="*, *" Margin="0,10">
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,12">
+                            <TextBlock Text="SCORE" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBlock Text="{Binding Metadata.Score, StringFormat='{}{0:F2}'}" FontSize="16" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,12">
+                            <TextBlock Text="RATING" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBlock Text="{Binding Metadata.Rating}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="0">
+                            <TextBlock Text="SEASON" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBlock Text="{Binding Metadata.Season}" FontSize="14" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1">
+                            <TextBlock Text="YEAR" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBlock Text="{Binding Metadata.Year}" FontSize="14" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Grid>
+                    </StackPanel>
+                </Border>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Right Column: Scrollable Content -->
+        <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+            <Border Padding="40">
+                <StackPanel Spacing="40">
+                <!-- Section 1: Synopsis -->
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Synopsis" FontSize="20" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Metadata.Synopsis}" TextWrapping="Wrap" LineHeight="24" FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- Section 2: Episode Progress -->
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Episode Progress" FontSize="20" FontWeight="Bold"/>
+                    
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0 0 0 0">
+                        <Run Text="Currently at episode " />
+                        <Run Text="{Binding CurrentEpisode}" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}" />
+                        <Run Text=" of " />
+                        <Run Text="{Binding TotalEpisodesDisplay}" />
+                        <Run Text="  —  click a tile to update" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    </TextBlock>
+
+                    <ItemsControl ItemsSource="{Binding EpisodeGrid}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Width="44" Height="44"
+                                        Padding="0" Margin="0 0 4 4"
+                                        Cursor="Hand"
+                                        Background="{Binding StatusBrush}"
+                                        ToolTip.Tip="{Binding TooltipText}"
+                                        BorderBrush="White"
+                                        BorderThickness="{Binding IsCurrentEpisode, Converter={StaticResource BoolToThicknessConverter}}"
+                                        Command="{Binding $parent[UserControl].DataContext.SetCurrentEpisodeCommand}"
+                                        CommandParameter="{Binding EpisodeNumber}">
+                                    <Button.Template>
+                                        <ControlTemplate>
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="4">
+                                                <Panel>
+                                                    <ContentPresenter Content="{TemplateBinding Content}"
+                                                                      HorizontalContentAlignment="Center"
+                                                                      VerticalContentAlignment="Center" />
+                                                    <Border IsVisible="{Binding IsCurrentEpisode}"
+                                                            BorderBrush="White" BorderThickness="1" Margin="2" CornerRadius="2" Opacity="0.5" />
+                                                </Panel>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Mark as Downloaded"
+                                                      Command="{Binding $parent[UserControl].DataContext.MarkEpisodeDownloadedCommand}"
+                                                      CommandParameter="{Binding EpisodeNumber}" />
+                                            <MenuItem Header="Mark as Missing"
+                                                      Command="{Binding $parent[UserControl].DataContext.MarkEpisodeMissingCommand}"
+                                                      CommandParameter="{Binding EpisodeNumber}" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    
+                                    <TextBlock Text="{Binding EpisodeNumber}"
+                                               FontSize="10" FontWeight="Bold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*, 20" /> <!-- Spacer -->
+
+                <Grid ColumnDefinitions="*, *">
+                    <!-- Section 3: Watch History -->
+                    <StackPanel Grid.Column="0" Spacing="16" Margin="0,0,20,0">
+                        <TextBlock Text="Watch History" FontSize="20" FontWeight="Bold"/>
+                        <ListBox ItemsSource="{Binding WatchHistory}" Background="Transparent">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="12,8" Background="#08FFFFFF" CornerRadius="4" Margin="0,0,0,4">
+                                        <Grid ColumnDefinitions="Auto, *, Auto">
+                                            <TextBlock Grid.Column="0" Text="Ep" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding EpisodeNumber}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding WatchedAt, StringFormat=\{0:MMM dd\}}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+
+                    <!-- Section 4: Download History -->
+                    <StackPanel Grid.Column="1" Spacing="16" Margin="20,0,0,0">
+                        <TextBlock Text="Download History" FontSize="20" FontWeight="Bold"/>
+                        <ListBox ItemsSource="{Binding DownloadHistory}" Background="Transparent">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="12,8" Background="#08FFFFFF" CornerRadius="4" Margin="0,0,0,4">
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding RssTitle}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                            <Border Grid.Column="1" Padding="6,2" CornerRadius="4" Background="{DynamicResource AccentSubtleBrush}" Margin="8,0,0,0">
+                                                <TextBlock Text="{Binding Status}" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Section 5: RSS Match Aliases -->
+                <StackPanel Spacing="16">
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBlock Grid.Column="0" Text="RSS Match Aliases" FontSize="20" FontWeight="Bold"/>
+                        <Button Grid.Column="1" Content="+ Add Alias" x:Name="AddAliasBtn" Classes="ghost" Padding="12,4" Height="28" FontSize="11"/>
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Aliases}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource AccentSubtleBrush}" Padding="10,6" CornerRadius="16" Margin="0,0,8,8">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Alias}" FontSize="12" Foreground="{DynamicResource AccentLightBrush}" VerticalAlignment="Center"/>
+                                        <Button Command="{Binding $parent[UserControl].((vm:SeriesDetailViewModel)DataContext).RemoveAliasCommand}" CommandParameter="{Binding}"
+                                                Padding="0" Background="Transparent" BorderThickness="0" Width="16" Height="16">
+                                            <Path Data="M1,1 L15,15 M15,1 L1,15" Stroke="{DynamicResource AccentLightBrush}" StrokeThickness="2" />
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- Section 6: Metadata Grid -->
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Detailed Metadata" FontSize="20" FontWeight="Bold"/>
+                    <Border Background="{DynamicResource CardBackgroundBrush}" Padding="20" CornerRadius="8" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                        <Grid ColumnDefinitions="*, *" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,16">
+                                <TextBlock Text="MAL ID" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding Series.MalId}" FontSize="14"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,16">
+                                <TextBlock Text="JIKAN STATUS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding Metadata.Status}" FontSize="14"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,16">
+                                <TextBlock Text="STUDIO" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding Metadata.Studios[0].Name}" FontSize="14"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,16">
+                                <TextBlock Text="SOURCE" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding Metadata.Source}" FontSize="14"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2">
+                                <TextBlock Text="GENRES" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <ItemsControl ItemsSource="{Binding Metadata.Genres}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding Name}" Margin="0,4,12,0" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/></DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <!-- Section 7: Monitoring Settings -->
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Monitoring Settings" FontSize="20" FontWeight="Bold"/>
+                    <Border Background="{DynamicResource CardBackgroundBrush}" Padding="20" CornerRadius="8">
+                        <Grid ColumnDefinitions="*, *">
+                            <StackPanel Grid.Column="0" Spacing="8">
+                                <TextBlock Text="QUALITY PREFERENCE" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <ComboBox SelectedItem="{Binding Series.QualityPreference}" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="Any"/>
+                                    <ComboBoxItem Content="1080p"/>
+                                    <ComboBoxItem Content="720p"/>
+                                    <ComboBoxItem Content="480p"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="8" Margin="24,0,0,0" VerticalAlignment="Center">
+                                <CheckBox IsChecked="{Binding Series.AutoCompleteEnabled}" Content="Auto-Complete Monitoring"/>
+                                <TextBlock Text="Stop checking RSS once total episodes reached" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="32,-4,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <!-- Section 8: Recommendations -->
+                <StackPanel Spacing="16">
+                    <TextBlock Text="You Might Also Like" FontSize="20" FontWeight="Bold"/>
+                    <ItemsControl ItemsSource="{Binding Recommendations}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel HorizontalAlignment="Center"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="140" Margin="8" CornerRadius="8" ClipToBounds="True" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                                    <StackPanel>
+                                        <ctrls:AsyncImage Url="{Binding Images.Jpg.LargeImageUrl}" Height="200" Stretch="UniformToFill"/>
+                                        <TextBlock Text="{Binding Title}" Padding="8,6" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="2" Height="40"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </ScrollViewer>
+        
+        <!-- Loading Overlay logic (Fix 1.1) -->
+        <Border Grid.ColumnSpan="2" Background="#80000000" IsVisible="{Binding IsLoading}" IsHitTestVisible="False">
+            <ProgressBar IsIndeterminate="True" VerticalAlignment="Top" Foreground="{DynamicResource AccentBrush}"/>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,75 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        x:Class="Sentrychan.UI.Views.Dialogs.AddFeedDialog"
+        x:DataType="vm:AddFeedViewModel"
+        Title="Add Feed"
+        Width="480" Height="360"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}"
+        CornerRadius="{DynamicResource DialogCornerRadius}">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Add RSS Feed"
+                       FontSize="22" FontWeight="Bold"
+                       Margin="0,0,0,4"/>
+            <TextBlock Text="Add a Nyaa or other RSS feed to monitor for new episodes"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="13"/>
+        </StackPanel>
+
+        <!-- Form -->
+        <StackPanel Grid.Row="1" Spacing="12">
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="Feed URL" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                <TextBox Text="{Binding FeedUrl}"
+                         Watermark="https://nyaa.si/?page=rss&amp;..."/>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="Feed Type" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <RadioButton Content="Priority (auto-download)"
+                                 IsChecked="{Binding IsPriority}"/>
+                    <RadioButton Content="Secondary (notify only)"
+                                 IsChecked="{Binding !IsPriority}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="Preferred Quality" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                <ComboBox ItemsSource="{Binding QualityOptions}"
+                          SelectedItem="{Binding PreferredQuality}"
+                          HorizontalAlignment="Stretch"/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding StatusMessage}"
+                       Foreground="{DynamicResource StatusRedBrush}"
+                       IsVisible="{Binding StatusMessage.Length}"
+                       FontSize="11" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Footer -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
+            <Button Grid.Column="1"
+                    Content="Cancel"
+                    Classes="ghost"
+                    Margin="0,0,8,0"
+                    Click="CancelButton_Click"/>
+            <Button Grid.Column="2"
+                    Content="Add Feed"
+                    Classes="accent"
+                    Command="{Binding AddCommand}"
+                    IsEnabled="{Binding CanAdd}"
+                    Width="100"/>
+        </Grid>
+    </Grid>
+</Window>

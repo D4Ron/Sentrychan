@@ -1,0 +1,165 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             x:Class="Sentrychan.UI.Views.RssFeedsView"
+             x:CompileBindings="False"
+             x:DataType="vm:RssFeedsViewModel">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Header -->
+        <Border Grid.Row="0" Padding="18,14"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="Auto, *">
+                    <TextBlock Text="Monitored Sources" FontSize="14" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Grid.Column="1" FontSize="11"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"
+                               Text="{Binding Feeds.Count, StringFormat='{}{0} feeds configured'}"/>
+                </Grid>
+                <Border Background="{DynamicResource AccentSubtleBrush}" CornerRadius="6" Padding="10,7">
+                    <TextBlock FontSize="11" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="The episode monitor only checks ENABLED feeds below. Turning a source off means new episodes released only on that source will NOT be detected — you may miss downloads."/>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Empty state — Sentrychan ships with no sources; the user adds their own. -->
+        <StackPanel Grid.Row="1" Spacing="8" Margin="32"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    IsVisible="{Binding !Feeds.Count}">
+            <TextBlock Text="No sources configured" FontSize="15" FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="Sentrychan doesn't ship with any feeds. Paste an RSS URL below to add one, or restore a saved setup with Settings → Import Library."/>
+        </StackPanel>
+
+        <!-- Feed List -->
+        <ScrollViewer Grid.Row="1" Padding="18,12" IsVisible="{Binding !!Feeds.Count}">
+            <ItemsControl ItemsSource="{Binding Feeds}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource CardBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1" CornerRadius="6"
+                                Padding="12,10" Margin="0,0,0,6">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+
+                                <!-- Monitor enable toggle -->
+                                <ToggleSwitch Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0"
+                                              OffContent="" OnContent=""
+                                              IsChecked="{Binding Feed.IsEnabled, Mode=OneWay}"
+                                              Command="{Binding $parent[ItemsControl].DataContext.ToggleFeedCommand}"
+                                              CommandParameter="{Binding}"
+                                              ToolTip.Tip="Monitor this source for new episodes"/>
+
+                                <!-- Type Badge -->
+                                <Border Grid.Column="1" CornerRadius="3" Padding="6,3"
+                                        Background="{DynamicResource AccentSubtleBrush}"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding FeedTypeLabel}"
+                                               FontSize="9" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentLightBrush}"/>
+                                </Border>
+
+                                <!-- URL + Last Checked -->
+                                <StackPanel Grid.Column="2" Margin="10,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DisplayUrl}"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding LastCheckedText}"
+                                               FontSize="9.5"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                </StackPanel>
+
+                                <!-- Health Badge -->
+                                <Border Grid.Column="3" CornerRadius="3" Padding="6,3"
+                                        VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="{Binding HealthStatus}"
+                                               FontSize="9" FontWeight="Bold"
+                                               Foreground="{Binding HealthColor}"/>
+                                </Border>
+
+                                <!-- S4: Test Feed Button -->
+                                <Button Grid.Column="4" Width="22" Height="22" Padding="0"
+                                        Background="Transparent" BorderThickness="0"
+                                        IsVisible="{Binding !IsDefault}"
+                                        Command="{Binding $parent[ItemsControl].DataContext.TestFeedCommand}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip.Tip="Check feed now" Margin="0,0,4,0">
+                                    <PathIcon Data="{StaticResource SearchRegular}" Width="12" Height="12"
+                                              Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </Button>
+
+                                <!-- Lock icon for default / Delete for user feeds -->
+                                <Panel Grid.Column="5" VerticalAlignment="Center" Margin="0,0,4,0">
+                                    <PathIcon Data="{StaticResource LockRegular}" Width="12" Height="12"
+                                              Foreground="{DynamicResource TextTertiaryBrush}"
+                                              ToolTip.Tip="Default feed — cannot be removed"
+                                              IsVisible="{Binding IsDefault}"
+                                              VerticalAlignment="Center"/>
+                                    <Button Width="22" Height="22" Padding="0"
+                                            Background="Transparent" BorderThickness="0"
+                                            IsVisible="{Binding !IsDefault}"
+                                            Command="{Binding $parent[ItemsControl].DataContext.RemoveFeedCommand}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip.Tip="Remove feed">
+                                        <PathIcon Data="{StaticResource DismissRegular}" Width="10" Height="10"
+                                                  Foreground="{DynamicResource StatusRedBrush}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Button>
+                                </Panel>
+
+                                <!-- Quality Badge -->
+                                <Border Grid.Column="6" CornerRadius="3" Padding="6,3"
+                                        VerticalAlignment="Center"
+                                        Background="{DynamicResource AccentSubtleBrush}"
+                                        IsVisible="{Binding Feed.PreferredQuality, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                    <TextBlock Text="{Binding QualityLabel}"
+                                               FontSize="9" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentLightBrush}"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Add Feed Form -->
+        <Border Grid.Row="2" Padding="18,14"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="*,100,120,Auto">
+                    <TextBox Grid.Column="0" Text="{Binding NewFeedUrl}"
+                             Watermark="https://nyaa.si/?page=rss&amp;..." Height="32"/>
+                    <ComboBox Grid.Column="1" SelectedItem="{Binding NewFeedType}"
+                              Height="32" Margin="8,0,0,0">
+                        <ComboBoxItem Content="Primary"/>
+                        <ComboBoxItem Content="Secondary"/>
+                    </ComboBox>
+                    <ComboBox Grid.Column="2" SelectedItem="{Binding NewFeedQuality}"
+                              Height="32" Margin="8,0,0,0">
+                        <ComboBoxItem Content="Use Global"/>
+                        <ComboBoxItem Content="1080p"/>
+                        <ComboBoxItem Content="720p"/>
+                        <ComboBoxItem Content="480p"/>
+                        <ComboBoxItem Content="Any"/>
+                    </ComboBox>
+                    <Button Grid.Column="3" Content="Add Feed"
+                            Command="{Binding AddFeedCommand}"
+                            Background="{DynamicResource AccentBrush}" Foreground="White"
+                            Height="32" Padding="14,0" Margin="8,0,0,0"/>
+                </Grid>
+                <TextBlock Text="{Binding AddFeedError}"
+                           Foreground="#F44336" FontSize="11"
+                           IsVisible="{Binding AddFeedError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

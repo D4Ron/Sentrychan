@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="200" d:DesignHeight="48"
+             x:Class="Sentrychan.UI.Controls.NavItem"
+             x:Name="Self"
+             x:CompileBindings="False">
+
+    <Button Background="Transparent"
+            BorderThickness="0"
+            Padding="11,10"
+            CornerRadius="6"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Left"
+            Command="{Binding #Self.Command}"
+            ToolTip.Tip="{Binding #Self.Label}">
+        <Button.Styles>
+            <Style Selector="Button:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="#18FFFFFF"/>
+            </Style>
+            <Style Selector="Button:pressed /template/ ContentPresenter">
+                <Setter Property="Background" Value="#28FFFFFF"/>
+            </Style>
+        </Button.Styles>
+
+        <StackPanel Orientation="Horizontal" Spacing="11">
+            <Path Stroke="{DynamicResource TextSecondaryBrush}"
+                  Fill="Transparent"
+                  StrokeThickness="1.5"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round"
+                  Data="{Binding #Self.Icon, Converter={StaticResource IconNameToPathConverter}}"
+                  Width="18" Height="18"
+                  Stretch="Uniform"
+                  VerticalAlignment="Center"/>
+
+            <TextBlock Text="{Binding #Self.Label}"
+                       IsVisible="{Binding #Self.IsExpanded}"
+                       FontSize="13"
+                       FontWeight="500"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center"/>
+        </StackPanel>
+    </Button>
+</UserControl>

@@ -1,0 +1,248 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             xmlns:models="using:Sentrychan.Core.Models"
+             xmlns:converters="using:Sentrychan.UI.Converters"
+             x:Class="Sentrychan.UI.Views.MangaLibraryView"
+             x:DataType="vm:MangaLibraryViewModel"
+             x:CompileBindings="False">
+
+    <UserControl.Resources>
+        <!-- Shared library card — reading status dot, unread badge, progress, context menu. -->
+        <DataTemplate x:Key="MangaCard" x:DataType="vm:MangaCardVm">
+            <Border Width="160" Margin="10" Background="{DynamicResource CardBackgroundBrush}"
+                    CornerRadius="8" BoxShadow="0 4 10 0 #40000000" Cursor="Hand">
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                        <MenuItem Header="Mark all read" Command="{Binding MarkAllReadCommand}"/>
+                        <MenuItem Header="Remove from Library" Command="{Binding RemoveCommand}"/>
+                    </ContextMenu>
+                </Border.ContextMenu>
+                <StackPanel>
+                    <Border Height="220" CornerRadius="8,8,0,0" ClipToBounds="True">
+                        <Button Padding="0" Background="Transparent" BorderThickness="0"
+                                Command="{Binding OpenCommand}">
+                            <Panel>
+                                <Panel Background="{DynamicResource SurfaceBackgroundBrush}">
+                                    <Image Source="avares://Sentrychan.UI/Assets/logo.png"
+                                           Width="56" Height="56" Opacity="0.18"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Panel>
+                                <controls:AsyncImage Url="{Binding CoverPath}" SourceName="{Binding Source}"
+                                                     Stretch="UniformToFill"/>
+                                <!-- Unread-chapter badge -->
+                                <Border CornerRadius="9" Background="#FFB300" Padding="6,2"
+                                        Margin="6" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                        IsVisible="{Binding HasUnread}">
+                                    <TextBlock Text="{Binding UnreadBadge}" FontSize="10" FontWeight="Bold"
+                                               Foreground="#1A1A1A"/>
+                                </Border>
+                            </Panel>
+                        </Button>
+                    </Border>
+                    <Border Padding="10,8">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Title}" FontSize="12.5"
+                                       FontWeight="600" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                            <Border Grid.Row="0" Grid.Column="1" Width="7" Height="7" CornerRadius="4"
+                                    Margin="6,0,0,0" VerticalAlignment="Center"
+                                    Background="{Binding StatusColor, Converter={x:Static converters:StringToBrushConverter.Instance}}"/>
+                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding ProgressText}"
+                                       FontSize="10.5" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Margin="24">
+
+        <!-- Search bar -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,18">
+            <ComboBox Grid.Column="0" Height="38" MinWidth="120" VerticalContentAlignment="Center"
+                      ItemsSource="{Binding SourceNames}" SelectedItem="{Binding SelectedSourceName}"
+                      ToolTip.Tip="Which source to search"/>
+            <TextBox Grid.Column="1" Text="{Binding SearchQuery}" Height="38" Margin="8,0,0,0"
+                     Watermark="Search for a manga…"
+                     VerticalContentAlignment="Center">
+                <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
+                </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="2" Classes="accent" Margin="8,0,0,0" Height="38" Padding="16,0"
+                    Command="{Binding SearchCommand}" Content="Search"/>
+            <Button Grid.Column="3" Classes="ghost" Margin="8,0,0,0" Height="38" Padding="14,0"
+                    Command="{Binding ClearSearchCommand}" Content="Library"
+                    IsVisible="{Binding InSearchMode}"/>
+        </Grid>
+
+        <!-- Browse (no search needed) — for sources that support it -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,14"
+                    IsVisible="{Binding SourceSupportsBrowse}">
+            <TextBlock Text="Browse:" VerticalAlignment="Center" FontSize="12"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <Button Classes="ghost" Content="Popular" Padding="14,6"
+                    Command="{Binding BrowseCommand}" CommandParameter="Popular"/>
+            <Button Classes="ghost" Content="Latest" Padding="14,6"
+                    Command="{Binding BrowseCommand}" CommandParameter="Latest"/>
+        </StackPanel>
+
+        <!-- Status line -->
+        <TextBlock DockPanel.Dock="Top" Text="{Binding StatusMessage}" Margin="2,0,0,10"
+                   Foreground="{DynamicResource TextSecondaryBrush}"
+                   IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+        <!-- ========== SEARCH RESULTS ========== -->
+        <ScrollViewer IsVisible="{Binding InSearchMode}" Name="ResultsScroll"
+                      ScrollChanged="ResultsScroll_ScrollChanged">
+          <StackPanel>
+            <ItemsControl ItemsSource="{Binding SearchResults}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MangaResultVm">
+                        <Border Width="184" Margin="10" Background="{DynamicResource CardBackgroundBrush}"
+                                CornerRadius="8" BoxShadow="0 4 10 0 #40000000">
+                            <StackPanel>
+                                <Border Height="252" CornerRadius="8,8,0,0" ClipToBounds="True">
+                                    <!-- Click the cover for full details -->
+                                    <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                            Command="{Binding OpenCommand}" ToolTip.Tip="View details">
+                                        <Panel>
+                                            <Panel Background="{DynamicResource SurfaceBackgroundBrush}">
+                                                <Image Source="avares://Sentrychan.UI/Assets/logo.png"
+                                                       Width="64" Height="64" Opacity="0.18"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Panel>
+                                            <controls:AsyncImage Url="{Binding CoverUrl}" SourceName="{Binding SourceName}" Stretch="UniformToFill"/>
+                                            <Border CornerRadius="12" Background="#00C853" Margin="8" Width="24" Height="24"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                    IsVisible="{Binding IsInLibrary}">
+                                                <Path Data="M3 8l3 3 6-6" Stroke="White" StrokeThickness="2"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </Panel>
+                                    </Button>
+                                </Border>
+                                <Border Padding="12,10,12,12">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" Height="38" MaxLines="2"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Meta}" FontSize="10.5"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Button Classes="accent" HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Center"
+                                                Command="{Binding AddCommand}"
+                                                IsVisible="{Binding !IsInLibrary}" Content="Add"/>
+                                        <TextBlock Text="In library" FontSize="11" HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource StatusGreenBrush}"
+                                                   IsVisible="{Binding IsInLibrary}"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Load more results -->
+            <Button Classes="ghost" HorizontalAlignment="Center" Margin="0,4,0,20" Padding="24,10"
+                    Command="{Binding LoadMoreCommand}"
+                    IsVisible="{Binding CanLoadMore}"
+                    IsEnabled="{Binding !IsLoadingMore}">
+                <Panel>
+                    <TextBlock Text="Load more" IsVisible="{Binding !IsLoadingMore}"/>
+                    <TextBlock Text="Loading…" IsVisible="{Binding IsLoadingMore}"/>
+                </Panel>
+            </Button>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- ========== LIBRARY ========== -->
+        <Panel IsVisible="{Binding ShowLibrary}">
+            <!-- Empty state -->
+            <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsVisible="{Binding IsLibraryEmpty}">
+                <TextBlock Text="No manga yet" FontSize="16" FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Text="Pick a source, search above, and hit Add to start tracking a series here."/>
+            </StackPanel>
+
+            <DockPanel IsVisible="{Binding !IsLibraryEmpty}">
+                <!-- Category chips + filter box -->
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+                    <ListBox Grid.Column="0" ItemsSource="{Binding LibraryCategories}"
+                             SelectedItem="{Binding LibraryCategory}"
+                             Background="Transparent" BorderThickness="0" Padding="0">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Padding" Value="12,6"/>
+                                <Setter Property="CornerRadius" Value="14"/>
+                                <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                            </Style>
+                            <Style Selector="ListBoxItem:selected">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Style>
+                        </ListBox.Styles>
+                    </ListBox>
+                    <TextBox Grid.Column="1" Width="200" Height="32" Text="{Binding LibraryFilter}"
+                             Watermark="Filter library…" VerticalContentAlignment="Center"/>
+                </Grid>
+
+                <ScrollViewer>
+                    <StackPanel Spacing="18">
+                        <!-- Continue Reading (home shelf) -->
+                        <StackPanel Spacing="10" IsVisible="{Binding ShowContinue}">
+                            <TextBlock Text="Continue Reading" FontSize="16" FontWeight="SemiBold"/>
+                            <ItemsControl ItemsSource="{Binding ContinueList}" ItemTemplate="{StaticResource MangaCard}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                        <!-- Recently Added -->
+                        <StackPanel Spacing="10" IsVisible="{Binding ShowRecent}">
+                            <TextBlock Text="Recently Added" FontSize="16" FontWeight="SemiBold"/>
+                            <ItemsControl ItemsSource="{Binding RecentList}" ItemTemplate="{StaticResource MangaCard}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                        <!-- Reading -->
+                        <StackPanel Spacing="10" IsVisible="{Binding ShowReading}">
+                            <TextBlock Text="Reading" FontSize="16" FontWeight="SemiBold"/>
+                            <ItemsControl ItemsSource="{Binding ReadingList}" ItemTemplate="{StaticResource MangaCard}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                        <!-- Completed -->
+                        <StackPanel Spacing="10" IsVisible="{Binding ShowCompleted}">
+                            <TextBlock Text="Completed" FontSize="16" FontWeight="SemiBold"/>
+                            <ItemsControl ItemsSource="{Binding CompletedList}" ItemTemplate="{StaticResource MangaCard}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                        <!-- Plan to Read -->
+                        <StackPanel Spacing="10" IsVisible="{Binding ShowPlan}">
+                            <TextBlock Text="Plan to Read" FontSize="16" FontWeight="SemiBold"/>
+                            <ItemsControl ItemsSource="{Binding PlanList}" ItemTemplate="{StaticResource MangaCard}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Panel>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,184 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             xmlns:converters="using:Sentrychan.UI.Converters"
+             x:Class="Sentrychan.UI.Views.MangaReaderView"
+             x:DataType="vm:MangaReaderViewModel"
+             x:CompileBindings="False"
+             Focusable="True">
+    <UserControl.Styles>
+        <!-- Segmented reader-mode control -->
+        <Style Selector="Button.seg">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,5"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="600"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.seg.active">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*" Background="#0A0A0F">
+
+        <!-- Top bar -->
+        <Border Grid.Row="0" Background="{DynamicResource SurfaceBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                Padding="14,8">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <Button Grid.Column="0" Classes="ghost" Content="Back" Command="{Binding CloseCommand}"/>
+                <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Manga.Title}" FontSize="13" FontWeight="Bold"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Text="{Binding ChapterHeading}" FontSize="11"
+                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding PageIndicator}" VerticalAlignment="Center"
+                           Margin="0,0,12,0" FontSize="12" FontWeight="600"
+                           IsVisible="{Binding !IsNovel}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <!-- Manga: zoom (paged) + reader-mode selector -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                            IsVisible="{Binding !IsNovel}">
+                    <Border CornerRadius="9" Padding="3" IsVisible="{Binding ShowPagedImages}"
+                            Background="{DynamicResource SurfaceBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <Button Content="−" Classes="seg" Command="{Binding ZoomOutCommand}" ToolTip.Tip="Zoom out"/>
+                            <Button Content="Fit" Classes="seg" Command="{Binding ResetZoomCommand}" ToolTip.Tip="Reset zoom"/>
+                            <Button Content="+" Classes="seg" Command="{Binding ZoomInCommand}" ToolTip.Tip="Zoom in (Ctrl+scroll)"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="9" Padding="3"
+                            Background="{DynamicResource SurfaceBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <Button Content="Paged" Classes="seg" Classes.active="{Binding IsPaged}"
+                                    Command="{Binding SetPagedCommand}" ToolTip.Tip="One page at a time"/>
+                            <Button Content="Webtoon" Classes="seg" Classes.active="{Binding IsLongStrip}"
+                                    Command="{Binding SetWebtoonCommand}" ToolTip.Tip="Continuous vertical scroll"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+                <!-- Novel: font size + chapter nav -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                            IsVisible="{Binding IsNovel}">
+                    <Button Classes="ghost" Content="Prev" Command="{Binding PrevChapterCommand}"/>
+                    <Button Classes="ghost" Content="A−" Command="{Binding DecreaseFontCommand}" ToolTip.Tip="Smaller text"/>
+                    <Button Classes="ghost" Content="A+" Command="{Binding IncreaseFontCommand}" ToolTip.Tip="Larger text"/>
+                    <Button Classes="accent" Content="Next" Command="{Binding NextChapterCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Loading -->
+        <ProgressBar Grid.Row="1" IsIndeterminate="True" Width="180" Height="4"
+                     VerticalAlignment="Center" HorizontalAlignment="Center"
+                     IsVisible="{Binding IsLoading}"/>
+
+        <!-- External / licensed fallback -->
+        <StackPanel Grid.Row="1" Spacing="12" MaxWidth="380"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    IsVisible="{Binding IsExternalOnly}">
+            <TextBlock Text="This chapter isn't readable in-app" FontSize="15" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock TextWrapping="Wrap" TextAlignment="Center" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="The content couldn't be loaded here (a licensed/external release, or the source changed). You can open it on the web instead."/>
+            <Button Classes="accent" HorizontalAlignment="Center" HorizontalContentAlignment="Center"
+                    Content="Open on the web" Command="{Binding OpenExternalCommand}"/>
+        </StackPanel>
+
+        <!-- Paged mode: one zoomable page; click zones flip pages -->
+        <Grid Grid.Row="1" Name="PagedArea" IsVisible="{Binding ShowPagedImages}"
+              PointerWheelChanged="PagedWheel">
+            <!-- ScrollViewer + LayoutTransform so a zoomed page can be panned -->
+            <ScrollViewer Name="PageScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <LayoutTransformControl HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <LayoutTransformControl.LayoutTransform>
+                        <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
+                    </LayoutTransformControl.LayoutTransform>
+                    <controls:AsyncImage x:Name="PagedImage"
+                                         Url="{Binding CurrentPageUrl}" SourceName="{Binding SourceName}"
+                                         Stretch="Uniform"
+                                         MaxWidth="{Binding #PageScroll.Bounds.Width}"
+                                         MaxHeight="{Binding #PageScroll.Bounds.Height}"/>
+                </LayoutTransformControl>
+            </ScrollViewer>
+            <!-- Per-page loader — shows while the current page is still fetching/decoding -->
+            <StackPanel Spacing="10" IsHitTestVisible="False"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsVisible="{Binding #PagedImage.IsLoading}">
+                <ProgressBar IsIndeterminate="True" Width="160" Height="4"/>
+                <TextBlock Text="Loading page…" FontSize="12" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+            </StackPanel>
+            <!-- Click zones: left third = previous, right two-thirds (incl. centre) = next -->
+            <Grid ColumnDefinitions="*,2*">
+                <Button Grid.Column="0" Background="Transparent" BorderThickness="0"
+                        Command="{Binding PrevPageCommand}" Cursor="Hand" ToolTip.Tip="Previous page"/>
+                <Button Grid.Column="1" Background="Transparent" BorderThickness="0"
+                        Command="{Binding NextPageCommand}" Cursor="Hand" ToolTip.Tip="Next page"/>
+            </Grid>
+        </Grid>
+
+        <!-- Long-strip / webtoon mode -->
+        <ScrollViewer Grid.Row="1" Name="StripScroll" IsVisible="{Binding ShowWebtoonImages}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      ScrollChanged="StripScroll_ScrollChanged">
+            <ItemsControl ItemsSource="{Binding Pages}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <controls:AsyncImage Url="{Binding}" SourceName="{Binding $parent[ItemsControl].DataContext.SourceName}" Stretch="Uniform"
+                                             MaxWidth="900" HorizontalAlignment="Center"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Novel mode: chapter prose, scrollable, comfortable reading column -->
+        <ScrollViewer Grid.Row="1" Name="NovelScroll" IsVisible="{Binding IsNovel}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      ScrollChanged="StripScroll_ScrollChanged">
+            <SelectableTextBlock Text="{Binding ChapterText}"
+                                 FontSize="{Binding NovelFontSize}"
+                                 MaxWidth="760" Margin="24,20,24,80"
+                                 HorizontalAlignment="Center"
+                                 TextWrapping="Wrap" LineHeight="{Binding NovelLineHeight}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}"/>
+        </ScrollViewer>
+
+        <!-- Preview reminder: reading something that isn't in the library yet (dismissable) -->
+        <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                Margin="0,0,0,22" Padding="16,10" CornerRadius="12"
+                IsVisible="{Binding ShowPreviewBanner}"
+                Background="{DynamicResource SurfaceBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
+                BoxShadow="0 6 22 0 #88000000">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <TextBlock Text="👀  Previewing — not in your library yet" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Button Classes="accent" Content="Add to library"
+                        Command="{Binding AddToLibraryCommand}" IsEnabled="{Binding !IsAdding}"/>
+                <Button Classes="seg" Content="✕" Command="{Binding HidePreviewCommand}"
+                        ToolTip.Tip="Hide this reminder"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Brief confirmation after adding -->
+        <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                Margin="0,0,0,22" Padding="16,10" CornerRadius="12"
+                IsVisible="{Binding AddedToLibrary}"
+                Background="{DynamicResource SurfaceBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+            <TextBlock Text="✓  Added to your library" VerticalAlignment="Center"
+                       FontSize="12" FontWeight="600" Foreground="{DynamicResource StatusGreenBrush}"/>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,171 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:models="using:Sentrychan.Core.Models"
+             x:Class="Sentrychan.UI.Views.UnmatchedResolverView"
+             x:DataType="vm:UnmatchedResolverViewModel"
+             Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid Margin="24" RowDefinitions="Auto,Auto,*">
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <StackPanel HorizontalAlignment="Left" Spacing="4">
+                <TextBlock Text="Unmatched Files" FontSize="24" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock Text="{Binding StatusMessage}"
+                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Rescan Folder"
+                        Command="{Binding RescanFolderCommand}"
+                        Classes="ghost" FontSize="12"/>
+                <Button Content="✓ Assign All High Confidence"
+                        Command="{Binding AssignAllHighConfidenceCommand}"
+                        Classes="accent" FontSize="12"
+                        IsVisible="{Binding Files.Count}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Loading bar -->
+        <ProgressBar Grid.Row="1" IsIndeterminate="True" IsVisible="{Binding IsLoading}"
+                     Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,12"/>
+
+        <!-- Empty state -->
+        <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Spacing="12" IsVisible="{Binding !Files.Count}">
+            <TextBlock Text="✓" FontSize="48" TextAlignment="Center"
+                       Foreground="{DynamicResource AccentBrush}"/>
+            <TextBlock Text="No unmatched files" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextAlignment="Center"/>
+            <TextBlock Text="All downloaded files have been matched to library series."
+                       FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}"
+                       TextAlignment="Center"/>
+        </StackPanel>
+
+        <!-- File list -->
+        <ScrollViewer Grid.Row="2" IsVisible="{Binding Files.Count}">
+            <ItemsControl ItemsSource="{Binding Files}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:UnmatchedFileRowVm">
+                        <Border Background="{DynamicResource SurfaceBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1" CornerRadius="10" Margin="0,0,0,12"
+                                Padding="18,14">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Open File"
+                                              Command="{Binding $parent[ItemsControl].((vm:UnmatchedResolverViewModel)DataContext).OpenFileCommand}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="Show in Folder"
+                                              Command="{Binding $parent[ItemsControl].((vm:UnmatchedResolverViewModel)DataContext).RevealCommand}"
+                                              CommandParameter="{Binding}"/>
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <Grid RowDefinitions="Auto,12,Auto">
+
+                                <!-- File info row -->
+                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="{Binding FileName}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <TextBlock Text="{Binding SizeDisplay}" FontSize="12"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            <TextBlock Text="{Binding ArrivedAt, StringFormat='{}{0:MMM dd, HH:mm}'}"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- Confidence badge -->
+                                    <Border Grid.Column="1" CornerRadius="6" Padding="10,4"
+                                            IsVisible="{Binding HasSuggestion}"
+                                            VerticalAlignment="Top">
+                                        <Border.Background>
+                                            <SolidColorBrush Color="{Binding ConfidenceColor}"/>
+                                        </Border.Background>
+                                        <TextBlock Text="{Binding ConfidenceBadge}"
+                                                   FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                    </Border>
+                                </Grid>
+
+                                <!-- Suggestion + manual assignment row -->
+                                <Grid Grid.Row="2" ColumnDefinitions="*,Auto,120,Auto,Auto,Auto,Auto">
+
+                                    <!-- Series picker -->
+                                    <ComboBox Grid.Column="0"
+                                              ItemsSource="{Binding $parent[ItemsControl].((vm:UnmatchedResolverViewModel)DataContext).LibrarySeries}"
+                                              SelectedIndex="-1"
+                                              PlaceholderText="{Binding SelectedSeriesTitle, FallbackValue='Select series...'}"
+                                              FontSize="13"
+                                              Margin="0,0,8,0">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="models:Series">
+                                                <TextBlock Text="{Binding Title}" FontSize="13"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+
+                                    <TextBlock Grid.Column="1" Text="Ep" FontSize="13"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                                    <!-- Episode number input -->
+                                    <NumericUpDown Grid.Column="2"
+                                                   Value="{Binding SelectedEpisode}"
+                                                   Minimum="1" Maximum="9999"
+                                                   FormatString="0"
+                                                   FontSize="13"
+                                                   Margin="0,0,8,0"/>
+
+                                    <!-- Assign button -->
+                                    <Button Grid.Column="3"
+                                            Content="✓ Assign"
+                                            Classes="accent"
+                                            FontSize="12" Padding="12,6"
+                                            Margin="0,0,6,0"
+                                            Command="{Binding $parent[ItemsControl].((vm:UnmatchedResolverViewModel)DataContext).AssignCommand}"
+                                            CommandParameter="{Binding}"/>
+
+                                    <!-- Delete button -->
+                                    <Button Grid.Column="4"
+                                            Content="Delete"
+                                            Classes="ghost"
+                                            FontSize="13" Padding="8,6"
+                                            Margin="0,0,4,0"
+                                            ToolTip.Tip="Delete file permanently"
+                                            Command="{Binding $parent[ItemsControl].((vm:UnmatchedResolverViewModel)DataContext).DeleteFileCommand}"
+                                            CommandParameter="{Binding}"/>
+
+                                    <!-- Add-as-series button: search MAL for this title,
+                                         add it, then auto-organize matching files -->
+                                    <Button Grid.Column="5"
+                                            Content="+ Series"
+                                            Classes="ghost"
+                                            FontSize="12" Padding="8,6"
+                                            Margin="0,0,4,0"
+                                            ToolTip.Tip="Add this show to your library, then auto-match every file of it in _Unmatched"
+                                            Command="{Binding $parent[ItemsControl].((vm:UnmatchedResolverViewModel)DataContext).AddAsSeriesCommand}"
+                                            CommandParameter="{Binding}"/>
+
+                                    <!-- Skip button -->
+                                    <Button Grid.Column="6"
+                                            Content="Skip"
+                                            Classes="ghost"
+                                            FontSize="12" Padding="8,6"
+                                            ToolTip.Tip="Hide from this list (file stays in _Unmatched)"
+                                            Command="{Binding $parent[ItemsControl].((vm:UnmatchedResolverViewModel)DataContext).SkipCommand}"
+                                            CommandParameter="{Binding}"/>
+                                </Grid>
+
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

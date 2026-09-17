@@ -1,0 +1,193 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        xmlns:api="using:Sentrychan.Core.Models.Api"
+        xmlns:converters="using:Sentrychan.UI.Converters"
+        xmlns:controls="using:Sentrychan.UI.Controls"
+        x:Class="Sentrychan.UI.Views.Dialogs.AddSeriesDialog"
+        x:DataType="vm:AddSeriesViewModel"
+        Title="Add Series"
+        Width="860" Height="600"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}"
+        CornerRadius="{DynamicResource DialogCornerRadius}">
+
+    <Window.Resources>
+        <converters:UrlToImageConverter x:Key="UrlToImage"/>
+    </Window.Resources>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+
+        <!-- ── Header ── -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Add Series"
+                       FontSize="22"
+                       FontWeight="Bold"
+                       Margin="0,0,0,4"/>
+            <TextBlock Text="Search MyAnimeList to find and add a series to your library"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="13"/>
+        </StackPanel>
+
+        <!-- ── Body ── -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,320">
+
+            <!-- Left — Search -->
+            <Grid Grid.Column="0"
+                  RowDefinitions="Auto,Auto,*"
+                  Margin="0,0,16,0">
+
+                <!-- Search box -->
+                <TextBox Text="{Binding SearchQuery}"
+                         Watermark="Search anime..."
+                         Margin="0,0,0,12"/>
+
+                <!-- Status -->
+                <TextBlock Grid.Row="1"
+                           Text="{Binding StatusMessage}"
+                           Foreground="{StaticResource AccentOrangeBrush}"
+                           IsVisible="{Binding StatusMessage.Length}"
+                           Margin="0,0,0,8"
+                           FontSize="12"/>
+
+                <!-- Results grid -->
+                <Grid Grid.Row="2">
+
+                    <!-- Loading -->
+                    <StackPanel VerticalAlignment="Center"
+                                HorizontalAlignment="Center"
+                                IsVisible="{Binding IsSearching}">
+                        <TextBlock Text="Searching..."
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Results -->
+                    <ScrollViewer IsVisible="{Binding !IsSearching}">
+                        <ItemsControl ItemsSource="{Binding SearchResults}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:CompileBindings="False" x:DataType="api:AnimeResult">
+                                    <Button Command="{Binding $parent[ItemsControl].DataContext.SelectResultCommand}"
+                                            CommandParameter="{Binding}"
+                                            Padding="0" Margin="0,0,10,10"
+                                            Background="Transparent" BorderThickness="0">
+                                        <Border Width="110" Height="190"
+                                                CornerRadius="{DynamicResource CardCornerRadius}"
+                                                ClipToBounds="True"
+                                                Background="{DynamicResource CardBackgroundBrush}"
+                                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                BorderThickness="1">
+                                            <Grid RowDefinitions="150,Auto">
+                                                <!-- Poster placeholder -->
+                                                <Border Background="{DynamicResource PosterPlaceholderB}" Opacity="0.5"/>
+                                                
+                                                <controls:AsyncImage Grid.Row="0"
+                                                       Url="{Binding Images.Jpg.LargeImageUrl}"
+                                                       Stretch="UniformToFill" Height="150"/>
+
+                                                <!-- Title -->
+                                                <Border Grid.Row="1" Padding="6,5" Background="{DynamicResource SurfaceBackgroundBrush}">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               FontSize="9.5" FontWeight="500"
+                                                               Foreground="{DynamicResource TextPrimaryBrush}"
+                                                               MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+
+            <!-- Right — Selected detail -->
+            <Border Grid.Column="1"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource CardCornerRadius}"
+                    Padding="16"
+                    IsVisible="{Binding HasSelection}">
+                <StackPanel Spacing="12">
+                    <Border CornerRadius="{DynamicResource CardCornerRadius}" ClipToBounds="True">
+                        <controls:AsyncImage
+                               Url="{Binding SelectedResult.Images.Jpg.LargeImageUrl}"
+                               Height="200"
+                               Stretch="UniformToFill"
+                               HorizontalAlignment="Stretch"/>
+                    </Border>
+
+                    <TextBlock Text="{Binding SelectedResult.Title}"
+                               FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"
+                               TextWrapping="Wrap"/>
+
+                    <TextBlock Text="{Binding SelectedResult.TitleEnglish}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               FontSize="11"
+                               IsVisible="{Binding SelectedResult.TitleEnglish, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" HorizontalAlignment="Left" Margin="0,4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Status" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,12,2"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedResult.Status}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Episodes" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,12,2"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedResult.Episodes}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Score" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,12,2"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedResult.Score}" Foreground="{DynamicResource AccentLightBrush}" FontSize="12" FontWeight="Bold"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Year" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,12,2"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedResult.Year}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12"/>
+                    </Grid>
+
+                    <TextBlock Text="{Binding SelectedResult.Synopsis}"
+                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis" LineHeight="16"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Right — Empty selection state -->
+            <Border Grid.Column="1"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    CornerRadius="8"
+                    IsVisible="{Binding !HasSelection}">
+                <StackPanel VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                    <TextBlock Text="Select a result"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="to see details"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ── Footer ── -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
+            <TextBlock Grid.Column="0"
+                       Text="{Binding StatusMessage}"
+                       Foreground="{DynamicResource StatusGreenBrush}"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding AddedSeries, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+            <Button Grid.Column="1"
+                    Content="Cancel"
+                    Classes="ghost"
+                    Margin="0,0,8,0"
+                    Click="CancelButton_Click"/>
+            <Button Grid.Column="2"
+                    Content="Add Series"
+                    Classes="accent"
+                    Command="{Binding AddCommand}"
+                    IsEnabled="{Binding HasSelection}"/>
+        </Grid>
+    </Grid>
+</Window>

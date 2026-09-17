@@ -1,0 +1,88 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        x:Class="Sentrychan.UI.Views.Dialogs.LibraryScanDialog"
+        x:DataType="vm:LibraryScanViewModel"
+        Title="Library Scan Results"
+        Width="620" Height="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="22">
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
+            <TextBlock Text="Library Scan" FontSize="20" FontWeight="Bold"/>
+            <TextBlock Text="{Binding Summary}" FontSize="12.5" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Spacing="18">
+
+                <!-- Missing folders -->
+                <StackPanel Spacing="8" IsVisible="{Binding HasMissing}">
+                    <TextBlock Text="Folders deleted outside the app" FontSize="14" FontWeight="SemiBold"/>
+                    <ItemsControl ItemsSource="{Binding MissingFolders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MissingFolderRowVm">
+                                <Border Background="{DynamicResource CardBackgroundBrush}"
+                                        CornerRadius="8" Padding="14,10" Margin="0,0,0,6">
+                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}" FontSize="13.5" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Detail}" FontSize="11"
+                                                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="Keep tracking" Classes="ghost"
+                                                FontSize="12" Padding="10,5" Margin="0,0,6,0"
+                                                ToolTip.Tip="I deleted the files on purpose — keep monitoring this series"
+                                                Command="{Binding $parent[Window].((vm:LibraryScanViewModel)DataContext).KeepSeriesCommand}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Grid.Column="2" Content="Remove from library"
+                                                Background="Transparent" BorderThickness="1" CornerRadius="4"
+                                                BorderBrush="{DynamicResource StatusRedBrush}"
+                                                Foreground="{DynamicResource StatusRedBrush}"
+                                                FontSize="12" Padding="10,5"
+                                                Command="{Binding $parent[Window].((vm:LibraryScanViewModel)DataContext).RemoveSeriesCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- Unknown folders -->
+                <StackPanel Spacing="8" IsVisible="{Binding HasUnknown}">
+                    <TextBlock Text="Folders the app doesn't recognize" FontSize="14" FontWeight="SemiBold"/>
+                    <ItemsControl ItemsSource="{Binding UnknownFolders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:UnknownFolderRowVm">
+                                <Border Background="{DynamicResource CardBackgroundBrush}"
+                                        CornerRadius="8" Padding="14,10" Margin="0,0,0,6">
+                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding FolderName}"
+                                                   FontSize="13.5" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Button Grid.Column="1" Content="Add as series…" Classes="accent"
+                                                FontSize="12" Padding="10,5" Margin="0,0,6,0"
+                                                Command="{Binding $parent[Window].((vm:LibraryScanViewModel)DataContext).AddFolderAsSeriesCommand}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Grid.Column="2" Content="Ignore" Classes="ghost"
+                                                FontSize="12" Padding="10,5"
+                                                Command="{Binding $parent[Window].((vm:LibraryScanViewModel)DataContext).DismissFolderCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" Content="Done" Classes="accent" HorizontalAlignment="Right"
+                Margin="0,16,0,0" Padding="18,7" Click="OnDone"/>
+    </Grid>
+</Window>

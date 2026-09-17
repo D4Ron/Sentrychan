@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sentrychan.UI.Views.Dialogs.AddToLibraryPromptDialog"
+        Title="Not in your library"
+        Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <StackPanel Margin="24" Spacing="14">
+        <TextBlock x:Name="SeriesTitleText"
+                   FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+        <TextBlock FontSize="12.5" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextSecondaryBrush}"
+                   Text="This series isn't in your library. Add it so future episodes are tracked automatically — or just download this release into the _Standalone folder of your anime library."/>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,6,0,0">
+            <Button Content="Cancel" Classes="ghost" Click="OnCancel"/>
+            <Button Content="Just Download" Click="OnJustDownload"
+                    Background="Transparent"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
+                    Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <Button Content="Add &amp; Download" Classes="accent" Click="OnAddAndDownload"/>
+        </StackPanel>
+    </StackPanel>
+</Window>
