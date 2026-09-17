@@ -1,0 +1,82 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        xmlns:controls="using:Sentrychan.UI.Controls"
+        x:Class="Sentrychan.UI.Views.Dialogs.ReleaseDetailsDialog"
+        x:DataType="vm:ReleaseDetailsViewModel"
+        Title="Release Details"
+        Width="620" SizeToContent="Height" MaxHeight="640"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="22">
+        <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,16">
+            <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="Bold" TextWrapping="Wrap"/>
+            <!-- The exact torrent filename, so you know precisely what you're getting -->
+            <TextBlock Text="Full torrent name" FontSize="11"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <Border Background="{DynamicResource CardBackgroundBrush}" CornerRadius="6" Padding="10,8">
+                <SelectableTextBlock Text="{Binding RawTitle}" FontSize="12"
+                                     FontFamily="Consolas,monospace" TextWrapping="Wrap"
+                                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </Border>
+        </StackPanel>
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*" ColumnSpacing="18">
+            <!-- Cover -->
+            <Border Grid.Column="0" Width="150" Height="210" CornerRadius="8" ClipToBounds="True"
+                    VerticalAlignment="Top" Background="{DynamicResource SurfaceBackgroundBrush}">
+                <Panel>
+                    <Image Source="avares://Sentrychan.UI/Assets/logo.png" Width="52" Height="52"
+                           Opacity="0.18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <controls:AsyncImage Url="{Binding PosterUrl}" Stretch="UniformToFill"
+                                         IsVisible="{Binding HasPoster}"/>
+                </Panel>
+            </Border>
+
+            <!-- Info grid -->
+            <StackPanel Grid.Column="1" Spacing="10">
+                <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Category" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12.5"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Category}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Size" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12.5"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SizeDisplay}" FontSize="12.5" FontWeight="SemiBold"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Swarm" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12.5"/>
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="14">
+                        <TextBlock FontSize="12.5"><Run Text="▲ " Foreground="{DynamicResource StatusGreenBrush}"/><Run Text="{Binding Seeders}"/><Run Text=" seed"/></TextBlock>
+                        <TextBlock FontSize="12.5"><Run Text="▼ " Foreground="{DynamicResource StatusRedBrush}"/><Run Text="{Binding Leechers}"/><Run Text=" leech"/></TextBlock>
+                        <TextBlock FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}"><Run Text="{Binding Downloads}"/><Run Text=" done"/></TextBlock>
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Uploaded" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12.5"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PublishedDisplay}" FontSize="12.5"/>
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Status" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12.5"/>
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding TrustedDisplay}" FontSize="12.5"/>
+
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Info hash" Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12.5"/>
+                    <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding InfoHash}" FontSize="11" FontFamily="Consolas,monospace"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" MaxWidth="230"/>
+                        <Button Content="Copy" Classes="ghost" FontSize="11" Padding="8,2"
+                                Command="{Binding CopyHashCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Grid>
+
+        <!-- Actions -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,20,0,0">
+            <Button Grid.Column="0" Content="Open on site ↗" Classes="ghost"
+                    Command="{Binding OpenPageCommand}" IsVisible="{Binding HasViewUrl}"/>
+            <Button Grid.Column="2" Content="Close" Classes="ghost" Margin="0,0,8,0"
+                    Command="{Binding CloseCommand}"/>
+            <Button Grid.Column="3" Content="Download" Classes="accent"
+                    Command="{Binding DownloadCommand}"/>
+        </Grid>
+    </Grid>
+</Window>

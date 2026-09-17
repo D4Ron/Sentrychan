@@ -1,0 +1,136 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        x:Class="Sentrychan.UI.Views.Dialogs.JoinWatchPartyDialog"
+        x:DataType="vm:JoinWatchPartyViewModel"
+        Title="Join Watch Party"
+        Width="400" Height="400"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}"
+        CornerRadius="{DynamicResource DialogCornerRadius}"
+        TransparencyLevelHint="Mica"
+        ExtendClientAreaToDecorationsHint="True">
+    
+    <Grid RowDefinitions="Auto,*" Margin="16">
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="Join Watch Party" FontSize="20" FontWeight="Bold" Margin="0,0,0,16"/>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Spacing="16">
+                <!-- Invite Link Paste -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Have an invite link? Paste it here:" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <TextBox x:Name="InvitePasteBox"
+                             Watermark="sentrychan://join/..."
+                             TextChanged="OnInvitePasteChanged"
+                             Height="34"/>
+                </StackPanel>
+
+                <Separator Background="{DynamicResource BorderSubtleBrush}" />
+
+                <!-- Nearby Parties Section -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Nearby Parties" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                    <Border Background="{DynamicResource SurfaceBackgroundBrush}" 
+                            BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" 
+                            CornerRadius="{DynamicResource CardCornerRadius}" Padding="4" MinHeight="100">
+                        <Panel>
+                            <TextBlock Text="Searching for nearby parties..." 
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextTertiaryBrush}"
+                                       IsVisible="{Binding !HasNearbyParties}"/>
+                            
+                            <ItemsControl ItemsSource="{Binding NearbyParties}" IsVisible="{Binding HasNearbyParties}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="8">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding Data.HostDisplayName}" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding Data.RoomCode}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Content="Join" Classes="accent" Padding="12,4"
+                                                        Command="{Binding $parent[Window].((vm:JoinWatchPartyViewModel)DataContext).JoinNearbyCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Panel>
+                    </Border>
+                </StackPanel>
+
+                <Separator Background="{DynamicResource BorderSubtleBrush}" />
+
+                <!-- Manual Entry Form -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="MANUAL ENTRY" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                    
+                    <Border IsVisible="{Binding IsTailscaleDetected}"
+                            Background="{DynamicResource AccentSubtleBrush}"
+                            CornerRadius="6" Padding="10 8" Margin="0 0 0 10">
+                      <StackPanel Spacing="3">
+                        <TextBlock Text="Tailscale detected on this device"
+                                   FontSize="11" FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentLightBrush}" />
+                        <TextBlock
+                          Text="If the host is also on Tailscale, paste their Tailscale invite link above."
+                          FontSize="10"
+                          Foreground="{DynamicResource TextTertiaryBrush}"
+                          TextWrapping="Wrap" />
+                      </StackPanel>
+                    </Border>
+                    
+                    <Grid ColumnDefinitions="*, 80">
+                        <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                            <TextBlock Text="Host Address" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding HostIp}" Watermark="e.g. 192.168.1.100" Height="34"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="Port" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding Port}" Watermark="7742" Height="34"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="*, *">
+                        <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                            <TextBlock Text="Room Code" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding RoomCode}" MaxLength="6" Watermark="ABCD12" Height="34"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="Display Name" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding Username}" Watermark="Your name..." Height="34"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Room Password (Optional)" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Text="{Binding Password}" PasswordChar="*" Watermark="If required by host" Height="34"/>
+                    </StackPanel>
+
+                    <!-- QR Info -->
+                    <StackPanel Spacing="2" Margin="0 4">
+                        <TextBlock Text="On mobile: scan the QR code shown on the host's screen,"
+                                   FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="then paste the link here to auto-fill."
+                                   FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!-- Status Message -->
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Foreground="{DynamicResource StatusRedBrush}"
+                               IsVisible="{Binding HasError}"
+                               FontSize="11" TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <!-- Footer Buttons -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0 8 0 0">
+                    <Button Content="Cancel" Classes="ghost" Click="Cancel_Click" IsEnabled="{Binding !IsBusy}"/>
+                    <Button Content="Join Party" Classes="accent" Command="{Binding JoinCommand}" IsEnabled="{Binding !IsBusy}" IsDefault="True"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

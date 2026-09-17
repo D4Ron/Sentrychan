@@ -1,0 +1,24 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Sentrychan.UI.App"
+             xmlns:converters="using:Sentrychan.UI.Converters"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <converters:StringToBrushConverter x:Key="StringToBrushConverter"/>
+            <converters:BoolToDoubleConverter x:Key="BoolToDoubleConverter"/>
+            <converters:IconNameToPathConverter x:Key="IconNameToPathConverter"/>
+            <converters:StringToInitialConverter x:Key="StringToInitialConverter"/>
+            <converters:PathToBitmapConverter x:Key="PathToBitmapConverter"/>
+            <converters:BoolToBrushConverter x:Key="BoolToBrushConverter"/>
+            <converters:MonitoringStateToBoolConverter x:Key="MonitoringStateToBoolConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme/>
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+        <StyleInclude Source="avares://Sentrychan.UI/Assets/Styles/GlobalStyles.axaml"/>
+    </Application.Styles>
+</Application>

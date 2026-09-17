@@ -1,0 +1,42 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        xmlns:controls="using:Sentrychan.UI.Controls"
+        x:Class="Sentrychan.UI.Views.Dialogs.AnimePreviewDialog"
+        x:DataType="vm:AnimePreviewViewModel"
+        Title="Anime"
+        Width="540" SizeToContent="Height" MaxHeight="560"
+        WindowStartupLocation="CenterOwner" CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto,Auto" Margin="22">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="18">
+            <Border Grid.Column="0" Width="140" Height="196" CornerRadius="8" ClipToBounds="True"
+                    VerticalAlignment="Top" Background="{DynamicResource SurfaceBackgroundBrush}">
+                <controls:AsyncImage Url="{Binding PosterUrl}" Stretch="UniformToFill"/>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="8">
+                <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding MetaLine}" FontSize="12"
+                           Foreground="{DynamicResource AccentLightBrush}"/>
+                <ScrollViewer MaxHeight="180">
+                    <TextBlock Text="{Binding Synopsis}" FontSize="12.5" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </ScrollViewer>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,18,0,0">
+            <Button Grid.Column="0" Content="Open source" Classes="ghost"
+                    Command="{Binding OpenPageCommand}" IsVisible="{Binding HasPage}"/>
+            <Button Grid.Column="2" Content="Close" Classes="ghost" Margin="0,0,8,0"
+                    Command="{Binding CloseCommand}"/>
+            <Button Grid.Column="3" Content="Add to Library" Classes="accent"
+                    Command="{Binding AddCommand}" IsVisible="{Binding !InLibrary}"/>
+            <Border Grid.Column="3" Background="{DynamicResource AccentSubtleBrush}" CornerRadius="6"
+                    Padding="12,7" IsVisible="{Binding InLibrary}">
+                <TextBlock Text="In library" Foreground="{DynamicResource AccentLightBrush}" FontSize="12" FontWeight="SemiBold"/>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

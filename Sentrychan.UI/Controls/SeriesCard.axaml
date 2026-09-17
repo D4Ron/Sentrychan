@@ -1,0 +1,110 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             xmlns:converters="using:Sentrychan.UI.Converters"
+             xmlns:models="using:Sentrychan.Core.Models"
+             x:Class="Sentrychan.UI.Controls.SeriesCard"
+             x:DataType="models:Series"
+             DoubleTapped="OnDoubleTapped"
+             Width="120">
+    <UserControl.Styles>
+        <Style Selector="Border#RootBorder">
+            <Setter Property="RenderTransform" Value="none"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="CubicEaseOut"/>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.2"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border#RootBorder:pointerover">
+            <Setter Property="RenderTransform" Value="translateY(-4px) scale(1.025)"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderEmphasisBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Name="RootBorder" 
+            Background="{DynamicResource CardBackgroundBrush}" 
+            BorderBrush="{DynamicResource BorderSubtleBrush}" 
+            BorderThickness="1" 
+            CornerRadius="{DynamicResource CardCornerRadius}"
+            ClipToBounds="True"
+            PointerEntered="OnPointerEntered"
+            PointerExited="OnPointerExited">
+        <Border.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="Look for Episode..." Click="OnLookForEpisodeClick"/>
+                <MenuItem Header="Download All Episodes..." Click="OnDownloadAllClick"/>
+                <MenuItem Header="Remove from Library" Click="OnRemoveSeriesClick" Foreground="{DynamicResource StatusRedBrush}"/>
+            </ContextMenu>
+        </Border.ContextMenu>
+        <Grid RowDefinitions="*, Auto">
+            <!-- Poster Area -->
+            <Panel Grid.Row="0" Height="210">
+                <Border Name="PosterPlaceholder" Background="{DynamicResource SurfaceBackgroundBrush}"/>
+                <controls:AsyncImage Url="{Binding PosterPath}" Stretch="UniformToFill"/>
+                
+                <!-- Episode Progress Badge (Task 4.1) -->
+                <Border CornerRadius="8" Background="{DynamicResource AccentBrush}" Padding="6,3"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="6"
+                        IsVisible="{Binding TotalEpisodes, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock FontSize="10" FontWeight="Bold" Foreground="White">
+                        <Run Text="{Binding LastEpisodeNumber}"/><Run Text="/"/><Run Text="{Binding TotalEpisodes}"/>
+                    </TextBlock>
+                </Border>
+                
+                <!-- Poster Overlay (Visible on Hover) -->
+                <Grid Name="PosterOverlay" Opacity="0" Background="{DynamicResource CardHoverOverlayBrush}">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                        <Button Content="Detail" FontSize="8.5" FontWeight="600" Padding="7,4" 
+                                Background="#20FFFFFF" BorderBrush="#38FFFFFF" BorderThickness="1"
+                                Command="{Binding $parent[controls:SeriesCard].OpenDetailCommand}"
+                                CommandParameter="{Binding}"/>
+                        <Button Content="Poster" FontSize="8.5" FontWeight="600" Classes="ghost" Padding="4"
+                                Background="#20FFFFFF" BorderBrush="#38FFFFFF" BorderThickness="1"
+                                Click="OnPosterButtonClick">
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Upload Custom..." Click="OnOpenPosterOptionsClick"/>
+                                    <MenuItem Header="Re-download from MAL" Click="OnDownloadPosterClick"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Secret Mode Censor Bar -->
+                <Border Name="CensorBar" Background="Black" VerticalAlignment="Center" Height="22" IsVisible="False">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Name="TitleFirstHalf" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <Rectangle Width="40" Height="2" Fill="White" VerticalAlignment="Center" Margin="4,0" Opacity="0.5"/>
+                        <TextBlock Name="TitleSecondHalf" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" IsVisible="False"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Sukebei Badge (Secret Mode only) -->
+                <Border Name="SukebeiBadge" Background="{DynamicResource StatusRedBrush}" Padding="4,2" 
+                        CornerRadius="4" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="False">
+                    <TextBlock Text="18+" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                </Border>
+            </Panel>
+
+            <!-- Title Area -->
+            <Border Grid.Row="1" Padding="10,8" Background="Transparent">
+                <Grid ColumnDefinitions="*, Auto">
+                    <TextBlock Grid.Column="0" Text="{Binding Title}"
+                               FontSize="12.5" FontWeight="600"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis" MaxLines="1"/>
+
+                    <!-- Airing-status dot: green = airing, violet = finished,
+                         amber = upcoming. Transparent (invisible) when unknown. -->
+                    <Border Grid.Column="1" Width="7" Height="7" CornerRadius="4"
+                            Margin="6,0,0,0" VerticalAlignment="Center"
+                            ToolTip.Tip="{Binding AiringStatus}"
+                            Background="{Binding AiringStatus, Converter={x:Static converters:AiringStatusToDotBrushConverter.Instance}}"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

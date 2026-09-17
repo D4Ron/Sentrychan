@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sentrychan.UI.Views.Dialogs.FirstRunDialog"
+        Title="Welcome to Sentrychan"
+        Width="520" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <StackPanel Margin="28" Spacing="18">
+        <StackPanel Orientation="Horizontal" Spacing="14">
+            <Border Width="52" Height="52" CornerRadius="26" ClipToBounds="True" Background="#0B0D14">
+                <Image Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
+            </Border>
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="Welcome to Sentrychan" FontSize="19" FontWeight="Bold"/>
+                <TextBlock Text="Two quick folders and you're set." FontSize="12.5"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Download folder -->
+        <StackPanel Spacing="5">
+            <TextBlock Text="Downloads folder" FontSize="12.5" FontWeight="SemiBold"/>
+            <TextBlock Text="Where new downloads land before they're organized (e.g. your Downloads folder)."
+                       FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBox Grid.Column="0" x:Name="DownloadBox" Watermark="Not set"/>
+                <Button Grid.Column="1" Content="Browse…" Classes="ghost" Margin="8,0,0,0" Click="OnBrowseDownload"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- Library folder -->
+        <StackPanel Spacing="5">
+            <TextBlock Text="Anime library folder" FontSize="12.5" FontWeight="SemiBold"/>
+            <TextBlock Text="Where episodes are organized into Show / Season folders."
+                       FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBox Grid.Column="0" x:Name="LibraryBox" Watermark="Not set"/>
+                <Button Grid.Column="1" Content="Browse…" Classes="ghost" Margin="8,0,0,0" Click="OnBrowseLibrary"/>
+            </Grid>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+            <Button Content="Skip for now" Classes="ghost" Click="OnSkip"/>
+            <Button Content="Get started" Classes="accent" Click="OnConfirm"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

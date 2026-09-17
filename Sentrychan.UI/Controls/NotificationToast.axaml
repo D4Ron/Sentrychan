@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="240" d:DesignHeight="80"
+             x:Class="Sentrychan.UI.Controls.NotificationToast">
+    <Border Name="ToastRoot" Width="240" 
+            Background="{DynamicResource CardHoverBackgroundBrush}" 
+            BorderBrush="{DynamicResource BorderEmphasisBrush}" 
+            BorderThickness="3,1,1,1" 
+            CornerRadius="{DynamicResource CardCornerRadius}" 
+            IsVisible="False">
+        <Border.Transitions>
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.28"/>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.22" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Border.Transitions>
+        <Border.RenderTransform>
+            <TranslateTransform X="260"/>
+        </Border.RenderTransform>
+
+        <Border Padding="11,10">
+        <StackPanel Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Border Classes="breathing" Width="6" Height="6" CornerRadius="3" Background="{DynamicResource AccentBrush}"/>
+                <TextBlock Name="TitleText" Text="Notification" 
+                           FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+            </StackPanel>
+            <TextBlock Name="BodyText" Text="Task completed successfully." 
+                       FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" 
+                       TextWrapping="Wrap"/>
+            <TextBlock Name="TimeText" Text="Just now" 
+                       FontSize="9" Foreground="{DynamicResource TextTertiaryBrush}"/>
+        </StackPanel>
+        </Border>
+    </Border>
+</UserControl>

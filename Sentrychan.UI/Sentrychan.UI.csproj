@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<ApplicationManifest>app.manifest</ApplicationManifest>
+		<AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+	</PropertyGroup>
+	<ItemGroup>
+		<Folder Include="Models\" />
+		<AvaloniaResource Include="Assets\**" Exclude="Assets\**\*.axaml" />
+	</ItemGroup>
+	<ItemGroup>
+	</ItemGroup>
+	<ItemGroup>
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Avalonia" Version="11.3.12" />
+		<PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
+		<PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.12" />
+		<PackageReference Include="Avalonia.ReactiveUI" Version="11.3.9" />
+		<PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
+		<PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
+		<PackageReference Include="Avalonia.Diagnostics" Version="11.3.12">
+			<IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+			<PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+		</PackageReference>
+		<PackageReference Include="LibVLCSharp.Avalonia" Version="3.9.0" />
+		<!-- Animated-GIF frame decoding for the reader (matches Avalonia's own Skia). -->
+		<PackageReference Include="SkiaSharp" Version="2.88.9" />
+		<PackageReference Include="QRCoder" Version="1.6.0" />
+		<PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Sentrychan.Core\Sentrychan.Core.csproj" />
+	</ItemGroup>
+</Project>

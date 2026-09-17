@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sentrychan.UI.Views.Dialogs.EpisodePickerDialog"
+        Title="Current Episode"
+        Width="350" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="{DynamicResource SurfaceBackgroundBrush}">
+    
+    <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8">
+        <StackPanel Margin="24">
+            <TextBlock Text="Add to Library" FontSize="20" FontWeight="Bold" Margin="0,0,0,8"/>
+            <TextBlock Text="What episode are you currently on?" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,16" TextWrapping="Wrap"/>
+            
+            <TextBlock Text="Current Episode:" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <NumericUpDown x:Name="EpisodeInput" Minimum="0" Value="0" FormatString="0" Margin="0,0,0,24"/>
+            
+            <TextBlock Text="Tip: Start at 0 to download from the beginning." 
+                       FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,-16,0,24" TextWrapping="Wrap"/>
+            
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <Button Grid.Column="1" Content="Cancel" Click="OnCancelClick" Margin="0,0,8,0" Classes="ghost"/>
+                <Button Grid.Column="2" Content="Add to Library" Click="OnSaveClick" Classes="accent" IsDefault="True"/>
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>

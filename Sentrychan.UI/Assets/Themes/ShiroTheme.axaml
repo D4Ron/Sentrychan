@@ -1,0 +1,46 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        SHIRO THEME (白 = White)
+        Clean light mode — soft white surfaces, violet accent, dark text.
+    -->
+
+    <!-- Backgrounds -->
+    <SolidColorBrush x:Key="AppBackgroundBrush"       Color="#F4F4F8"/>
+    <SolidColorBrush x:Key="SurfaceBackgroundBrush"   Color="#EAEAF0"/>
+    <SolidColorBrush x:Key="CardBackgroundBrush"      Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#F0F0FA"/>
+    <SolidColorBrush x:Key="CardHoverOverlayBrush"    Color="#14000000"/>
+
+    <!-- Accent -->
+    <SolidColorBrush x:Key="AccentBrush"       Color="#6D28D9"/>
+    <SolidColorBrush x:Key="AccentLightBrush"  Color="#8B5CF6"/>
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#EDE9FE"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextPrimaryBrush"   Color="#1A1A2E"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#4A4A6A"/>
+    <SolidColorBrush x:Key="TextTertiaryBrush"  Color="#7A7A9A"/>
+    <SolidColorBrush x:Key="TextMutedBrush"     Color="#B0B0C8"/>
+
+    <!-- Borders -->
+    <SolidColorBrush x:Key="BorderBrush"         Color="#D4D4E8"/>
+    <SolidColorBrush x:Key="BorderSubtleBrush"   Color="#E4E4F4"/>
+    <SolidColorBrush x:Key="BorderEmphasisBrush" Color="#6D28D9"/>
+
+    <!-- Status (unchanged semantics) -->
+    <SolidColorBrush x:Key="StatusGreenBrush"  Color="#059669"/>
+    <SolidColorBrush x:Key="StatusRedBrush"    Color="#DC2626"/>
+    <SolidColorBrush x:Key="StatusAmberBrush"  Color="#D97706"/>
+    <SolidColorBrush x:Key="AccentOrangeBrush" Color="#EA580C"/>
+
+    <!-- Poster placeholders (muted light tones) -->
+    <SolidColorBrush x:Key="PosterPlaceholderA" Color="#E8E0F4"/>
+    <SolidColorBrush x:Key="PosterPlaceholderB" Color="#E0E8F4"/>
+    <SolidColorBrush x:Key="PosterPlaceholderC" Color="#E0F4E8"/>
+    <SolidColorBrush x:Key="PosterPlaceholderD" Color="#F4EEE0"/>
+    <SolidColorBrush x:Key="PosterPlaceholderE" Color="#F4E0E8"/>
+    <SolidColorBrush x:Key="PosterPlaceholderF" Color="#EEF4E0"/>
+
+</ResourceDictionary>

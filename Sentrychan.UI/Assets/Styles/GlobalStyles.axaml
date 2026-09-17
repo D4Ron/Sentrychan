@@ -1,0 +1,370 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="using:Sentrychan.UI.Converters">
+
+    <Styles.Resources>
+        <ResourceDictionary>
+
+            <!-- Backgrounds -->
+            <SolidColorBrush x:Key="AppBackgroundBrush"       Color="#0D0D1A"/>
+            <SolidColorBrush x:Key="SurfaceBackgroundBrush"   Color="#12121F"/>
+            <SolidColorBrush x:Key="CardBackgroundBrush"      Color="#1A1A2E"/>
+            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#20203A"/>
+            <SolidColorBrush x:Key="CardHoverOverlayBrush"    Color="#90000000"/>
+
+            <!-- Accent -->
+            <SolidColorBrush x:Key="AccentBrush"       Color="#7C3AED"/>
+            <SolidColorBrush x:Key="AccentLightBrush"  Color="#A78BFA"/>
+            <SolidColorBrush x:Key="AccentSubtleBrush" Color="#2D1B69"/>
+
+            <!-- Text -->
+            <SolidColorBrush x:Key="TextPrimaryBrush"   Color="#F0F0FF"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9090B8"/>
+            <SolidColorBrush x:Key="TextTertiaryBrush"  Color="#5A5A88"/>
+            <SolidColorBrush x:Key="TextMutedBrush"     Color="#3A3A60"/>
+
+            <!-- Borders -->
+            <SolidColorBrush x:Key="BorderBrush"         Color="#252540"/>
+            <SolidColorBrush x:Key="BorderSubtleBrush"   Color="#1C1C34"/>
+            <SolidColorBrush x:Key="BorderEmphasisBrush" Color="#7C3AED"/>
+
+            <!-- Status -->
+            <SolidColorBrush x:Key="StatusGreenBrush"  Color="#00C853"/>
+            <SolidColorBrush x:Key="StatusRedBrush"    Color="#F44336"/>
+            <SolidColorBrush x:Key="StatusAmberBrush"  Color="#FFBF00"/>
+            <SolidColorBrush x:Key="AccentOrangeBrush" Color="#FF9800"/>
+
+            <!-- Hero overlay -->
+            <LinearGradientBrush x:Key="DetailHeroOverlayBrush"
+                                 StartPoint="0%,0%" EndPoint="0%,100%">
+                <GradientStop Color="#A0000000" Offset="0"/>
+                <GradientStop Color="#F0000000" Offset="1"/>
+            </LinearGradientBrush>
+
+            <!-- Poster placeholders -->
+            <SolidColorBrush x:Key="PosterPlaceholderA" Color="#1A0A2E"/>
+            <SolidColorBrush x:Key="PosterPlaceholderB" Color="#0A1A2E"/>
+            <SolidColorBrush x:Key="PosterPlaceholderC" Color="#0A2E1A"/>
+            <SolidColorBrush x:Key="PosterPlaceholderD" Color="#2E1A0A"/>
+            <SolidColorBrush x:Key="PosterPlaceholderE" Color="#2E0A1A"/>
+            <SolidColorBrush x:Key="PosterPlaceholderF" Color="#1A2E0A"/>
+
+            <!-- Secret mode brushes -->
+            <SolidColorBrush x:Key="SM_AppBackgroundBrush"       Color="#1A0A0D"/>
+            <SolidColorBrush x:Key="SM_SurfaceBackgroundBrush"   Color="#1F0D12"/>
+            <SolidColorBrush x:Key="SM_CardBackgroundBrush"      Color="#2A1018"/>
+            <SolidColorBrush x:Key="SM_CardHoverBackgroundBrush" Color="#2E121C"/>
+            <SolidColorBrush x:Key="SM_AccentBrush"              Color="#DC2626"/>
+            <SolidColorBrush x:Key="SM_AccentLightBrush"         Color="#EF4444"/>
+            <SolidColorBrush x:Key="SM_AccentSubtleBrush"        Color="#7F1D1D"/>
+            <SolidColorBrush x:Key="SM_TextPrimaryBrush"         Color="#FFF0F4"/>
+            <SolidColorBrush x:Key="SM_TextSecondaryBrush"       Color="#C0A0A8"/>
+            <SolidColorBrush x:Key="SM_TextTertiaryBrush"        Color="#A06070"/>
+            <SolidColorBrush x:Key="SM_BorderSubtleBrush"        Color="#3A1E22"/>
+            <SolidColorBrush x:Key="SM_BorderEmphasisBrush"      Color="#DC2626"/>
+
+            <!-- Corner radii -->
+            <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="DialogCornerRadius">12</CornerRadius>
+
+            <!-- Icon path data (FILLED, 16x16 grid). PathIcon fills geometry with
+                 Foreground and draws no stroke, so every shape here must enclose
+                 area — pure line paths render blank. Concentric subpaths cut holes
+                 (EvenOdd is the default fill rule). -->
+            <StreamGeometry x:Key="ChevronRight">M5.2,2.2 L11.5,8 L5.2,13.8 L4,12.6 L9,8 L4,3.4 Z</StreamGeometry>
+            <StreamGeometry x:Key="LibraryRegular">M2,2 L4,2 L4,14 L2,14 Z M5.5,2 L7.5,2 L7.5,14 L5.5,14 Z M9,3 L11,2.6 L13.4,13.6 L11.4,14 Z</StreamGeometry>
+            <StreamGeometry x:Key="DownloadRegular">M7.2,2 L8.8,2 L8.8,8.6 L11.6,5.8 L12.7,6.9 L8,11.6 L3.3,6.9 L4.4,5.8 L7.2,8.6 Z M3,12.6 L13,12.6 L13,14.2 L3,14.2 Z</StreamGeometry>
+            <StreamGeometry x:Key="SparkleRegular">M8,1 L9.5,6.5 L15,8 L9.5,9.5 L8,15 L6.5,9.5 L1,8 L6.5,6.5 Z</StreamGeometry>
+            <StreamGeometry x:Key="NewsRegular">M2,3 L12,3 L12,13 L2,13 Z M3.5,5 L10.5,5 L10.5,6.2 L3.5,6.2 Z M3.5,7.5 L10.5,7.5 L10.5,8.7 L3.5,8.7 Z M3.5,10 L8,10 L8,11.2 L3.5,11.2 Z M12.8,6 L14,6 L14,13 L12.8,13 Z</StreamGeometry>
+            <StreamGeometry x:Key="SearchRegular">M7,2 A5,5,0,1,0,7,12 A5,5,0,0,0,7,2 M7,3.6 A3.4,3.4,0,1,1,7,10.4 A3.4,3.4,0,0,1,7,3.6 M10.3,11.4 L11.4,10.3 L14.5,13.4 L13.4,14.5 Z</StreamGeometry>
+            <StreamGeometry x:Key="LockRegular">M8,1 A3.5,3.5,0,0,0,4.5,4.5 L4.5,6.5 L6,6.5 L6,4.5 A2,2,0,0,1,10,4.5 L10,6.5 L11.5,6.5 L11.5,4.5 A3.5,3.5,0,0,0,8,1 M3,7 L13,7 L13,14.5 L3,14.5 Z</StreamGeometry>
+            <StreamGeometry x:Key="FolderRegular">M1,4 L1,13 L15,13 L15,6 L7,6 L5.5,4 Z</StreamGeometry>
+            <StreamGeometry x:Key="CalendarRegular">M2,3.5 L14,3.5 L14,14 L2,14 Z M3.3,6.5 L12.7,6.5 L12.7,12.7 L3.3,12.7 Z M5.4,1.5 L6.6,1.5 L6.6,4.5 L5.4,4.5 Z M9.4,1.5 L10.6,1.5 L10.6,4.5 L9.4,4.5 Z</StreamGeometry>
+            <StreamGeometry x:Key="PlayRegular">M4.5,2.5 L13.5,8 L4.5,13.5 Z</StreamGeometry>
+            <StreamGeometry x:Key="PauseRegular">M4,2.5 L6.8,2.5 L6.8,13.5 L4,13.5 Z M9.2,2.5 L12,2.5 L12,13.5 L9.2,13.5 Z</StreamGeometry>
+            <StreamGeometry x:Key="RefreshRegular">M8,2 A6,6,0,1,1,2,8 L3.6,8 A4.4,4.4,0,1,0,8,3.6 Z M8,0.8 L11.6,3 L8,5.2 Z</StreamGeometry>
+            <StreamGeometry x:Key="DismissRegular">M3.6,2.5 L8,6.9 L12.4,2.5 L13.5,3.6 L9.1,8 L13.5,12.4 L12.4,13.5 L8,9.1 L3.6,13.5 L2.5,12.4 L6.9,8 L2.5,3.6 Z</StreamGeometry>
+            <!-- Open book (Manga) -->
+            <StreamGeometry x:Key="MangaRegular">M8,3.2 C6.4,2.1 4,1.9 1.8,2.6 L1.8,12.4 C4,11.7 6.4,11.9 8,13 C9.6,11.9 12,11.7 14.2,12.4 L14.2,2.6 C12,1.9 9.6,2.1 8,3.2 Z M8,3.2 L8,13</StreamGeometry>
+            <!-- Closed book (Novels) -->
+            <StreamGeometry x:Key="BookRegular">M3.5,2.5 L11.5,2.5 A1,1,0,0,1,12.5,3.5 L12.5,12.5 A1,1,0,0,1,11.5,13.5 L3.5,13.5 Z M5.5,2.5 L5.5,13.5</StreamGeometry>
+            <StreamGeometry x:Key="PeopleRegular">M6,2 A3,3,0,1,0,6,8 A3,3,0,0,0,6,2 M1,15 C1,11.5 3,9 6,9 C9,9 11,11.5 11,15 M12,5 A2,2,0,1,0,12,9 A2,2,0,0,0,12,5 M11,15 C11,12.5 11.5,11 12,11 C14,11 15,12.5 15,15</StreamGeometry>
+            <StreamGeometry x:Key="SettingsRegular">M8,5.5 A2.5,2.5,0,1,0,8,10.5 A2.5,2.5,0,0,0,8,5.5 M6.8,1 L5.8,3 L3.5,2.2 L2.2,3.5 L3,5.8 L1,6.8 L1,9.2 L3,10.2 L2.2,12.5 L3.5,13.8 L5.8,13 L6.8,15 L9.2,15 L10.2,13 L12.5,13.8 L13.8,12.5 L13,10.2 L15,9.2 L15,6.8 L13,5.8 L13.8,3.5 L12.5,2.2 L10.2,3 L9.2,1 Z</StreamGeometry>
+
+            <converters:BoolToColorConverter x:Key="BoolToGreenBrushConverter"
+                                              TrueValue="{StaticResource StatusGreenBrush}"
+                                              FalseValue="{StaticResource TextTertiaryBrush}" />
+            <converters:BoolToColorConverter x:Key="BoolToAmberBrushConverter"
+                                              TrueValue="{StaticResource StatusAmberBrush}"
+                                              FalseValue="{StaticResource TextTertiaryBrush}" />
+            <converters:BoolToThicknessConverter x:Key="BoolToThicknessConverter"
+                                                 TrueValue="1.5"
+                                                 FalseValue="0" />
+            <converters:BoolToDoubleConverter x:Key="BoolToVisibleOpacity"
+                                              TrueValue="1.0" FalseValue="0.0" />
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <!-- Breathing dot animation -->
+    <Style Selector="Border.breathing">
+        <Style.Animations>
+            <Animation Duration="0:0:2" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%">  <Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                <KeyFrame Cue="50%"> <Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <!-- Logo breathing animation -->
+    <Style Selector="Border.logo-breathing">
+        <Style.Animations>
+            <Animation Duration="0:0:3.5" IterationCount="INFINITE" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%">  <Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                <KeyFrame Cue="50%"> <Setter Property="Opacity" Value="0.6"/></KeyFrame>
+                <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <!-- Base: center content in every button (NavItem overrides with an explicit
+         Left value, so the sidebar nav is unaffected). -->
+    <Style Selector="Button">
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment"   Value="Center"/>
+    </Style>
+
+    <!-- Button: accent -->
+    <Style Selector="Button.accent">
+        <Setter Property="Background"      Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="Foreground"      Value="#FFFFFF"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius"    Value="6"/>
+        <Setter Property="Padding"         Value="14,7"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment"   Value="Center"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Button.accent:pressed">
+        <Setter Property="RenderTransform" Value="scale(0.96)"/>
+    </Style>
+    <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentLightBrush}"/>
+    </Style>
+    <Style Selector="Button.accent:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+    </Style>
+    <Style Selector="Button.accent:disabled /template/ ContentPresenter">
+        <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+
+    <!-- Button: ghost -->
+    <Style Selector="Button.ghost">
+        <Setter Property="Background"      Value="Transparent"/>
+        <Setter Property="Foreground"      Value="{DynamicResource TextSecondaryBrush}"/>
+        <Setter Property="BorderBrush"     Value="{DynamicResource BorderSubtleBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius"    Value="6"/>
+        <Setter Property="Padding"         Value="12,6"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment"   Value="Center"/>
+    </Style>
+
+    <!-- Hover-lift card (subtle) -->
+    <Style Selector="Border.hovercard">
+        <Setter Property="RenderTransform" Value="none"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.hovercard:pointerover">
+        <Setter Property="RenderTransform" Value="translateY(-3px) scale(1.02)"/>
+    </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#14FFFFFF"/>
+    </Style>
+    <Style Selector="Button.ghost:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="#20FFFFFF"/>
+    </Style>
+
+    <!-- Button: danger -->
+    <Style Selector="Button.danger">
+        <Setter Property="Background"      Value="{DynamicResource StatusRedBrush}"/>
+        <Setter Property="Foreground"      Value="#FFFFFF"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius"    Value="6"/>
+        <Setter Property="Padding"         Value="14,7"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+    </Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#EF5350"/>
+    </Style>
+
+    <!-- Button: success -->
+    <Style Selector="Button.success">
+        <Setter Property="Background"      Value="{DynamicResource StatusGreenBrush}"/>
+        <Setter Property="Foreground"      Value="#FFFFFF"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius"    Value="6"/>
+        <Setter Property="Padding"         Value="14,7"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+    </Style>
+    <Style Selector="Button.success:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#00E676"/>
+    </Style>
+
+    <!-- Button: player-btn -->
+    <Style Selector="Button.player-btn">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.player-btn:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#33FFFFFF" />
+        <Setter Property="CornerRadius" Value="4" />
+    </Style>
+
+    <!-- TextBox -->
+    <Style Selector="TextBox">
+        <Setter Property="Background"      Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="Foreground"      Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush"     Value="{DynamicResource BorderSubtleBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius"    Value="6"/>
+        <Setter Property="Padding"         Value="10,7"/>
+        <Setter Property="CaretBrush"      Value="{DynamicResource AccentLightBrush}"/>
+        <Setter Property="SelectionBrush"  Value="{DynamicResource AccentSubtleBrush}"/>
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="TextBox /template/ TextBlock#PART_Watermark">
+        <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+    </Style>
+
+    <!-- ComboBox -->
+    <Style Selector="ComboBox">
+        <Setter Property="Background"      Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="Foreground"      Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush"     Value="{DynamicResource BorderSubtleBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius"    Value="6"/>
+        <Setter Property="Padding"         Value="10,7"/>
+        <Setter Property="MinHeight"       Value="34"/>
+    </Style>
+    <Style Selector="ComboBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="Padding"    Value="10,6"/>
+    </Style>
+
+    <!-- ListBox -->
+    <Style Selector="ListBox">
+        <Setter Property="Background"      Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="ListBoxItem">
+        <Setter Property="Foreground"   Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+    </Style>
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#10FFFFFF"/>
+    </Style>
+
+    <!-- DataGrid -->
+    <Style Selector="DataGrid">
+        <Setter Property="Background"               Value="Transparent"/>
+        <Setter Property="Foreground"               Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="BorderThickness"          Value="0"/>
+        <Setter Property="RowBackground"            Value="Transparent"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+        <Setter Property="VerticalGridLinesBrush"   Value="Transparent"/>
+    </Style>
+    <Style Selector="DataGridColumnHeader">
+        <Setter Property="Background"  Value="{DynamicResource SurfaceBackgroundBrush}"/>
+        <Setter Property="Foreground"  Value="{DynamicResource TextMutedBrush}"/>
+        <Setter Property="Padding"     Value="12,8"/>
+        <Setter Property="FontSize"    Value="11"/>
+        <Setter Property="FontWeight"  Value="Bold"/>
+    </Style>
+    <Style Selector="DataGridCell">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    </Style>
+
+    <!-- ToggleButton -->
+    <Style Selector="ToggleButton">
+        <Setter Property="Background"      Value="{DynamicResource SurfaceBackgroundBrush}"/>
+        <Setter Property="Foreground"      Value="{DynamicResource TextSecondaryBrush}"/>
+        <Setter Property="BorderBrush"     Value="{DynamicResource BorderSubtleBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius"    Value="6"/>
+        <Setter Property="Padding"         Value="12,6"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+    </Style>
+    <Style Selector="ToggleButton:checked /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+    </Style>
+
+    <!-- RadioButton -->
+    <Style Selector="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+
+    <!-- ProgressBar -->
+    <Style Selector="ProgressBar">
+        <Setter Property="Background"   Value="{DynamicResource SurfaceBackgroundBrush}"/>
+        <Setter Property="Foreground"   Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="Height"       Value="3"/>
+        <Setter Property="CornerRadius" Value="2"/>
+    </Style>
+
+    <!-- ScrollBar -->
+    <Style Selector="ScrollBar">
+        <Setter Property="AllowAutoHide" Value="True"/>
+        <Setter Property="Opacity"       Value="0.4"/>
+    </Style>
+
+    <!-- Window -->
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    </Style>
+
+    <!-- TextBlock default foreground -->
+    <Style Selector="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    </Style>
+
+    <!-- Segment Button (Tabs) -->
+    <Style Selector="Button.SegmentButton">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="0,8"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.SegmentButton:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#0AFFFFFF"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="Button.SegmentButton.active /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentLightBrush}"/>
+    </Style>
+
+</Styles>

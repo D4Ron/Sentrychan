@@ -1,0 +1,45 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        x:Class="Sentrychan.UI.Views.Dialogs.FillGapsDialog"
+        x:DataType="vm:FillGapsViewModel"
+        Title="Fill Missing Episodes"
+        Width="600" Height="450"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto, *, Auto" Margin="20">
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,20">
+            <TextBlock Text="Missing Episodes" FontSize="20" FontWeight="Bold"/>
+            <TextBlock Text="The following gaps were found in your library. Select the ones you want to download." Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,0,-8,0" Padding="0,0,8,0">
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource CardBackgroundBrush}" CornerRadius="6" Padding="12" Margin="0,0,0,8">
+                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" IsEnabled="{Binding HasMatch}" Margin="0,0,12,0"/>
+                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" FontSize="13" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="12" IsVisible="{Binding HasMatch}">
+                                        <TextBlock Text="{Binding Group}" FontSize="11" Foreground="{DynamicResource AccentBrush}"/>
+                                        <TextBlock Text="{Binding Size}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                        <TextBlock Text="{Binding Seeders, StringFormat='\{0\}'}" FontSize="11" Foreground="{DynamicResource StatusGreenBrush}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding EpisodeLabel}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*, Auto, Auto" Margin="0,20,0,0">
+            <Button Grid.Column="1" Content="Cancel" Command="{Binding CancelCommand}" Classes="ghost" Margin="0,0,8,0" Click="CancelButton_Click"/>
+            <Button Grid.Column="2" Content="Download Selected" Command="{Binding ConfirmCommand}" Classes="accent" Click="ConfirmButton_Click"/>
+        </Grid>
+    </Grid>
+</Window>

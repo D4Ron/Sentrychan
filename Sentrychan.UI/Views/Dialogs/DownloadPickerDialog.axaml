@@ -1,0 +1,91 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialogs="using:Sentrychan.UI.Views.Dialogs"
+        x:Class="Sentrychan.UI.Views.Dialogs.DownloadPickerDialog"
+        Title="Download"
+        Width="400" Height="300"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}"
+        CanResize="False"
+        SizeToContent="Height"
+        MinHeight="220">
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="24">
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,20">
+            <TextBlock Text="How do you want to download this?"
+                       FontSize="16" FontWeight="Bold"/>
+            <TextBlock x:Name="ContextLabel"
+                       Text="Hub"
+                       FontSize="11"
+                       Foreground="{DynamicResource TextMutedBrush}"/>
+        </StackPanel>
+
+        <!-- Backend options -->
+        <ItemsControl Grid.Row="1"
+                      x:Name="BackendList"
+                      Margin="0,0,0,16">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="dialogs:BackendOptionVm">
+                    <!-- Each item is a BackendOptionVm -->
+                    <Border Padding="12,10"
+                            CornerRadius="6"
+                            Margin="0,0,0,6"
+                            BorderThickness="1.5"
+                            x:Name="OptionBorder">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <RadioButton Grid.Column="0"
+                                         IsChecked="{Binding IsSelected}"
+                                         GroupName="BackendChoice"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,12,0"/>
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding DisplayName}"
+                                           FontWeight="SemiBold"
+                                           FontSize="13"/>
+                                <TextBlock Text="{Binding StatusText}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding AvailabilityBadge}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{Binding AvailabilityColor}"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Remember checkbox -->
+        <CheckBox Grid.Row="2"
+                  x:Name="RememberCheckBox"
+                  Margin="0,0,0,20"
+                  FontSize="12">
+            <TextBlock>
+                <Run Text="Remember for "/>
+                <Run x:Name="ContextRun" Text="Hub" FontWeight="SemiBold"/>
+                <Run Text=" downloads"/>
+            </TextBlock>
+        </CheckBox>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto">
+            <Button Grid.Column="1"
+                    Content="Cancel"
+                    Classes="ghost"
+                    x:Name="CancelButton"
+                    Margin="0,0,8,0"
+                    MinWidth="80"/>
+            <Button Grid.Column="2"
+                    Content="Download →"
+                    Classes="accent"
+                    x:Name="ConfirmButton"
+                    MinWidth="110"/>
+        </Grid>
+    </Grid>
+</Window>

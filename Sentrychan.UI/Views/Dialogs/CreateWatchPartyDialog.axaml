@@ -1,0 +1,268 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        xmlns:i="using:Avalonia.Xaml.Interactivity"
+        xmlns:ia="using:Avalonia.Xaml.Interactions.Core"
+        x:Class="Sentrychan.UI.Views.Dialogs.CreateWatchPartyDialog"
+        x:DataType="vm:CreateWatchPartyViewModel"
+        Title="Create Watch Party"
+        Width="420" Height="580"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}"
+        CornerRadius="{DynamicResource DialogCornerRadius}"
+        TransparencyLevelHint="Mica"
+        ExtendClientAreaToDecorationsHint="True">
+    
+    <Grid RowDefinitions="*,Auto" Margin="16">
+        <!-- Row 0: Header and scrollable form content -->
+        <DockPanel Grid.Row="0">
+            <TextBlock DockPanel.Dock="Top" Text="Create Watch Party" FontSize="20" FontWeight="Bold" Margin="0,0,0,16"/>
+            
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Spacing="12">
+                    <!-- Form (Input state) -->
+                    <StackPanel Spacing="12" IsVisible="{Binding !IsSessionCreated}">
+                        <!-- Mode Selector (Segmented) -->
+                        <Border Background="{DynamicResource SurfaceBackgroundBrush}" 
+                                CornerRadius="8" Padding="3" Margin="0,0,0,8">
+                            <Grid ColumnDefinitions="*,*">
+                                <Button Grid.Column="0" Content="Library" 
+                                        Command="{Binding SwitchToLibraryModeCommand}"
+                                        Classes.active="{Binding IsLibraryMode}"
+                                        Classes="SegmentButton"/>
+                                <Button Grid.Column="1" Content="Custom" 
+                                        Command="{Binding SwitchToCustomModeCommand}"
+                                        Classes.active="{Binding IsCustomMode}"
+                                        Classes="SegmentButton"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Library Mode Panel -->
+                        <StackPanel Spacing="8" IsVisible="{Binding IsLibraryMode}">
+                            <TextBlock Text="Series" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
+                            <ComboBox ItemsSource="{Binding AvailableSeries}"
+                                      SelectedItem="{Binding SelectedSeries}"
+                                      DisplayMemberBinding="{Binding Title}"
+                                      HorizontalAlignment="Stretch" />
+                        </StackPanel>
+
+                        <!-- Custom Mode Panel -->
+                        <StackPanel Spacing="8" IsVisible="{Binding IsCustomMode}">
+                            <TextBlock Text="Search Anime (MAL)" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox Text="{Binding CustomSeriesSearch}" Watermark="Search titles..."/>
+                                <Button Grid.Column="1" Command="{Binding SearchJikanCommand}" 
+                                        Content="Search" Margin="4,0,0,0"/>
+                            </Grid>
+
+                            <!-- Mini Result List -->
+                            <ListBox ItemsSource="{Binding SearchResults}" MaxHeight="120"
+                                     IsVisible="{Binding SearchResults.Count}"
+                                     SelectedItem="{Binding SelectedSearchResult}"
+                                     Background="{DynamicResource SurfaceBackgroundBrush}"
+                                     CornerRadius="6">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="Auto, *">
+                                            <Image Source="{Binding Images.Jpg.ImageUrl}" Width="24" Height="34" Stretch="UniformToFill" Margin="0,0,8,0"/>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Type}" FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <TextBlock Text="Manual Title" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,0"/>
+                            <TextBox Text="{Binding CustomSeriesTitle}" Watermark="Enter anime title manually..."/>
+                        </StackPanel>
+
+                        <!-- Episode number -->
+                        <TextBlock Text="Episode" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" />
+                        <NumericUpDown Value="{Binding SelectedEpisodeNumber}"
+                                       Minimum="1" Maximum="9999" Increment="1" />
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Display Name" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            <TextBox Text="{Binding DisplayName}" Watermark="Your name in the party..." Height="34"/>
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Password (Optional)" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            <TextBox Text="{Binding Password}" PasswordChar="*" Watermark="Leave blank for public" Height="34"/>
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Video Source" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            <Grid ColumnDefinitions="*,Auto" Margin="0 0 0 4">
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding VideoSource}"
+                                         Watermark="Video file path or URL..."
+                                         IsReadOnly="True" Height="34"/>
+                                <Button Grid.Column="1"
+                                        Content="Browse"
+                                        Command="{Binding BrowseCommand}"
+                                        Margin="6 0 0 0" Height="34"/>
+                            </Grid>
+                            <TextBlock Text="{Binding FileStatusMessage}"
+                                       FontSize="11"
+                                       Foreground="{Binding FileFoundAutomatically,
+                                           Converter={StaticResource BoolToGreenBrushConverter}}" />
+                        </StackPanel>
+
+                        <!-- Status Message -->
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   Foreground="{DynamicResource StatusRedBrush}"
+                                   IsVisible="{Binding HasError}"
+                                   FontSize="11" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <!-- Success State (Invite Panel) -->
+                    <StackPanel IsVisible="{Binding IsSessionCreated}" Spacing="16" Margin="0 8">
+                        <TextBlock Text="Party Created!" Foreground="{DynamicResource AccentLightBrush}" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center"/>
+                        
+                        <Border Background="{DynamicResource SurfaceBackgroundBrush}" Padding="20" 
+                                CornerRadius="{DynamicResource CardCornerRadius}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                            <StackPanel Spacing="8" HorizontalAlignment="Center">
+                                <TextBlock Text="INVITE LINK" HorizontalAlignment="Center" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding RoomCode}" FontSize="36" FontWeight="800" LetterSpacing="6" 
+                                           Foreground="{DynamicResource AccentLightBrush}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0" Text="{Binding InviteString}" IsReadOnly="True" Height="34" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="1" Content="Copy" Command="{Binding CopyLinkCommand}" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <Image Source="{Binding QrCodeBitmap}"
+                               Width="180" Height="180"
+                               RenderOptions.BitmapInterpolationMode="None"
+                               HorizontalAlignment="Center"/>
+
+                        <TextBlock Text="How will friends connect?"
+                                   FontSize="12" FontWeight="Bold"
+                                   Margin="0 12 0 8" />
+
+                        <StackPanel Spacing="6">
+                          <!-- Option 1: LAN -->
+                          <Border Background="{DynamicResource CardBackgroundBrush}"
+                                  BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                  BorderThickness="1" CornerRadius="6" Padding="12 10">
+                            <StackPanel>
+                              <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Same network (LAN)"
+                                           FontWeight="Bold" FontSize="12" />
+                                <Border Background="{DynamicResource AccentSubtleBrush}"
+                                        CornerRadius="3" Padding="4 2">
+                                  <TextBlock Text="READY" FontSize="9" FontWeight="Bold"
+                                             Foreground="{DynamicResource StatusGreenBrush}" />
+                                </Border>
+                              </StackPanel>
+                              <TextBlock Text="Friends on the same WiFi join automatically."
+                                         FontSize="11"
+                                         Foreground="{DynamicResource TextTertiaryBrush}" />
+                            </StackPanel>
+                          </Border>
+
+                          <!-- Option 2: Tailscale -->
+                          <Border Background="{DynamicResource CardBackgroundBrush}"
+                                  BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                  BorderThickness="1" CornerRadius="6" Padding="12 10">
+                            <Grid RowDefinitions="Auto,Auto,Auto">
+                              <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Internet via Tailscale"
+                                           FontWeight="Bold" FontSize="12" />
+                                <Border Background="{DynamicResource AccentSubtleBrush}"
+                                        CornerRadius="3" Padding="4 2">
+                                  <TextBlock Text="FREE" FontSize="9" FontWeight="Bold"
+                                             Foreground="{DynamicResource AccentLightBrush}" />
+                                </Border>
+                              </StackPanel>
+                              <TextBlock Grid.Row="1"
+                                         Text="Install Tailscale on all devices. Share your Tailscale IP instead of your local IP."
+                                         FontSize="11"
+                                         Foreground="{DynamicResource TextTertiaryBrush}"
+                                         TextWrapping="Wrap" Margin="0 3 0 6" />
+                              <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6">
+                                <Button Content="Get Tailscale (free)"
+                                        Command="{Binding OpenTailscaleCommand}" />
+                                <Button Content="Copy Tailscale Invite"
+                                        Command="{Binding CopyTailscaleInviteCommand}"
+                                        IsEnabled="{Binding TailscaleIp,
+                                            Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <TextBlock Text="{Binding TailscaleIp}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource AccentLightBrush}"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding TailscaleIp,
+                                               Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                              </StackPanel>
+                            </Grid>
+                          </Border>
+
+                          <!-- Option 3: FRP Tunnel -->
+                          <Border Background="{DynamicResource CardBackgroundBrush}"
+                                  BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                  BorderThickness="1" CornerRadius="6" Padding="12 10">
+                            <Grid RowDefinitions="Auto,Auto,Auto">
+                              <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Internet via Tunnel"
+                                           FontWeight="Bold" FontSize="12" />
+                                <Border Background="{DynamicResource CardHoverBackgroundBrush}"
+                                        CornerRadius="3" Padding="4 2">
+                                  <TextBlock Text="REQUIRES SETUP" FontSize="9" FontWeight="Bold"
+                                             Foreground="{DynamicResource TextTertiaryBrush}" />
+                                </Border>
+                              </StackPanel>
+                              <TextBlock Grid.Row="1"
+                                         Text="{Binding TunnelStatusMessage}"
+                                         FontSize="11"
+                                         Foreground="{DynamicResource TextTertiaryBrush}"
+                                         TextWrapping="Wrap" Margin="0 3 0 6" />
+                              <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6">
+                                <Button Content="{Binding TunnelButtonLabel}"
+                                        Command="{Binding ToggleTunnelCommand}"
+                                        IsEnabled="{Binding IsTunnelConfigured}" />
+                                <TextBlock Text="Configure FRP server in Settings first"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding !IsTunnelConfigured}" />
+                              </StackPanel>
+                            </Grid>
+                          </Border>
+                        </StackPanel>
+
+                        <Button Content="Copy &amp; Open Discord" 
+                                Command="{Binding ShareDiscordCommand}" 
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- Row 1: Footers (Pinned) -->
+        <Border Grid.Row="1"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0 1 0 0"
+                Margin="-16 12 -16 -16"
+                Padding="18 12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="{Binding CancelButtonText}" Command="{Binding CancelCommand}" IsEnabled="{Binding !IsBusy}"/>
+                <Button Content="Create Party"
+                        Command="{Binding CreateCommand}"
+                        Classes="primary"
+                        IsVisible="{Binding !IsSessionCreated}"
+                        IsDefault="True"/>
+                <Button Content="Go to Lobby"
+                        Command="{Binding ProceedToLobbyCommand}"
+                        Classes="primary"
+                        IsVisible="{Binding IsSessionCreated}"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

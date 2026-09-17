@@ -1,0 +1,370 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        xmlns:models="using:Sentrychan.Core.Models"
+        x:Class="Sentrychan.UI.Views.Dialogs.AccountDialog"
+        x:DataType="vm:AccountViewModel"
+        Title="Account"
+        Width="460" Height="580"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="*,Auto" Margin="0,0,0,16">
+
+        <TabControl Grid.Row="0" Margin="20,16,20,0">
+
+            <!-- ══════════════════ TAB 1: ACCOUNT ══════════════════ -->
+            <TabItem Header="Account">
+                <ScrollViewer>
+                    <StackPanel Spacing="16" Margin="0,12,0,0">
+
+                        <!-- Not configured warning -->
+                        <Border IsVisible="{Binding !IsSupabaseConfigured}"
+                                Background="#332B2000"
+                                BorderBrush="#CC9900"
+                                BorderThickness="1" CornerRadius="6"
+                                Padding="14,10">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Supabase not configured"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="#FFCC00"/>
+                                <TextBlock Text="{Binding NotConfiguredMessage}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Signed Out ── -->
+                        <StackPanel IsVisible="{Binding IsSignedOut}" Spacing="14">
+                            <Button Command="{Binding SignInWithGoogleCommand}"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center"
+                                    Height="42"
+                                    Background="{DynamicResource AccentBrush}"
+                                    Foreground="White"
+                                    CornerRadius="8"
+                                    IsEnabled="{Binding IsSupabaseConfigured}">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Border Width="20" Height="20" CornerRadius="10" Background="White">
+                                        <TextBlock Text="G" FontSize="13" FontWeight="Bold"
+                                                   Foreground="#4285F4"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="Sign in with Google"
+                                               FontSize="14" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Button>
+                            <TextBlock Text="Your library stays local. Sign in to sync it across devices and add friends."
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- ── Signed In ── -->
+                        <StackPanel IsVisible="{Binding IsSignedIn}" Spacing="14">
+
+                            <!-- Avatar card -->
+                            <Border Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                    BorderThickness="1" CornerRadius="10"
+                                    Padding="16">
+                                <Grid ColumnDefinitions="48,*,Auto">
+                                    <Border Grid.Column="0"
+                                            Width="44" Height="44" CornerRadius="22"
+                                            Background="{DynamicResource AccentBrush}"
+                                            VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding AvatarInitials}"
+                                                   FontSize="18" FontWeight="Bold"
+                                                   Foreground="White"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                                        <TextBlock Text="{Binding DisplayName}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding DisplayEmail}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <!-- User ID (for adding friends) -->
+                                        <TextBlock FontSize="10"
+                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="Share this ID so friends can add you">
+                                            <Run Text="ID: "/><Run Text="{Binding UserId}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <Button Grid.Column="2"
+                                            Content="Sign out"
+                                            Command="{Binding SignOutCommand}"
+                                            Classes="ghost" FontSize="11"
+                                            VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Cloud Sync -->
+                            <Border Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                    BorderThickness="1" CornerRadius="10"
+                                    Padding="16">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="CLOUD SYNC"
+                                               FontSize="10" FontWeight="Bold"
+                                               Foreground="{DynamicResource TextMutedBrush}"/>
+                                    <ProgressBar IsIndeterminate="True"
+                                                 IsVisible="{Binding IsSyncing}"
+                                                 Foreground="{DynamicResource AccentBrush}"
+                                                 Height="2"/>
+                                    <Grid ColumnDefinitions="*,8,*">
+                                        <Button Grid.Column="0"
+                                                Content="↑  Sync to Cloud"
+                                                Command="{Binding SyncToCloudCommand}"
+                                                Classes="ghost"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Center"
+                                                FontSize="12"
+                                                IsEnabled="{Binding !IsSyncing}"/>
+                                        <Button Grid.Column="2"
+                                                Content="↓  Pull from Cloud"
+                                                Command="{Binding PullFromCloudCommand}"
+                                                Classes="ghost"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Center"
+                                                FontSize="12"
+                                                IsEnabled="{Binding !IsSyncing}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding SyncStatus}"
+                                               IsVisible="{Binding SyncStatus.Length}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               TextWrapping="Wrap"/>
+
+                                    <!-- Pulled library preview -->
+                                    <StackPanel IsVisible="{Binding HasCloudLibrary}" Spacing="6">
+                                        <TextBlock Text="CLOUD LIBRARY"
+                                                   FontSize="10" FontWeight="Bold"
+                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                   Margin="0,4,0,0"/>
+                                        <Border MaxHeight="120"
+                                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                BorderThickness="1" CornerRadius="6">
+                                            <ScrollViewer>
+                                                <ItemsControl ItemsSource="{Binding CloudLibrary}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:CloudSeriesEntry">
+                                                            <Grid ColumnDefinitions="*,Auto" Margin="10,6">
+                                                                <TextBlock Grid.Column="0"
+                                                                           Text="{Binding Title}"
+                                                                           FontSize="12"
+                                                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                <TextBlock Grid.Column="1"
+                                                                           Text="{Binding LastEpisode, StringFormat='Ep {0}'}"
+                                                                           FontSize="11"
+                                                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                                                           Margin="8,0,0,0"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ══════════════════ TAB 2: FRIENDS ══════════════════ -->
+            <TabItem Header="Friends">
+                <ScrollViewer>
+                    <StackPanel Spacing="14" Margin="0,12,0,0">
+
+                        <!-- Not signed in notice -->
+                        <Border IsVisible="{Binding IsSignedOut}"
+                                Background="{DynamicResource CardBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1" CornerRadius="8"
+                                Padding="16">
+                            <TextBlock Text="Sign in to use the friend system."
+                                       FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+
+                        <!-- Friends panel (signed in) -->
+                        <StackPanel IsVisible="{Binding IsSignedIn}" Spacing="14">
+
+                            <!-- Add friend -->
+                            <Border Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                    BorderThickness="1" CornerRadius="10"
+                                    Padding="14">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="ADD FRIEND"
+                                               FontSize="10" FontWeight="Bold"
+                                               Foreground="{DynamicResource TextMutedBrush}"/>
+                                    <Grid ColumnDefinitions="*,8,Auto">
+                                        <TextBox Grid.Column="0"
+                                                 Text="{Binding AddFriendId}"
+                                                 Watermark="Paste their User ID…"
+                                                 FontSize="12"/>
+                                        <Button Grid.Column="2"
+                                                Content="Send"
+                                                Command="{Binding SendFriendRequestCommand}"
+                                                Classes="accent"
+                                                FontSize="12"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding FriendsStatus}"
+                                               IsVisible="{Binding FriendsStatus.Length}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Refresh button -->
+                            <Button Content="Refresh"
+                                    Command="{Binding LoadFriendsCommand}"
+                                    Classes="ghost" FontSize="11"
+                                    HorizontalAlignment="Left"
+                                    IsEnabled="{Binding !IsLoadingFriends}"/>
+                            <ProgressBar IsIndeterminate="True"
+                                         IsVisible="{Binding IsLoadingFriends}"
+                                         Foreground="{DynamicResource AccentBrush}"
+                                         Height="2"/>
+
+                            <!-- Pending requests -->
+                            <StackPanel IsVisible="{Binding HasPending}" Spacing="8">
+                                <TextBlock Text="PENDING REQUESTS"
+                                           FontSize="10" FontWeight="Bold"
+                                           Foreground="{DynamicResource TextMutedBrush}"/>
+                                <ItemsControl ItemsSource="{Binding PendingRequests}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:FriendshipEntry">
+                                            <Border Background="{DynamicResource CardBackgroundBrush}"
+                                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                    BorderThickness="1" CornerRadius="8"
+                                                    Padding="12,8" Margin="0,0,0,4">
+                                                <Grid ColumnDefinitions="*,Auto,6,Auto">
+                                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding FriendDisplayName}"
+                                                                   FontSize="12" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                        <TextBlock Text="wants to be friends"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1"
+                                                            Content="✓ Accept"
+                                                            Command="{Binding $parent[Window].((vm:AccountViewModel)DataContext).AcceptFriendCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            Background="{DynamicResource StatusGreenBrush}"
+                                                            Foreground="White"
+                                                            BorderThickness="0"
+                                                            CornerRadius="5"
+                                                            Padding="10,5"
+                                                            FontSize="11"/>
+                                                    <Button Grid.Column="3"
+                                                            Content="Remove"
+                                                            Command="{Binding $parent[Window].((vm:AccountViewModel)DataContext).DeclineFriendCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            Classes="ghost"
+                                                            FontSize="11"
+                                                            Padding="8,5"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Friends list -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="FRIENDS"
+                                           FontSize="10" FontWeight="Bold"
+                                           Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="No friends yet. Share your User ID!"
+                                           IsVisible="{Binding !HasFriends}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                <ItemsControl ItemsSource="{Binding Friends}"
+                                              IsVisible="{Binding HasFriends}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:FriendshipEntry">
+                                            <Border Background="{DynamicResource CardBackgroundBrush}"
+                                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                    BorderThickness="1" CornerRadius="8"
+                                                    Padding="12,8" Margin="0,0,0,4">
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Border Width="30" Height="30" CornerRadius="15"
+                                                            Background="{DynamicResource AccentSubtleBrush}">
+                                                        <PathIcon Data="{StaticResource PeopleRegular}" Width="15" Height="15"
+                                                                  Foreground="{DynamicResource AccentLightBrush}"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding FriendDisplayName}"
+                                                               FontSize="13" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextPrimaryBrush}"
+                                                               VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Activity feed -->
+                            <StackPanel IsVisible="{Binding HasActivity}" Spacing="8">
+                                <TextBlock Text="ACTIVITY"
+                                           FontSize="10" FontWeight="Bold"
+                                           Foreground="{DynamicResource TextMutedBrush}"/>
+                                <ItemsControl ItemsSource="{Binding ActivityFeed}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:ActivityEntry">
+                                            <Border Padding="10,7" Margin="0,0,0,2">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Summary}"
+                                                               FontSize="12"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding CreatedAt, StringFormat='{}{0:MM/dd HH:mm}'}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               VerticalAlignment="Top"
+                                                               Margin="8,0,0,0"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- Footer -->
+        <Button Grid.Row="1"
+                Content="Close"
+                Classes="ghost"
+                HorizontalAlignment="Right"
+                Margin="20,0,20,0"
+                Click="CloseButton_Click"/>
+    </Grid>
+</Window>
