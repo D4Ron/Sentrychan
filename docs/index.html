@@ -243,14 +243,17 @@
   .card.soon .ico{background:var(--c-bg-soft)}
   .card.soon .ico svg{fill:var(--c-text-3)}
   .badge-soon{color:var(--c-text-2);background:var(--c-bg-soft)}
+  .badge-beta{color:#b45309;background:rgba(245,158,11,.16)}
+  :root.dark .badge-beta{color:#fbbf24;background:rgba(251,191,36,.14)}
 
   /* ── Notices ──────────────────────────────────────────────────── */
   .notice{
     max-width:820px;margin:0 auto 16px;padding:22px 26px;
     border-radius:var(--radius);border:1px solid var(--c-divider);
-    border-left:3px solid var(--c-brand-2);background:var(--c-bg-soft);
-    transition:background-color .5s,border-color .5s;
+    background:var(--c-bg-soft);
+    transition:background-color .5s,border-color .25s,transform .25s var(--ease);
   }
+  .notice:hover{border-color:var(--c-brand-1);transform:translateY(-2px)}
   .notice:last-child{margin-bottom:0}
   .notice h3{font-size:16px;font-weight:600}
   .notice p{margin-top:8px;font-size:14.5px;line-height:24px;color:var(--c-text-2)}
@@ -312,6 +315,81 @@
   /* ── Motion ───────────────────────────────────────────────────── */
   @keyframes rise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
 
+  /* Slow drift on the hero blob so the hero is never completely static. */
+  @keyframes drift{
+    0%,100%{transform:translate3d(0,0,0) scale(1)}
+    33%    {transform:translate3d(14px,-18px,0) scale(1.05)}
+    66%    {transform:translate3d(-12px,12px,0) scale(.97)}
+  }
+  .blob{animation:drift 18s ease-in-out infinite}
+
+  /* The product name's gradient breathes very slowly. */
+  @keyframes hue{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+  .hero .name{background-size:200% auto;animation:hue 9s ease-in-out infinite}
+
+  /* Scroll progress bar. */
+  #progress{
+    position:fixed;top:0;left:0;height:2px;width:0;z-index:101;
+    background:linear-gradient(90deg,var(--c-brand-3),var(--c-brand-1));
+    transition:width .1s linear;
+  }
+
+  /* Nav links get a sliding underline. */
+  .nav-link{position:relative}
+  .nav-link::after{
+    content:"";position:absolute;left:12px;right:12px;bottom:18px;height:2px;
+    background:var(--c-brand-1);transform:scaleX(0);transform-origin:left;
+    transition:transform .25s var(--ease);
+  }
+  .nav-link:hover::after{transform:scaleX(1)}
+
+  /* Feature icons lift and tilt with the card. */
+  .card .ico{transition:transform .35s var(--ease),background-color .25s}
+  .card:hover .ico{transform:translateY(-3px) rotate(-6deg) scale(1.06)}
+  .card:hover .ico svg{fill:var(--c-brand-2)}
+
+  /* Step numbers pop. */
+  .step .num{transition:transform .3s var(--ease),box-shadow .3s}
+  .step:hover .num{transform:scale(1.12) rotate(-8deg);box-shadow:0 6px 18px var(--c-brand-soft)}
+
+  /* Swatch dots swell on hover. */
+  .swatch .dot{transition:transform .3s var(--ease)}
+  .swatch:hover .dot{transform:scale(1.18)}
+
+  /* Buttons sweep a highlight across on hover. */
+  .btn-brand{position:relative;overflow:hidden}
+  .btn-brand::before{
+    content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);
+    transform:skewX(-20deg);transition:left .6s var(--ease);
+  }
+  .btn-brand:hover::before{left:120%}
+
+  /* ── Easter eggs ──────────────────────────────────────────────── */
+  @keyframes spin-y{from{transform:rotateY(0)}to{transform:rotateY(360deg)}}
+  .hero-figure img{cursor:pointer}
+  .hero-figure img.spin{animation:spin-y .9s var(--ease)}
+
+  @keyframes petal-fall{
+    0%  {transform:translateY(-8vh) rotate(0deg);opacity:0}
+    10% {opacity:.9}
+    100%{transform:translateY(108vh) rotate(720deg);opacity:0}
+  }
+  .petal{
+    position:fixed;top:0;z-index:99;pointer-events:none;
+    width:12px;height:12px;border-radius:12px 1px 12px 1px;
+    background:#f8b7d0;animation:petal-fall linear forwards;
+  }
+
+  .egg-toast{
+    position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);
+    z-index:102;padding:12px 22px;border-radius:24px;opacity:0;
+    background:var(--c-bg-elv);border:1px solid var(--c-brand-1);color:var(--c-text-1);
+    font-size:14px;font-weight:600;box-shadow:var(--shadow-3);
+    transition:opacity .35s var(--ease),transform .35s var(--ease);
+  }
+  .egg-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
   /* Hero entrance: staggered, runs once on load. */
   .rise-in{opacity:0;animation:rise .7s var(--ease) forwards}
   .d1{animation-delay:.05s}.d2{animation-delay:.14s}.d3{animation-delay:.23s}
@@ -325,13 +403,18 @@
   @media(prefers-reduced-motion:reduce){
     html{scroll-behavior:auto}
     *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0ms!important;
+                         animation-iteration-count:1!important;
                          transition-duration:.01ms!important}
     .rise-in{opacity:1}
     .reveal{opacity:1;transform:none}
+    .blob,.hero .name{animation:none}
+    .petal{display:none}
   }
 </style>
 </head>
 <body>
+
+<div id="progress"></div>
 
 <!-- ══ Nav ══ -->
 <nav class="nav" id="nav">
@@ -347,6 +430,9 @@
         <svg class="sun" viewBox="0 0 24 24"><path d="M12 17a5 5 0 110-10 5 5 0 010 10zm0-2a3 3 0 100-6 3 3 0 000 6zM11 1h2v3h-2zm0 19h2v3h-2zM3.5 4.9l1.4-1.4 2.1 2.1-1.4 1.4zM17 18.4l1.4-1.4 2.1 2.1-1.4 1.4zM1 11h3v2H1zm19 0h3v2h-3zM4.9 20.5l-1.4-1.4 2.1-2.1 1.4 1.4zM18.4 7l-1.4-1.4 2.1-2.1 1.4 1.4z"/></svg>
         <svg class="moon" viewBox="0 0 24 24"><path d="M10 7a7 7 0 009.8 6.4A7.5 7.5 0 118.6 4.2 7 7 0 0010 7z"/></svg>
       </button>
+      <a class="icon-btn js-discord" href="#" aria-label="Discord" title="Discord">
+        <svg viewBox="0 0 24 24"><path d="M19.3 5.4A17.6 17.6 0 0015 4.1l-.2.4a16 16 0 00-5.6 0L9 4.1a17.6 17.6 0 00-4.3 1.3C2 9.3 1.2 13.1 1.6 16.8a17.7 17.7 0 005.4 2.7l1-1.7a11.5 11.5 0 01-1.8-.9l.4-.3a12.6 12.6 0 0010.8 0l.4.3a11.5 11.5 0 01-1.8.9l1 1.7a17.7 17.7 0 005.4-2.7c.5-4.3-.8-8.1-3.1-11.4zM8.4 14.6c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2zm7.2 0c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2z"/></svg>
+      </a>
       <a class="icon-btn" href="https://github.com/D4Ron/Sentrychan" aria-label="GitHub" title="GitHub">
         <svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0C17.1 4.7 18.1 5 18.1 5c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3z"/></svg>
       </a>
@@ -384,7 +470,7 @@
     </div>
     <div class="hero-figure rise-in d3">
       <div class="blob" aria-hidden="true"></div>
-      <img src="logo.png" alt="Sentrychan">
+      <img src="logo.png" alt="Sentrychan" id="heroLogo" title="…nani?">
     </div>
   </div>
 </header>
@@ -420,6 +506,7 @@
         <p>Track your reading and read right here — paged or webtoon scroll, online or
            downloaded for offline. Already have chapters on disk? Point it at the folder
            and read those too.</p>
+        <span class="badge badge-beta">Beta</span>
       </div>
 
       <div class="card reveal">
@@ -551,6 +638,18 @@
     </div>
 
     <div class="notice reveal">
+      <h3>Manga and novels are still in beta</h3>
+      <p>The anime side is the mature half of Sentrychan. Manga and novel support — the
+         library, the reader, offline downloads and progress tracking — works, but it is
+         newer and rougher, and odd chapter numbering or an unusual source layout can still
+         trip it up.</p>
+      <p>Feedback on it is genuinely wanted. Tell me what broke, on
+         <a href="https://github.com/D4Ron/Sentrychan/issues">GitHub issues</a> or
+         <a href="#" class="js-discord">Discord</a>, and include the series and source if
+         you can — that's usually enough to reproduce it.</p>
+    </div>
+
+    <div class="notice reveal">
       <h3>Do I need an account?</h3>
       <p>No — and today there is nothing to sign up for. Everything Sentrychan currently does
          runs entirely on your own machine and never talks to a server of ours: library,
@@ -623,6 +722,7 @@
       <a href="https://github.com/D4Ron/Sentrychan/releases">Releases</a>
       <a href="https://github.com/D4Ron/Sentrychan">Source</a>
       <a href="https://github.com/D4Ron/Sentrychan/issues">Issues</a>
+      <a href="#" class="js-discord">Discord</a>
       <a href="https://github.com/D4Ron/Sentrychan/blob/main/LICENSE">License</a>
     </div>
     <p>Released under the AGPL-3.0 License. Made by D4Ron.</p>
@@ -634,6 +734,13 @@
 </footer>
 
 <script>
+  // ══════════════════════════════════════════════════════════════
+  //  DISCORD — PUT THE INVITE HERE AND EVERY LINK ON THE PAGE GOES LIVE.
+  //  Until then, links marked .js-discord say "coming soon" instead of
+  //  jumping to the top of the page. This is the only line to change.
+  // ══════════════════════════════════════════════════════════════
+  var DISCORD_URL = '';
+
   // ── Theme toggle ────────────────────────────────────────────────
   var root = document.documentElement;
   var meta = document.querySelector('meta[name="theme-color"]');
@@ -674,6 +781,125 @@
         meta.textContent = 'Windows 10/11 · 64-bit' + (when ? ' · released ' + when : '');
       })
       .catch(function () { /* keep the static copy */ });
+  })();
+
+  // ── Scroll progress ─────────────────────────────────────────────
+  var bar = document.getElementById('progress');
+  function onProgress() {
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (max > 0 ? (window.scrollY / max) * 100 : 0) + '%';
+  }
+  onProgress();
+  window.addEventListener('scroll', onProgress, { passive: true });
+  window.addEventListener('resize', onProgress);
+
+  // ── Easter eggs ─────────────────────────────────────────────────
+  // Deliberately small and skippable: none of them block or alter the page.
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function toast(msg, ms) {
+    var el = document.createElement('div');
+    el.className = 'egg-toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add('show'); });
+    setTimeout(function () {
+      el.classList.remove('show');
+      setTimeout(function () { el.remove(); }, 400);
+    }, ms || 2600);
+  }
+
+  function petals(count) {
+    if (reduced) return;
+    for (var i = 0; i < count; i++) {
+      (function (i) {
+        setTimeout(function () {
+          var p = document.createElement('div');
+          p.className = 'petal';
+          p.style.left = Math.random() * 100 + 'vw';
+          p.style.animationDuration = (4 + Math.random() * 4) + 's';
+          p.style.opacity = 0.5 + Math.random() * 0.5;
+          var s = 8 + Math.random() * 10;
+          p.style.width = p.style.height = s + 'px';
+          document.body.appendChild(p);
+          setTimeout(function () { p.remove(); }, 9000);
+        }, i * 90);
+      })(i);
+    }
+  }
+
+  // 1. Poke the logo. Third time it says something.
+  var pokes = 0, pokeTimer;
+  var logo = document.getElementById('heroLogo');
+  if (logo) logo.addEventListener('click', function () {
+    pokes++;
+    clearTimeout(pokeTimer);
+    pokeTimer = setTimeout(function () { pokes = 0; }, 1500);
+    if (!reduced) {
+      logo.classList.remove('spin');
+      void logo.offsetWidth; // restart the animation
+      logo.classList.add('spin');
+    }
+    if (pokes === 3) {
+      pokes = 0;
+      toast('やめて! (Please stop poking the mascot.)');
+    }
+  });
+
+  // 2. Konami code → sakura, which is also one of the app's four themes.
+  var konami = [38,38,40,40,37,39,37,39,66,65], progress = 0;
+  window.addEventListener('keydown', function (e) {
+    progress = (e.keyCode === konami[progress]) ? progress + 1 : 0;
+    if (progress === konami.length) {
+      progress = 0;
+      petals(60);
+      toast('Sakura mode. (It is also a theme in the app.)', 4000);
+    }
+  });
+
+  // 3. Type "nyaa" anywhere.
+  var buf = '';
+  window.addEventListener('keydown', function (e) {
+    if (e.key && e.key.length === 1) {
+      buf = (buf + e.key.toLowerCase()).slice(-8);
+      if (buf.indexOf('nyaa') !== -1) {
+        buf = '';
+        petals(14);
+        toast('(=^･ω･^=) nyaa~');
+      }
+    }
+  });
+
+  // 4. For whoever opens the console.
+  try {
+    console.log(
+      '%c ✦ Sentrychan ✦ ',
+      'background:#7c3aed;color:#fff;font-size:15px;font-weight:700;padding:6px 14px;border-radius:12px'
+    );
+    console.log(
+      '%cSo we meet in the console. Respect.\n' +
+      'Source: https://github.com/D4Ron/Sentrychan  (AGPL-3.0)\n' +
+      'Try the Konami code. Or type "nyaa". Or poke the mascot three times.\n' +
+      '"People die when they are killed." — every localisation, eventually',
+      'color:#a78bfa;font-size:12px;line-height:1.7'
+    );
+  } catch (e) {}
+
+  // ── Wire up the Discord links ───────────────────────────────────
+  (function () {
+    var links = document.querySelectorAll('.js-discord');
+    for (var i = 0; i < links.length; i++) {
+      if (DISCORD_URL) {
+        links[i].setAttribute('href', DISCORD_URL);
+        links[i].setAttribute('rel', 'noopener');
+        links[i].setAttribute('target', '_blank');
+      } else {
+        links[i].addEventListener('click', function (e) {
+          e.preventDefault();
+          toast('Discord server is being set up — check back soon.');
+        });
+      }
+    }
   })();
 
   // ── Scroll reveal ───────────────────────────────────────────────

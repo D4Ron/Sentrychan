@@ -29,9 +29,9 @@ gives you a reader for everything that isn't video.
   it picks the right one when several publish the same episode.
 - **Downloads, your way** — a built-in torrent engine (pause, resume, speed limits,
   queue), or point it at your own qBittorrent instance instead.
-- **Read manga and novels in-app** — paged or webtoon scroll, online or downloaded
-  for offline, with reading progress tracked. Already have chapters on disk? Point
-  it at the folder and read those too.
+- **Read manga and novels in-app** *(beta)* — paged or webtoon scroll, online or
+  downloaded for offline, with reading progress tracked. Already have chapters on
+  disk? Point it at the folder and read those too.
 - **Stay current** — a background monitor checks for new episodes and chapters and
   raises a Windows notification when they land.
 - **Discover** — browse the current season, follow anime news, and see a live feed
@@ -52,6 +52,16 @@ from then on.
 > **Windows may warn you the first time.** Sentrychan isn't code-signed yet, so
 > SmartScreen may show a blue "Windows protected your PC" screen on first launch.
 > Click **More info → Run anyway**.
+
+## Manga and novels are in beta
+
+The anime side is the mature half of Sentrychan. Manga and novel support — library,
+reader, offline downloads and progress tracking — works, but it is newer and rougher,
+and odd chapter numbering or an unusual source layout can still trip it up.
+
+Feedback on it is genuinely wanted. Open an
+[issue](https://github.com/D4Ron/Sentrychan/issues) and include the series and source
+if you can; that's usually enough to reproduce a problem.
 
 ## About online sources
 
