@@ -847,9 +847,16 @@
   });
 
   // 2. Konami code → sakura, which is also one of the app's four themes.
+  //    ↑ ↑ ↓ ↓ ← → ← → B A, as keyCodes.
   var konami = [38,38,40,40,37,39,37,39,66,65], progress = 0;
   window.addEventListener('keydown', function (e) {
-    progress = (e.keyCode === konami[progress]) ? progress + 1 : 0;
+    if (e.keyCode === konami[progress]) {
+      progress++;
+    } else {
+      // A wrong key resets — but if that key is itself the opening ↑, it starts a
+      // fresh attempt rather than costing the user a keypress.
+      progress = (e.keyCode === konami[0]) ? 1 : 0;
+    }
     if (progress === konami.length) {
       progress = 0;
       petals(60);
