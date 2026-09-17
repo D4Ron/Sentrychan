@@ -9,10 +9,17 @@ namespace Sentrychan.App;
 /// Velopack-backed updater pointed at the GitHub Releases feed. Only does anything for
 /// an installed build — a dev/portable run reports IsSupported=false so the UI can say
 /// "updates only apply to the installed version" instead of erroring.
+///
+/// WARNING: this URL is compiled into every shipped build, so an installed client can only
+/// ever look where the binary it was installed from was told to look. Changing it does NOT
+/// redirect clients already in the wild — they keep querying the old address forever. It
+/// pointed at the pre-rename "SentryDotNet" repo, which was deleted on 2026-09-17, stranding
+/// every build released before 1.0.3. Never repoint or delete a repo that shipped builds
+/// still query.
 /// </summary>
 public class VelopackUpdateService : IUpdateService
 {
-    private const string RepoUrl = "https://github.com/D4Ron/SentryDotNet";
+    private const string RepoUrl = "https://github.com/D4Ron/Sentrychan";
 
     private readonly ILogger<VelopackUpdateService> _logger;
     private readonly UpdateManager _manager;
