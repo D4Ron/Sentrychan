@@ -3,6 +3,7 @@ bin/
 obj/
 /publish/
 /releases/
+/releases-beta-local/
 .vs/
 
 # Credentials - never commit.

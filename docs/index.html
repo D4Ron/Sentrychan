@@ -6,10 +6,18 @@
 <title>Sentrychan — self-driving anime &amp; manga library</title>
 <meta name="description" content="Sentrychan tracks the anime, manga and novels you follow, then finds, downloads, names and files every new episode and chapter for you. Free and open source, for Windows.">
 <link rel="icon" href="favicon.ico">
-<meta property="og:title" content="Sentrychan">
+<link rel="canonical" href="https://d4ron.github.io/Sentrychan/">
+<!-- Social cards need ABSOLUTE urls; a relative og:image silently shows nothing. -->
+<meta property="og:title" content="Sentrychan — self-driving anime &amp; manga library">
 <meta property="og:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows.">
-<meta property="og:image" content="logo.png">
+<meta property="og:image" content="https://d4ron.github.io/Sentrychan/logo.png">
+<meta property="og:url" content="https://d4ron.github.io/Sentrychan/">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Sentrychan">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Sentrychan — self-driving anime &amp; manga library">
+<meta name="twitter:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows.">
+<meta name="twitter:image" content="https://d4ron.github.io/Sentrychan/logo.png">
 <meta name="theme-color" content="#0d0d1a">
 
 <script>
@@ -368,8 +376,8 @@
       <a class="release-card rise-in d5" href="https://github.com/D4Ron/Sentrychan/releases/latest">
         <div>
           <div class="label">Latest release</div>
-          <div class="title">Sentrychan for Windows</div>
-          <div class="meta">Windows 10/11 · 64-bit · updates itself</div>
+          <div class="title" id="relTitle">Sentrychan for Windows</div>
+          <div class="meta" id="relMeta">Windows 10/11 · 64-bit · updates itself</div>
         </div>
         <span class="btn btn-brand">Download</span>
       </a>
@@ -644,6 +652,29 @@
   function onScroll() { nav.classList.toggle('scrolled', window.scrollY > 16); }
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
+
+  // ── Live release info ───────────────────────────────────────────
+  // Progressive enhancement only: if this fails (offline, rate-limited, no release
+  // published yet) the static copy already in the card stands unchanged.
+  (function () {
+    var title = document.getElementById('relTitle');
+    var meta = document.getElementById('relMeta');
+    if (!title || !meta || !window.fetch) return;
+    fetch('https://api.github.com/repos/D4Ron/Sentrychan/releases/latest', {
+      headers: { 'Accept': 'application/vnd.github+json' }
+    })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (rel) {
+        if (!rel || !rel.tag_name) return;
+        title.textContent = 'Sentrychan ' + rel.tag_name;
+        var when = rel.published_at
+          ? new Date(rel.published_at).toLocaleDateString(undefined,
+              { year: 'numeric', month: 'short', day: 'numeric' })
+          : null;
+        meta.textContent = 'Windows 10/11 · 64-bit' + (when ? ' · released ' + when : '');
+      })
+      .catch(function () { /* keep the static copy */ });
+  })();
 
   // ── Scroll reveal ───────────────────────────────────────────────
   var items = document.querySelectorAll('.reveal');
