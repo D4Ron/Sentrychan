@@ -74,8 +74,18 @@ import yourself from `Settings → Library & Danger → Import source pack`. The
 on the next restart. This repository neither distributes nor links to them.
 
 Everything else works without any of that: your existing files, your own folders of
-chapter images, RSS feeds you add, MyAnimeList import, the reader, the quiz and
-watch parties.
+chapter images, RSS feeds you add, MyAnimeList import, the reader and the quiz.
+
+## Intended use
+
+Sentrychan connects to nothing on its own — every feed it reads and every source it
+can reach is one **you** configured. It is built for organising a library you are
+entitled to hold: your own rips, public domain and Creative Commons works, freely
+distributed releases, and anything you have permission to download.
+
+It is not intended for copyright infringement, and using it that way is neither
+supported nor endorsed. What you point it at, and whether that is lawful where you
+live, is your responsibility.
 
 ## On the way
 
@@ -162,9 +172,11 @@ Metadata from [Jikan](https://jikan.moe/) (MyAnimeList),
 <div align="center">
 <sub>
 
-Sentrychan is a library manager and download client. It bundles no online sources
-and hosts no content. You are responsible for what you download and for complying
-with the laws that apply to you.
+Sentrychan is a general-purpose library manager and download client. It bundles no
+online sources, indexes nothing, hosts no content and is not affiliated with any
+content site. Every feed and source it uses is one the user configures. It is not
+intended for copyright infringement. You are responsible for what you point it at
+and for complying with the laws that apply to you.
 
 </sub>
 </div>

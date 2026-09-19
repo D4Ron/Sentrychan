@@ -116,6 +116,15 @@
         </Style.Animations>
     </Style>
 
+    <!-- Status dot: grey by default, green only when the thing it reports is actually live.
+         Kept as classes rather than a converter so it follows the active theme. -->
+    <Style Selector="Border.statusdot">
+        <Setter Property="Background" Value="{DynamicResource TextTertiaryBrush}"/>
+    </Style>
+    <Style Selector="Border.statusdot.live">
+        <Setter Property="Background" Value="{DynamicResource StatusGreenBrush}"/>
+    </Style>
+
     <!-- Logo breathing animation -->
     <Style Selector="Border.logo-breathing">
         <Style.Animations>
