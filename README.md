@@ -111,6 +111,22 @@ and the same features run against your own backend for nothing.
 > or compiled into a client build. Before watch parties ship, that call moves behind a
 > Supabase Edge Function.
 
+## Supporting the project
+
+The app is free and always will be. **It will never be for sale** — not a trial, not
+a licence, not a paywalled build, and supporting it will never get you more sources,
+faster downloads or any advantage in finding or fetching content.
+
+Being straight about where contributions go: part goes to **me, the developer**, as
+payment for my time. Sentrychan is written by one person in evenings and weekends,
+and a project that pays for some of those evenings is one that still exists in two
+years. The rest covers real bills — a code-signing certificate (which removes the
+SmartScreen warning for *everyone*, supporter or not), hosted rooms for watch
+parties, and the database behind sync and alerts.
+
+If you would rather not fund hosting at all, run it yourself against your own
+Supabase project. That escape hatch is deliberate and will not be closed.
+
 ## Building from source
 
 Requires the [.NET 9 SDK](https://dotnet.microsoft.com/download).
