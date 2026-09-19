@@ -175,8 +175,12 @@ public class MainWindowViewModel : ViewModelBase,
             this.RaiseAndSetIfChanged(ref _isMonitoring, value);
             this.RaisePropertyChanged(nameof(MonitorButtonText));
             this.RaisePropertyChanged(nameof(MonitorButtonColor));
+            this.RaisePropertyChanged(nameof(MonitorStatusText));
         }
     }
+
+    /// <summary>Sidebar label. Used to be the hardcoded literal "Monitoring Active".</summary>
+    public string MonitorStatusText => IsMonitoring ? "Monitoring active" : "Monitoring paused";
 
     private bool _hasPendingEpisodes;
     public bool HasPendingEpisodes

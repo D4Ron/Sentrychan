@@ -18,3 +18,6 @@ Sentrychan.App/Assets/frpc.exe
 # Internal working notes: monetization strategy, security posture, unfinished work.
 # Deliberately not published - see the note in the first commit's review.
 CLAUDE.md
+
+# Local editor/agent scratch (dev-server launch config etc.)
+.claude/

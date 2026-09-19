@@ -88,20 +88,51 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
     public async Task ManualCheckAsync(CancellationToken ct = default)
         => await RunCheckAsync(isManual: true, ct);
 
-    public void Pause()  { _paused = true;  _ = PersistPausedAsync(true); }
-    public void Resume() { _paused = false; _ = PersistPausedAsync(false); }
+    public void Pause()  { _paused = true;  _logger.LogInformation("RSS Monitor PAUSED by user");  _ = PersistPausedAsync(true); }
+    public void Resume() { _paused = false; _logger.LogInformation("RSS Monitor RESUMED by user"); _ = PersistPausedAsync(false); }
 
+    /// <summary>
+    /// Writes the paused flag so the choice survives a restart.
+    ///
+    /// This used to swallow every exception silently, which made a lost write
+    /// indistinguishable from a working one: the pause held for the session, then
+    /// the app came back up monitoring again with nothing in the log to explain it.
+    /// SQLite write contention here is real — several services share this DB — so
+    /// retry briefly and, if it still fails, say so loudly.
+    /// </summary>
     private async Task PersistPausedAsync(bool paused)
     {
-        try
+        var value = paused ? "true" : "false";
+
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            await using var db = await _dbFactory.CreateDbContextAsync();
-            var row = await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == PausedKey);
-            if (row == null) db.AppConfigs.Add(new AppConfig { Key = PausedKey, Value = paused ? "true" : "false" });
-            else row.Value = paused ? "true" : "false";
-            await db.SaveChangesAsync();
+            try
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync();
+                var row = await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == PausedKey);
+                if (row == null) db.AppConfigs.Add(new AppConfig { Key = PausedKey, Value = value });
+                else row.Value = value;
+                await db.SaveChangesAsync();
+
+                _logger.LogInformation("RSS Monitor persisted {Key}={Value}", PausedKey, value);
+                return;
+            }
+            catch (Exception ex) when (attempt < 3)
+            {
+                _logger.LogWarning(ex,
+                    "RSS Monitor could not persist {Key} (attempt {Attempt}/3), retrying",
+                    PausedKey, attempt);
+                await Task.Delay(200 * attempt);
+            }
+            catch (Exception ex)
+            {
+                // Final failure — the session-local pause still holds, but the
+                // setting will NOT survive a restart. Never hide this again.
+                _logger.LogError(ex,
+                    "RSS Monitor FAILED to persist {Key}={Value}. The pause applies to this " +
+                    "session only and monitoring will resume after a restart.", PausedKey, value);
+            }
         }
-        catch { /* best-effort — the in-memory pause still takes effect this session */ }
     }
 
     public async Task CheckSingleFeedAsync(int feedId, CancellationToken ct = default)
@@ -129,7 +160,19 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                 await db.SaveChangesAsync(ct);
             }
 
-            var seriesList = await db.Series.ToListAsync(ct);
+            // Only series the user is actually monitoring. Turning monitoring off on a
+            // series set MonitoringState.Paused and persisted it, but this query used to
+            // load every series regardless — so paused shows kept matching feed items and
+            // kept downloading, which is exactly what "stop monitoring does nothing" meant.
+            var seriesList = await db.Series
+                .Where(s => s.MonitoringState == MonitoringState.Active)
+                .ToListAsync(ct);
+
+            var pausedCount = await db.Series.CountAsync(s => s.MonitoringState != MonitoringState.Active, ct);
+            if (pausedCount > 0)
+                _logger.LogInformation("RSS check covering {Active} series, skipping {Paused} paused",
+                    seriesList.Count, pausedCount);
+
             IQueryable<RssFeed> feedsQuery = db.RssFeeds.Where(f => f.IsEnabled);
 
             if (singleFeedId.HasValue)
@@ -160,6 +203,15 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
 
             foreach (var feed in priorityFeeds)
             {
+                // Stop pressed mid-check: bail now instead of finishing the sweep and
+                // enqueuing episodes after the UI already says Idle. A manual check is
+                // an explicit user action, so it is allowed to run to completion.
+                if (_paused && !isManual)
+                {
+                    _logger.LogInformation("RSS check aborted — monitoring was paused mid-check");
+                    break;
+                }
+
                 var quality = feed.PreferredQuality ?? qualityPreference;
                 var found = await CheckFeedAsync(feed, seriesList, quality, foundKeys, preferredGroups, ct);
                 foreach (var ep in found)
@@ -172,6 +224,12 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
 
             foreach (var feed in secondaryFeeds)
             {
+                if (_paused && !isManual)
+                {
+                    _logger.LogInformation("RSS check aborted — monitoring was paused mid-check");
+                    break;
+                }
+
                 var quality = feed.PreferredQuality ?? qualityPreference;
                 var found = await CheckFeedAsync(feed, seriesList, quality, foundKeys, preferredGroups, ct);
                 foreach (var ep in found)

@@ -96,14 +96,27 @@
                 <!-- Monitor Strip + Support -->
                 <Border Grid.Row="2" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0" Padding="11,10">
                     <StackPanel Spacing="8">
+                        <!-- The dot and label used to be hardcoded green / "Monitoring Active",
+                             and nothing was bound to ToggleMonitoringCommand, so there was no way
+                             to stop monitoring from the UI at all. Both now reflect real state. -->
                         <StackPanel Spacing="3">
                             <StackPanel Orientation="Horizontal" Spacing="7">
-                                <Border Classes="breathing" Width="6" Height="6" CornerRadius="3" Background="{DynamicResource StatusGreenBrush}"/>
-                                <TextBlock Text="Monitoring Active" IsVisible="{Binding IsSidebarExpanded}"
+                                <Border Width="6" Height="6" CornerRadius="3"
+                                        Classes="statusdot"
+                                        Classes.live="{Binding IsMonitoring}"
+                                        Classes.breathing="{Binding IsMonitoring}"/>
+                                <TextBlock Text="{Binding MonitorStatusText}" IsVisible="{Binding IsSidebarExpanded}"
                                            FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}"/>
                             </StackPanel>
                             <TextBlock Text="{Binding LastCheckText}" IsVisible="{Binding IsSidebarExpanded}"
                                        FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            <Button Command="{Binding ToggleMonitoringCommand}"
+                                    Content="{Binding MonitorButtonText}"
+                                    IsVisible="{Binding IsSidebarExpanded}"
+                                    Classes="ghost" FontSize="11"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center"
+                                    Margin="0,4,0,0"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

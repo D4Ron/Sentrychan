@@ -425,6 +425,7 @@
       <a class="nav-link hide-sm" href="#sources">Sources</a>
       <a class="nav-link hide-sm" href="#how">Guide</a>
       <a class="nav-link hide-sm" href="#soon">On the way</a>
+      <a class="nav-link hide-sm" href="#support">Support</a>
       <button class="icon-btn theme-toggle" id="themeToggle" type="button"
               aria-label="Toggle dark mode" title="Toggle dark mode">
         <svg class="sun" viewBox="0 0 24 24"><path d="M12 17a5 5 0 110-10 5 5 0 010 10zm0-2a3 3 0 100-6 3 3 0 000 6zM11 1h2v3h-2zm0 19h2v3h-2zM3.5 4.9l1.4-1.4 2.1 2.1-1.4 1.4zM17 18.4l1.4-1.4 2.1 2.1-1.4 1.4zM1 11h3v2H1zm19 0h3v2h-3zM4.9 20.5l-1.4-1.4 2.1-2.1 1.4 1.4zM18.4 7l-1.4-1.4 2.1-2.1 1.4 1.4z"/></svg>
@@ -449,8 +450,9 @@
         <span class="rise-in d2">Self-driving library</span>
       </h1>
       <p class="tagline rise-in d3">
-        Tell it what you follow — it finds, downloads, names and files every new
-        episode and chapter for you. Anime, manga and novels, on Windows.
+        Tell it what you follow. It watches the feeds you choose, then names, sorts and
+        files what turns up — so your library stays tidy on its own. Anime, manga and
+        novels, on Windows.
       </p>
       <div class="hero-actions rise-in d4">
         <a class="btn btn-brand btn-lg" href="https://github.com/D4Ron/Sentrychan/releases/latest/download/Sentrychan-win-Setup.exe">
@@ -487,10 +489,11 @@
     <div class="features">
       <div class="card reveal">
         <div class="ico"><svg viewBox="0 0 16 16"><path d="M2 2h2v12H2zm3.5 0h2v12h-2zM9 3l2-.4 2.4 11-2 .4z"/></svg></div>
-        <h3>Auto-download episodes</h3>
-        <p>Add a show and every new episode arrives on its own — properly named and filed
-           into Show / Season folders, ready for Plex or Jellyfin. Set preferred release
-           groups and it picks the right one.</p>
+        <h3>Automatic episode handling</h3>
+        <p>Follow a show and Sentrychan watches the feeds you've added for matching
+           episodes, then names and files them into Show / Season folders your media server
+           already understands. Set preferred release groups and it chooses between matches
+           for you.</p>
       </div>
 
       <div class="card reveal">
@@ -519,8 +522,9 @@
       <div class="card reveal">
         <div class="ico"><svg viewBox="0 0 16 16"><path d="M8 1l1.5 5.5L15 8l-5.5 1.5L8 15l-1.5-5.5L1 8l5.5-1.5z"/></svg></div>
         <h3>Discover what's next</h3>
-        <p>Browse the current season, catch up on anime news, and see a live feed of the
-           newest releases with seeds and size before you grab anything.</p>
+        <p>Browse the current season and catch up on anime news, so you know what's starting
+           and what's worth following. New items from the feeds you've added show up here
+           too.</p>
       </div>
 
       <div class="card reveal">
@@ -572,6 +576,18 @@
       <p>Everything else works without any of that: your existing files, your own folders of
          chapter images, RSS feeds you add, MyAnimeList import, the reader and the quiz.</p>
     </div>
+
+    <div class="notice reveal">
+      <h3>What Sentrychan expects of you</h3>
+      <p>Sentrychan is a general-purpose tool. It connects to nothing on its own: every feed
+         it reads and every source it can reach is one <strong>you</strong> configured. It
+         is built for organising a library you are entitled to hold — your own rips, public
+         domain and Creative Commons works, freely distributed releases, and anything you
+         have permission to download.</p>
+      <p>It is not intended for copyright infringement, and using it that way is neither
+         supported nor endorsed. What you point it at, and whether that is lawful where you
+         live, is your responsibility.</p>
+    </div>
   </div>
 </section>
 
@@ -594,14 +610,15 @@
            Finished downloads move from one to the other, renamed and filed into Show / Season
            folders on the way.</p></div></div>
       <div class="step reveal"><div class="num">3</div><div>
-        <h3>Let it fetch new episodes</h3>
-        <p>New episodes are detected and downloaded automatically. Turn on auto-download to
-           skip even the confirmation, or confirm each one yourself.</p></div></div>
+        <h3>Let it handle new episodes</h3>
+        <p>Matches from your feeds are detected and fetched automatically. Turn on
+           auto-download to skip even the confirmation, or review and confirm each one
+           yourself.</p></div></div>
       <div class="step reveal"><div class="num">4</div><div>
         <h3>Fill in the gaps</h3>
-        <p>Grab a whole finished season in one batch, let Sentrychan spot missing episodes in a
-           series you already own and fetch just those, or use the Unmatched Files screen to
-           place anything the matcher couldn't identify.</p></div></div>
+        <p>Fill an entire season in one pass, let Sentrychan spot which episodes are missing
+           from a series you already own and fetch only those, or use the Unmatched Files
+           screen to place anything the matcher couldn't identify.</p></div></div>
       <div class="step reveal"><div class="num">5</div><div>
         <h3>Track &amp; read manga and novels</h3>
         <p>Switch to Manga or Novels, add a series and read chapters in-app — paged or webtoon —
@@ -666,9 +683,9 @@
   <div class="container">
     <div class="section-head reveal">
       <h2>On the way</h2>
-      <p>Features that are being built but aren't in the app yet. They'll need a hosted
-         backend to run, so they'll arrive as supporter features — everything on this page
-         above stays free.</p>
+      <p>Features that are being built but aren't in the app yet. They need a hosted backend
+         to run, so they'll arrive as supporter features — everything above stays free.
+         <a href="#support">What that funds</a> is spelled out below.</p>
     </div>
 
     <div class="features">
@@ -701,8 +718,66 @@
   </div>
 </section>
 
+<!-- ══ Supporting ══ -->
+<section id="support" class="band">
+  <div class="container">
+    <div class="section-head reveal">
+      <h2>Supporting Sentrychan</h2>
+      <p>The app is free and stays free. Some things genuinely cost money to run every
+         month, though, and this is what support would pay for — stated plainly so you can
+         judge whether it's worth it.</p>
+    </div>
+
+    <div class="features">
+      <div class="card reveal">
+        <div class="ico"><svg viewBox="0 0 16 16"><path d="M8 1l5.5 2.4v4c0 3.4-2.3 6.6-5.5 7.6-3.2-1-5.5-4.2-5.5-7.6v-4zm-.8 9.6l4-4-1.1-1.1-2.9 2.9-1.3-1.3-1.1 1.1z"/></svg></div>
+        <h3>A code-signing certificate</h3>
+        <p>The blue “Windows protected your PC” warning on first launch exists because
+           signing certificates cost a few hundred a year. This is the first thing support
+           would buy, and it helps <strong>everyone</strong> who installs Sentrychan —
+           supporter or not.</p>
+        <span class="badge">Benefits everyone</span>
+      </div>
+
+      <div class="card reveal">
+        <div class="ico"><svg viewBox="0 0 16 16"><path d="M1.5 3h13v9h-13zM6.4 5.6v3.8l3.4-1.9z"/></svg></div>
+        <h3>Watch party rooms</h3>
+        <p>A shared room runs on a hosted machine and is billed by the hour. It is the one
+           part of Sentrychan with a real per-use cost, so it is the one part that has to be
+           funded rather than simply written once.</p>
+        <span class="badge badge-soon">Coming soon</span>
+      </div>
+
+      <div class="card reveal">
+        <div class="ico"><svg viewBox="0 0 16 16"><path d="M8 2c3 0 5.5 1 5.5 2.3v7.4C13.5 13 11 14 8 14s-5.5-1-5.5-2.3V4.3C2.5 3 5 2 8 2zm0 1.3c-2.5 0-4.2.8-4.2 1s1.7 1 4.2 1 4.2-.8 4.2-1-1.7-1-4.2-1z"/></svg></div>
+        <h3>Sync, friends and alerts</h3>
+        <p>One library across machines, an activity feed, and realtime alerts when something
+           you follow starts airing. All of that needs a database and a server that stays
+           awake — a monthly bill rather than a one-off.</p>
+        <span class="badge badge-soon">Coming soon</span>
+      </div>
+    </div>
+
+    <div class="notice reveal" style="margin-top:32px">
+      <h3>What support will never buy</h3>
+      <p>Supporting Sentrychan will never get you more sources, faster downloads, or any
+         advantage in finding or fetching content. None of that is a product here and none
+         of it ever will be. The downloader, the library, the reader and the quiz are
+         finished, free, and stay that way.</p>
+      <p>What is being funded is <strong>hosting</strong> — machines, a database and a
+         certificate. If you would rather not pay for hosting, run it yourself: point the
+         app at your own <a href="https://supabase.com">Supabase</a> project, apply
+         <code>schema.sql</code> from the repository, and the same features work against
+         your own backend for nothing. That escape hatch is deliberate and will not be
+         closed.</p>
+      <p>Nothing is for sale yet — there is no checkout, no subscription and no account to
+         create. This section describes where support would go when it exists.</p>
+    </div>
+  </div>
+</section>
+
 <!-- ══ CTA ══ -->
-<section class="band">
+<section>
   <div class="container">
     <div class="cta reveal">
       <h2>Open source</h2>
@@ -727,9 +802,11 @@
     </div>
     <p>Released under the AGPL-3.0 License. Made by D4Ron.</p>
     <p class="disclaim">Uses Jikan (MyAnimeList), AnitomySharp and the anime-offline-database.</p>
-    <p class="disclaim">Sentrychan is a library manager and download client. It bundles no
-       online sources and hosts no content. You are responsible for what you download and for
-       complying with the laws that apply to you.</p>
+    <p class="disclaim">Sentrychan is a general-purpose library manager and download client.
+       It bundles no online sources, indexes nothing, hosts no content and is not affiliated
+       with any content site. Every feed and source it uses is one the user configures.
+       It is not intended for copyright infringement. You are responsible for what you point
+       it at and for complying with the laws that apply to you.</p>
   </div>
 </footer>
 
