@@ -21,3 +21,9 @@ CLAUDE.md
 
 # Local editor/agent scratch (dev-server launch config etc.)
 .claude/
+
+# Built source packs kept locally for testing / distribution.
+# These MUST NOT reach the public repo - the sources-as-plugins split is the
+# whole legal separation. Never remove this rule.
+/sources/
+*.Sources.dll
