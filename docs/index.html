@@ -246,12 +246,15 @@
   .badge-beta{color:#b45309;background:rgba(245,158,11,.16)}
   :root.dark .badge-beta{color:#fbbf24;background:rgba(251,191,36,.14)}
 
-  /* The one place the site is allowed to be silly. */
+  /* The one place the site is allowed to be silly. Quote marks live here so the
+     strings in the script stay clean. */
   .quip{
     margin-top:12px!important;padding-left:12px;
     border-left:2px solid var(--c-brand-soft);
     font-style:italic;font-size:13.5px!important;color:var(--c-text-3)!important;
   }
+  .quip::before{content:"\201C"}
+  .quip::after{content:"\201D"}
   .fund-row{
     margin-top:32px;display:flex;flex-wrap:wrap;gap:14px;
     align-items:center;justify-content:center;text-align:center;
@@ -775,7 +778,8 @@
         <p>No feature attached, no unlock, nothing to install. This one goes to the one person
            who writes all of this at 2am and then reads the bug reports at 9. It buys evenings
            spent on Sentrychan instead of on something sensible.</p>
-        <p class="quip">“It's not like I'm building this for you or anything… b-baka.”</p>
+        <!-- Swapped for a random line on load; this one is the no-JS fallback. -->
+        <p class="quip" id="quip">It's not like I'm building this for you or anything… b-baka.</p>
         <span class="badge">No strings attached</span>
       </div>
     </div>
@@ -876,6 +880,41 @@
   function onScroll() { nav.classList.toggle('scrolled', window.scrollY > 16); }
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
+
+  // ── Rotating quip ───────────────────────────────────────────────
+  // One of these per page load. Add lines freely — the only rule is that they
+  // stay jokes about the developer, never about what you can do with the app.
+  (function () {
+    var el = document.getElementById('quip');
+    if (!el) return;
+
+    var lines = [
+      "It's not like I'm building this for you or anything… b-baka.",
+      'Powered by instant ramen and unresolved merge conflicts.',
+      'Sleep is a debuff. I have chosen to remain debuffed.',
+      'Behind every tidy library is one deeply untidy developer.',
+      'I will stop after one more commit. I am on episode 47 of that arc.',
+      'Yare yare daze… another filename failed to parse.',
+      'I did not choose the RSS life. The RSS life chose me.',
+      'My power level is directly proportional to caffeine on hand.',
+      'The real source pack was the bugs we fixed along the way.',
+      'Not a hero. Just a guy who cannot abide a badly named file.',
+      'Somewhere out there, a season number is wrong. I can feel it.',
+      'One person, several thousand lines, and a concerning number of evenings.',
+      'This card unlocks nothing. That is genuinely the whole idea.',
+      'Nani?! My weekend — gone already?!'
+    ];
+
+    // Avoid handing the same line to someone who just refreshed.
+    var last = null;
+    try { last = sessionStorage.getItem('sc-quip'); } catch (e) {}
+
+    var i = Math.floor(Math.random() * lines.length);
+    if (lines.length > 1 && String(i) === last) i = (i + 1) % lines.length;
+
+    try { sessionStorage.setItem('sc-quip', String(i)); } catch (e) {}
+    el.textContent = lines[i];
+  })();
 
   // ── Live release info ───────────────────────────────────────────
   // Progressive enhancement only: if this fails (offline, rate-limited, no release
