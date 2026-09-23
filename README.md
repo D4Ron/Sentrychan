@@ -65,11 +65,10 @@ if you can; that's usually enough to reproduce a problem.
 
 ## About online sources
 
-**Sentrychan ships with no online sources built in.** Out of the box it is a
-library manager, downloader and reader. It does not include, host or bundle any
-scraper for a manga or anime site, and it is not affiliated with any of them.
+Sentrychan is a library manager, downloader and reader, and it is not affiliated
+with any content site.
 
-Online sources come from **source packs** — separate, third-party plug-in DLLs you
+Manga and novel sources come from **source packs** — separate, third-party plug-in DLLs you
 import yourself from `Settings → Library & Danger → Import source pack`. They load
 on the next restart. This repository neither distributes nor links to them.
 
@@ -78,9 +77,7 @@ chapter images, RSS feeds you add, MyAnimeList import, the reader and the quiz.
 
 ## Intended use
 
-Sentrychan connects to nothing on its own — every feed it reads and every source it
-can reach is one **you** configured. It is built for organising a library you are
-entitled to hold: your own rips, public domain and Creative Commons works, freely
+Sentrychan is built for organising a library you are entitled to hold: your own rips, public domain and Creative Commons works, freely
 distributed releases, and anything you have permission to download.
 
 It is not intended for copyright infringement, and using it that way is neither
@@ -188,10 +185,9 @@ Metadata from [Jikan](https://jikan.moe/) (MyAnimeList),
 <div align="center">
 <sub>
 
-Sentrychan is a general-purpose library manager and download client. It bundles no
-online sources, indexes nothing, hosts no content and is not affiliated with any
-content site. Every feed and source it uses is one the user configures. It is not
-intended for copyright infringement. You are responsible for what you point it at
+Sentrychan is a general-purpose library manager and download client. It hosts no
+content and is not affiliated with any content site. It is not intended for
+copyright infringement. You are responsible for what you point it at
 and for complying with the laws that apply to you.
 
 </sub>
