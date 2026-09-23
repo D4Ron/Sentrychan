@@ -155,7 +155,7 @@
                                        FontSize="12"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                             <TextBox Text="{Binding PreferredReleaseGroups}"
-                                     Watermark="SubsPlease,Erai-raws — comma separated, highest priority first"
+                                     Watermark="GroupA,GroupB — comma separated, highest priority first"
                                      HorizontalAlignment="Stretch"/>
                             <TextBlock Text="When several groups release the same episode, the monitor picks the one highest in this list."
                                        FontSize="10.5" Foreground="{StaticResource TextTertiaryBrush}" TextWrapping="Wrap"/>

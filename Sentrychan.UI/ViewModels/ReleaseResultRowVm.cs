@@ -4,11 +4,11 @@ using System.Reactive;
 
 namespace Sentrychan.UI.ViewModels;
 
-public class NyaaResultRowVm : ViewModelBase
+public class ReleaseResultRowVm : ViewModelBase
 {
-    private readonly NyaaResult _result;
+    private readonly ReleaseResult _result;
 
-    public NyaaResultRowVm(NyaaResult result, ReactiveCommand<NyaaResultRowVm, Unit> downloadCommand)
+    public ReleaseResultRowVm(ReleaseResult result, ReactiveCommand<ReleaseResultRowVm, Unit> downloadCommand)
     {
         _result = result;
         DownloadCommand = downloadCommand;
@@ -21,8 +21,8 @@ public class NyaaResultRowVm : ViewModelBase
     public int Leechers => _result.Leechers;
     public string Category => "Anime"; // Default or inferred
 
-    // Computed UI styling properties based on group/quality
-    public bool IsTrusted => Title.Contains("[SubsPlease]") || Title.Contains("[Erai-raws]");
+    // Trusted is the provider's call; the UI only colours it.
+    public bool IsTrusted => _result.IsTrusted;
     public string HighlightColor => IsTrusted ? "#4CAF50" : "#FFFFFF"; // Green for trusted
 
     public string ParsedQuality
@@ -45,7 +45,7 @@ public class NyaaResultRowVm : ViewModelBase
 
     public void MarkDownloaded() => IsDownloaded = true;
 
-    public ReactiveCommand<NyaaResultRowVm, Unit> DownloadCommand { get; }
+    public ReactiveCommand<ReleaseResultRowVm, Unit> DownloadCommand { get; }
 
-    public NyaaResult GetUnderlyingResult() => _result;
+    public ReleaseResult GetUnderlyingResult() => _result;
 }

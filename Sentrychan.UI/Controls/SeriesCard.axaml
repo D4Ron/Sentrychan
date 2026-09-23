@@ -82,8 +82,8 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Sukebei Badge (Secret Mode only) -->
-                <Border Name="SukebeiBadge" Background="{DynamicResource StatusRedBrush}" Padding="4,2" 
+                <!-- Adult badge (secret mode only; placeholder, not yet shown) -->
+                <Border Name="AdultBadge" Background="{DynamicResource StatusRedBrush}" Padding="4,2" 
                         CornerRadius="4" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="False">
                     <TextBlock Text="18+" FontSize="9" FontWeight="Bold" Foreground="White"/>
                 </Border>

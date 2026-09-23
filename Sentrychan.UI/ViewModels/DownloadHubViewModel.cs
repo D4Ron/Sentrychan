@@ -14,13 +14,18 @@ namespace Sentrychan.UI.ViewModels;
 
 public class DownloadHubViewModel : ViewModelBase
 {
-    private readonly INyaaSearchService _nyaaSearch;
+    private readonly IReleaseProviders _releases;
     private readonly IDownloadPickerService _picker;
     private readonly IDbContextFactory<Sentrychan.Core.Data.AppDbContext> _dbFactory;
     private readonly IDownloadBackendRouter? _backendRouter;
 
-    public ObservableCollection<NyaaResultRowVm> SearchResults { get; } = new();
-    public ObservableCollection<NyaaResultRowVm> TrendingResults { get; } = new();
+    public ObservableCollection<ReleaseResultRowVm> SearchResults { get; } = new();
+    public ObservableCollection<ReleaseResultRowVm> TrendingResults { get; } = new();
+
+    // Search needs a release provider, and only a source pack supplies one.
+    public bool HasSearchProvider => _releases?.HasSearch == true;
+    public const string NoProviderMessage =
+        "No release search provider installed. Import a source pack in Settings → Library.";
 
     private string _searchQuery = string.Empty;
     public string SearchQuery
@@ -80,7 +85,7 @@ public class DownloadHubViewModel : ViewModelBase
     private CancellationTokenSource? _searchCts;
 
     public ReactiveCommand<Unit, Unit> SearchCommand { get; }
-    public ReactiveCommand<NyaaResultRowVm, Unit> DownloadResultCommand { get; }
+    public ReactiveCommand<ReleaseResultRowVm, Unit> DownloadResultCommand { get; }
     public ReactiveCommand<Unit, Unit> ChangeDownloadMethodCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowTrendingCommand { get; }
     public ReactiveCommand<Unit, Unit> FillGapsForMatchCommand { get; }
@@ -88,11 +93,11 @@ public class DownloadHubViewModel : ViewModelBase
     // Design-time ctor
     public DownloadHubViewModel()
     {
-        _nyaaSearch = null!;
+        _releases = null!;
         _picker = null!;
         _dbFactory = null!;
         SearchCommand = ReactiveCommand.Create(() => { });
-        DownloadResultCommand = ReactiveCommand.Create<NyaaResultRowVm>(_ => { });
+        DownloadResultCommand = ReactiveCommand.Create<ReleaseResultRowVm>(_ => { });
         ChangeDownloadMethodCommand = ReactiveCommand.Create(() => { });
         ShowTrendingCommand = ReactiveCommand.Create(() => { });
         FillGapsForMatchCommand = ReactiveCommand.Create(() => { });
@@ -102,20 +107,20 @@ public class DownloadHubViewModel : ViewModelBase
     private bool SecretMode => _themeService?.IsSecretMode ?? false;
 
     public DownloadHubViewModel(
-        INyaaSearchService nyaaSearch,
+        IReleaseProviders releases,
         IDownloadPickerService picker,
         IDbContextFactory<Sentrychan.Core.Data.AppDbContext> dbFactory,
         IDownloadBackendRouter? backendRouter = null,
         Sentrychan.UI.Services.IThemeService? themeService = null)
     {
-        _nyaaSearch = nyaaSearch;
+        _releases = releases;
         _picker = picker;
         _dbFactory = dbFactory;
         _backendRouter = backendRouter;
         _themeService = themeService;
 
         SearchCommand = ReactiveCommand.CreateFromTask(ExecuteSearchAsync);
-        DownloadResultCommand = ReactiveCommand.CreateFromTask<NyaaResultRowVm>(ExecuteDownloadResultAsync);
+        DownloadResultCommand = ReactiveCommand.CreateFromTask<ReleaseResultRowVm>(ExecuteDownloadResultAsync);
 
         ChangeDownloadMethodCommand = ReactiveCommand.CreateFromTask(async ct =>
         {
@@ -147,7 +152,7 @@ public class DownloadHubViewModel : ViewModelBase
         _ = LoadTrendingAsync(CancellationToken.None);
     }
 
-    /// <summary>Reload trending for the current mode (nyaa vs sukebei). Called on nav + secret toggle.</summary>
+    /// <summary>Reload trending for the current mode. Called on nav + secret toggle.</summary>
     public void RefreshForMode()
     {
         IsShowingTrending = true;
@@ -157,18 +162,25 @@ public class DownloadHubViewModel : ViewModelBase
 
     private async Task LoadTrendingAsync(CancellationToken ct)
     {
+        this.RaisePropertyChanged(nameof(HasSearchProvider));
+        if (!HasSearchProvider)
+        {
+            StatusMessage = NoProviderMessage;
+            return;
+        }
+
         IsLoadingTrending = true;
         try
         {
-            // Pull front-page RSS (sukebei in secret mode), sorted by seeders
-            var results = await _nyaaSearch.SearchAsync(string.Empty, quality: null, secretMode: SecretMode, ct: ct);
+            // An empty query returns the provider's newest releases, sorted here by seeders.
+            var results = await _releases.SearchAsync(string.Empty, quality: null, secretMode: SecretMode, ct: ct);
             var top = results.OrderByDescending(r => r.Seeders).Take(40);
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 TrendingResults.Clear();
                 foreach (var r in top)
-                    TrendingResults.Add(new NyaaResultRowVm(r, DownloadResultCommand));
+                    TrendingResults.Add(new ReleaseResultRowVm(r, DownloadResultCommand));
             });
         }
         catch
@@ -185,23 +197,31 @@ public class DownloadHubViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(SearchQuery)) return;
 
+        if (!HasSearchProvider)
+        {
+            IsShowingTrending = false;
+            SearchResults.Clear();
+            StatusMessage = NoProviderMessage;
+            return;
+        }
+
         _searchCts?.Cancel();
         _searchCts = new CancellationTokenSource();
         var linkedCt = CancellationTokenSource.CreateLinkedTokenSource(ct, _searchCts.Token).Token;
 
         IsSearching = true;
         IsShowingTrending = false;
-        StatusMessage = SecretMode ? "Searching Sukebei..." : "Searching Nyaa...";
+        StatusMessage = "Searching...";
         SearchResults.Clear();
         LibraryMatchTitle = string.Empty;
 
         try
         {
-            var results = await _nyaaSearch.SearchAsync(SearchQuery, secretMode: SecretMode, ct: linkedCt);
+            var results = await _releases.SearchAsync(SearchQuery, secretMode: SecretMode, ct: linkedCt);
             var sorted = results.OrderByDescending(r => r.Seeders).Take(50);
 
             foreach (var r in sorted)
-                SearchResults.Add(new NyaaResultRowVm(r, DownloadResultCommand));
+                SearchResults.Add(new ReleaseResultRowVm(r, DownloadResultCommand));
 
             StatusMessage = results.Count == 0
                 ? "No results found."
@@ -241,7 +261,7 @@ public class DownloadHubViewModel : ViewModelBase
         catch { }
     }
 
-    private async Task ExecuteDownloadResultAsync(NyaaResultRowVm row, CancellationToken ct)
+    private async Task ExecuteDownloadResultAsync(ReleaseResultRowVm row, CancellationToken ct)
     {
         var rawResult = row.GetUnderlyingResult();
 

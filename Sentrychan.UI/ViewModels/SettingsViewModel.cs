@@ -74,7 +74,8 @@ public class SettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _qualityPreference, value);
     }
     
-    private string _preferredReleaseGroups = "SubsPlease,Erai-raws,HorribleSubs";
+    // No built-in preference: a loaded source pack may seed one on a fresh install.
+    private string _preferredReleaseGroups = string.Empty;
     public string PreferredReleaseGroups
     {
         get => _preferredReleaseGroups;
@@ -397,7 +398,7 @@ public class SettingsViewModel : ViewModelBase
         NotificationLevel = await GetConfig(db, Sentrychan.Core.Services.NotificationSettings.LevelKey, "Important", ct);
         WindowsNotifications = await GetConfig(db, Sentrychan.Core.Services.NotificationSettings.WindowsKey, "true", ct) == "true";
         WatchFolderMode = await GetConfig(db, "DownloadOrganizeMode", "Own", ct) == "Watch";
-        PreferredReleaseGroups = await GetConfig(db, "PreferredReleaseGroups", "SubsPlease,Erai-raws,HorribleSubs", ct);
+        PreferredReleaseGroups = await GetConfig(db, "PreferredReleaseGroups", "", ct);
         AutoDownloadGroups = await GetConfig(db, "AutoDownloadGroups", "", ct);
         VlcPath = await GetConfig(db, "VlcPath", "vlc", ct);
         SelectedPlayer = await GetConfig(db, "SelectedPlayer", "Internal", ct);

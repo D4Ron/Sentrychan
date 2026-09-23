@@ -26,8 +26,8 @@ public record MangaChapterInfo(
     DateTime? PublishedAt);
 
 /// <summary>
-/// A manga source (MangaDex to start). Kept behind an interface so more sources can be
-/// added the same way the anime side blends SubsPlease + nyaa.
+/// A manga source. Kept behind an interface so sources can live in loadable source packs,
+/// the same way the anime side's release providers do (see IReleaseProvider).
 /// </summary>
 public interface IMangaSourceService
 {

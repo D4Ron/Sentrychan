@@ -5,9 +5,8 @@ using System.Reactive;
 namespace Sentrychan.UI.ViewModels;
 
 /// <summary>
-/// Torrent-level details for one Latest release — the info you'd see on the
-/// nyaa/sukebei page (category, size, seeders/leechers, hash, date), sourced
-/// straight from the RSS item plus the resolved cover.
+/// Torrent-level details for one Latest release (category, size, seeders/leechers,
+/// hash, date), sourced straight from the RSS item plus the resolved cover.
 /// </summary>
 public class ReleaseDetailsViewModel : ViewModelBase
 {
@@ -17,8 +16,8 @@ public class ReleaseDetailsViewModel : ViewModelBase
     public string Category { get; }
     public string SizeDisplay { get; }
 
-    // Swarm counts are settable: feeds like SubsPlease's own RSS carry no seeder data,
-    // so the dialog opens with 0s and enriches them from the release's nyaa page.
+    // Swarm counts are settable: some feeds carry no seeder data, so the dialog opens
+    // with 0s and a loaded provider may fill them in afterwards.
     private int _seeders;
     public int Seeders { get => _seeders; set => this.RaiseAndSetIfChanged(ref _seeders, value); }
     private int _leechers;

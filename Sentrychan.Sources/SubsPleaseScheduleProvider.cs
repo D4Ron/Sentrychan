@@ -2,25 +2,25 @@ using Microsoft.Extensions.Logging;
 using Sentrychan.Core.Interfaces;
 using System.Text.Json;
 
-namespace Sentrychan.Core.Services;
+namespace Sentrychan.Sources;
 
 /// <summary>
-/// Fetches SubsPlease's schedule API (https://subsplease.org/api/?f=schedule&amp;tz=...).
-/// It returns each weekday's shows with release times already converted to the
-/// requested IANA timezone, plus poster URLs — the real release calendar.
+/// Release schedule from SubsPlease's API, with times already converted to the requested
+/// IANA timezone. Registered as an override on the app's schedule; without this pack the
+/// app falls back to MAL broadcast data.
 /// </summary>
-public class SubsPleaseScheduleService : IAiringScheduleService
+public class SubsPleaseScheduleProvider : IAiringScheduleService
 {
     private const string BaseUrl = "https://subsplease.org";
     private readonly HttpClient _http;
-    private readonly ILogger<SubsPleaseScheduleService> _logger;
+    private readonly ILogger<SubsPleaseScheduleProvider> _logger;
 
     // Small in-memory cache — the schedule barely changes within a session.
     private List<AiringScheduleEntry>? _cache;
     private DateTime _cacheDay = DateTime.MinValue;
     private DateTime _cachedAt = DateTime.MinValue;
 
-    public SubsPleaseScheduleService(ILogger<SubsPleaseScheduleService> logger)
+    public SubsPleaseScheduleProvider(ILogger<SubsPleaseScheduleProvider> logger)
     {
         _logger = logger;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };

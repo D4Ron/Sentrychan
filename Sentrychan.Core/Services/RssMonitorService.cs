@@ -31,12 +31,16 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
     private readonly IEpisodeNormalizer _normalizer;
     private static readonly Regex SourceGroupPattern = new(@"^\[(.*?)\]", RegexOptions.Compiled);
 
+    // Release-index access for the early-episode search. Empty unless a source pack is loaded.
+    private readonly IReleaseProviders _releases;
+
     public RssMonitorService(
         IDbContextFactory<AppDbContext> dbFactory,
         IMediator mediator,
         DownloadQueueManager downloadQueue,
         IEpisodeNormalizer normalizer,
         ITitleResolverService titleResolver,
+        IReleaseProviders releases,
         ILogger<RssMonitorService> logger)
     {
         _dbFactory = dbFactory;
@@ -44,6 +48,7 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
         _downloadQueue = downloadQueue;
         _normalizer = normalizer;
         _titleResolver = titleResolver;
+        _releases = releases;
         _logger = logger;
     }
 
@@ -472,22 +477,21 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
 
     private async Task<NewEpisodeFoundEvent?> SearchForEarlyEpisodeAsync(Series series, string qualityPreference, CancellationToken ct)
     {
+        // Needs a release provider, which only a loaded source pack supplies.
+        if (!_releases.HasSearch) return null;
+
         try
         {
             var targetEp = Math.Max(1, series.LastEpisodeNumber + 1); // We look for 1 if it's -1 or 0
             var query = $"{series.Title} {targetEp:D2}";
-            var encoded = Uri.EscapeDataString(query);
 
-            // Search Nyaa specifically for English-translated Anime (category 1_2)
-            var searchUrl = $"https://nyaa.si/?page=rss&q={encoded}&c=1_2&f=0";
+            _logger.LogInformation("Performing targeted search for {Title} Ep {Ep}", series.Title, targetEp);
+            var results = await _releases.SearchAsync(query, quality: null, secretMode: false, ct);
 
-            _logger.LogInformation("Performing targeted search for {Title} Ep {Ep}: {Url}", series.Title, targetEp, searchUrl);
-            var parsedFeed = await FeedReader.ReadAsync(searchUrl, ct);
-
-            foreach (var item in parsedFeed.Items)
+            foreach (var result in results)
             {
-                var title = item.Title ?? string.Empty;
-                var link = item.Link ?? string.Empty;
+                var title = result.Title;
+                var link = result.DownloadLink;
 
                 if (!MatchesQuality(title, qualityPreference)) continue;
                 if (!TitleMatchesSeries(title, series)) continue;

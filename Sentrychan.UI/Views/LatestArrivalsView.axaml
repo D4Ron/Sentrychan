@@ -75,7 +75,7 @@
                                 <Border Height="252" CornerRadius="8,8,0,0" ClipToBounds="True">
                                     <Panel>
                                         <!-- Placeholder behind the poster: shows through when no
-                                             thumbnail could be resolved (most JAV releases have no cover) -->
+                                             thumbnail could be resolved -->
                                         <Panel Background="{DynamicResource SurfaceBackgroundBrush}">
                                             <Image Source="avares://Sentrychan.UI/Assets/logo.png"
                                                    Width="64" Height="64" Opacity="0.18"

@@ -12,16 +12,19 @@ namespace Sentrychan.Core.Services;
 public class FillGapsService : IFillGapsService
 {
     private readonly IVideoFileLocator _fileLocator;
-    private readonly INyaaSearchService _nyaaSearch;
+    private readonly IReleaseProviders _releases;
+    private readonly ISecretModeService _secretMode;
     private readonly ILogger<FillGapsService> _logger;
 
     public FillGapsService(
         IVideoFileLocator fileLocator,
-        INyaaSearchService nyaaSearch,
+        IReleaseProviders releases,
+        ISecretModeService secretMode,
         ILogger<FillGapsService> logger)
     {
         _fileLocator = fileLocator;
-        _nyaaSearch = nyaaSearch;
+        _releases = releases;
+        _secretMode = secretMode;
         _logger = logger;
     }
 
@@ -49,7 +52,7 @@ public class FillGapsService : IFillGapsService
             {
                 _logger.LogInformation("Gap found: {Title} Ep {Ep}", series.Title, i);
 
-                var results = await _nyaaSearch.FindEpisodeAsync(searchTitle, i, null, ct);
+                var results = await _releases.FindEpisodeAsync(searchTitle, i, null, ct);
                 var best = results.FirstOrDefault(r =>
                     SeasonSearch.MatchesSeason(r.Title, season));
 
@@ -66,10 +69,10 @@ public class FillGapsService : IFillGapsService
     }
 
     /// <summary>
-    /// Searches Nyaa for a batch torrent for this series.
-    /// Returns the best candidate (most seeders from preferred groups) or null.
+    /// Searches the loaded release providers for a batch torrent for this series.
+    /// Returns the best candidate (most seeders) or null — always null with no provider loaded.
     /// </summary>
-    public async Task<NyaaResult?> SearchBatchTorrentAsync(Series series, string quality = "1080p", CancellationToken ct = default)
+    public async Task<ReleaseResult?> SearchBatchTorrentAsync(Series series, string quality = "1080p", CancellationToken ct = default)
     {
         // Query on the season-stripped title so we see every season's batches, then
         // filter to the requested season — otherwise a higher-seeded Season 1 batch
@@ -86,7 +89,7 @@ public class FillGapsService : IFillGapsService
 
         foreach (var q in queries)
         {
-            var results = await _nyaaSearch.SearchAsync(q, ct: ct);
+            var results = await _releases.SearchAsync(q, secretMode: _secretMode.IsSecretModeActive, ct: ct);
             var batches = results
                 .Where(r => r.IsBatch || r.Title.Contains("batch", StringComparison.OrdinalIgnoreCase)
                                       || r.Title.Contains("complete", StringComparison.OrdinalIgnoreCase))

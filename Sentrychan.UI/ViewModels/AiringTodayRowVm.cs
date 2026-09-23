@@ -4,12 +4,12 @@ using System.Reactive;
 
 namespace Sentrychan.UI.ViewModels;
 
-/// <summary>One row in the Library page's "Airing Today" panel (SubsPlease schedule).</summary>
+/// <summary>One row in the Library page's "Airing Today" panel.</summary>
 public class AiringTodayRowVm : ViewModelBase
 {
     public string Title { get; }
     public string PosterUrl { get; }
-    public string AirTime { get; }   // already local, from SubsPlease
+    public string AirTime { get; }   // already local
     public bool InLibrary { get; }
 
     public ReactiveCommand<Unit, Unit> OpenCommand { get; }

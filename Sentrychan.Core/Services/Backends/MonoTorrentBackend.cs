@@ -133,7 +133,7 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
                 {
                     _logger.LogError(
                         "[MonoTorrent] .torrent fetch returned {Status} for {Url}. " +
-                        "If this came from a hash-based Nyaa URL, prefer magnet links.",
+                        "If this was a hash-based .torrent URL, prefer magnet links.",
                         (int)response.StatusCode,
                         magnetOrUrl[..Math.Min(120, magnetOrUrl.Length)]);
                     return null;

@@ -653,9 +653,9 @@ public class MainWindowViewModel : ViewModelBase,
     public string TodayLabel => DateTime.Now.ToString("dddd");
 
     /// <summary>
-    /// Loads today's release schedule from SubsPlease (their live calendar, times
-    /// already localized). The user's own library shows are matched via the title
-    /// resolver, pinned to the top and badged. Best-effort, cached, background.
+    /// Loads today's schedule (MAL broadcast data, or a source pack's schedule when one is
+    /// loaded; times already localized). The user's own library shows are matched, pinned
+    /// to the top and badged. Best-effort, cached, background.
     /// </summary>
     private async Task LoadAiringTodayAsync()
     {
@@ -670,9 +670,10 @@ public class MainWindowViewModel : ViewModelBase,
             var rows = new List<AiringTodayRowVm>();
             foreach (var e in entries)
             {
-                // Resolve the SubsPlease title to a canonical anime (MAL id + poster).
+                // Resolve to a canonical anime (MAL id + poster). MAL-sourced entries carry
+                // their id already; anything else is matched by title.
                 ResolvedAnime? res = resolver?.IsReady == true ? resolver.ResolveTitle(e.Title) : null;
-                int malId = res?.MalId ?? 0;
+                int malId = e.MalId > 0 ? e.MalId : res?.MalId ?? 0;
                 bool inLib = malId > 0 && _allSeries.Any(s => s.MalId == malId);
 
                 var entry = e;
@@ -1083,7 +1084,7 @@ public class MainWindowViewModel : ViewModelBase,
                 this.RaisePropertyChanged(nameof(CurrentPageCountText));
             }
 
-            // Latest + Search feeds differ by mode (secret uses sukebei) — reload
+            // Latest + Search feeds differ by mode (secret mode shows adult feeds) — reload
             // so the user doesn't have to refresh manually after toggling.
             LatestArrivalsVm?.RefreshCommand.Execute().Subscribe();
             DownloadHubVm?.RefreshForMode();
@@ -1099,7 +1100,7 @@ public class MainWindowViewModel : ViewModelBase,
         // Populate immediately so the poll loop has rows to merge progress into
         DownloadsVm.LoadJobsCommand.Execute().Subscribe();
         DownloadHubVm = new DownloadHubViewModel(
-            App.Services.GetRequiredService<INyaaSearchService>(),
+            App.Services.GetRequiredService<IReleaseProviders>(),
             App.Services.GetRequiredService<IDownloadPickerService>(),
             dbContextFactory,
             App.Services.GetRequiredService<IDownloadBackendRouter>(),
@@ -1627,6 +1628,14 @@ public class MainWindowViewModel : ViewModelBase,
     {
         if (series == null || App.Services == null) return;
 
+        // Don't ask for an episode number we can't search for.
+        var releases = App.Services.GetRequiredService<IReleaseProviders>();
+        if (!releases.HasSearch)
+        {
+            ShowToast("No search provider", DownloadHubViewModel.NoProviderMessage);
+            return;
+        }
+
         int targetEpisode = 0;
         if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
         {
@@ -1638,7 +1647,7 @@ public class MainWindowViewModel : ViewModelBase,
             targetEpisode = result;
         }
 
-        // Targeted Nyaa search for this exact episode. The old approach (roll back
+        // Targeted search for this exact episode. The old approach (roll back
         // LastEpisodeNumber and re-run the RSS check) only worked when the episode
         // happened to still be inside the feed's ~75-item window.
         UpdateStatus($"● Looking for Ep {targetEpisode}...", "#FFA726");
@@ -1646,8 +1655,6 @@ public class MainWindowViewModel : ViewModelBase,
 
         try
         {
-            var nyaa = App.Services.GetRequiredService<INyaaSearchService>();
-
             // Try the primary title, then original/alternative titles — release
             // groups often use a different title than MAL's romaji. Strip the season
             // out of each query title so every season's releases come back, then keep
@@ -1669,11 +1676,11 @@ public class MainWindowViewModel : ViewModelBase,
             }
 
             var season = Sentrychan.Core.Services.SeasonSearch.EffectiveSeason(series.Title, series.SeasonNumber);
-            Sentrychan.Core.Models.NyaaResult? best = null;
+            Sentrychan.Core.Models.ReleaseResult? best = null;
             foreach (var title in titlesToTry)
             {
                 var searchTitle = Sentrychan.Core.Services.SeasonSearch.StripSeason(title);
-                var results = await nyaa.FindEpisodeAsync(searchTitle, targetEpisode, null, CancellationToken.None);
+                var results = await releases.FindEpisodeAsync(searchTitle, targetEpisode, null, CancellationToken.None);
                 best = results.FirstOrDefault(r =>
                     Sentrychan.Core.Services.SeasonSearch.MatchesSeason(r.Title, season));
                 if (best != null) break;
