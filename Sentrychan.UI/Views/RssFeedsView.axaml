@@ -137,7 +137,7 @@
             <StackPanel Spacing="6">
                 <Grid ColumnDefinitions="*,100,120,Auto">
                     <TextBox Grid.Column="0" Text="{Binding NewFeedUrl}"
-                             Watermark="https://nyaa.si/?page=rss&amp;..." Height="32"/>
+                             Watermark="https://example.org/rss" Height="32"/>
                     <ComboBox Grid.Column="1" SelectedItem="{Binding NewFeedType}"
                               Height="32" Margin="8,0,0,0">
                         <ComboBoxItem Content="Primary"/>

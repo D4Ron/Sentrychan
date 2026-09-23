@@ -155,7 +155,11 @@ public static class Program
                 services.AddSingleton<ITitleResolverService, TitleResolverService>();
                 services.AddSingleton<ILibraryScanService, LibraryScanService>();
                 services.AddSingleton<Sentrychan.Core.Services.AiringStatusRefreshService>();
-                services.AddSingleton<IAiringScheduleService, SubsPleaseScheduleService>();
+                // MAL-backed schedule by default; a loaded source pack may register an override.
+                services.AddSingleton<JikanAiringScheduleService>();
+                services.AddSingleton<AiringScheduleRouter>();
+                services.AddSingleton<IAiringScheduleService>(sp => sp.GetRequiredService<AiringScheduleRouter>());
+                services.AddSingleton<IAiringScheduleRegistry>(sp => sp.GetRequiredService<AiringScheduleRouter>());
                 services.AddSingleton<INotificationService, WindowsNotificationService>();
                 services.AddSingleton<QuoteService>();
                 services.AddSingleton<IAccountService, SupabaseAccountService>();
@@ -176,7 +180,8 @@ public static class Program
                 services.AddSingleton<Sentrychan.Core.Services.Backends.MonoTorrentBackend>();
                 services.AddSingleton<IDownloadBackendRouter, DownloadBackendRouter>();
                 services.AddSingleton<IFileMovementPipeline, FileMovementPipeline>();
-                services.AddSingleton<INyaaSearchService, NyaaSearchService>();
+                // Holds no provider of its own: release-index providers come only from source packs.
+                services.AddSingleton<IReleaseProviders, ReleaseProviders>();
                 services.AddSingleton<IFillGapsService, FillGapsService>();
                 services.AddSingleton<IDownloadPickerService, Sentrychan.UI.Services.DownloadPickerService>();
 
@@ -302,27 +307,8 @@ public static class Program
                 Console.WriteLine($"[Program] Healed {corrupted.Count} corrupted config value(s)");
             }
 
-            // Seed the default sources so the app works out of the box (bundled build).
-            if (!db.RssFeeds.Any())
-            {
-                db.RssFeeds.Add(new Sentrychan.Core.Models.RssFeed
-                {
-                    Url       = "https://nyaa.si/?page=rss",
-                    FeedType  = Sentrychan.Core.Models.FeedType.Priority,
-                    IsEnabled = true,
-                    AddedAt   = DateTime.UtcNow
-                });
-                db.RssFeeds.Add(new Sentrychan.Core.Models.RssFeed
-                {
-                    Url              = "https://subsplease.org/rss/?t&h=1080",
-                    FeedType         = Sentrychan.Core.Models.FeedType.Priority,
-                    PreferredQuality = "1080p",
-                    IsEnabled        = true,
-                    AddedAt          = DateTime.UtcNow
-                });
-                db.SaveChanges();
-                Console.WriteLine("[Program] Seeded default RSS feeds: nyaa.si + SubsPlease 1080p");
-            }
+            // No feeds are seeded here. The app ships knowing no content site; default feeds,
+            // if any, come from a loaded source pack (see SeedProviderDefaults).
         }
 
         // Hand service provider to Avalonia
@@ -332,6 +318,24 @@ public static class Program
         // Win32 dispatcher is installed (see note further down).
         Sentrychan.UI.App.PostInitAction = () =>
         {
+            // Load source packs BEFORE the host starts. Hosted services — the RSS monitor in
+            // particular — run their first check the moment the host starts, so any release
+            // provider and the default feeds it brings must already be registered by then.
+            var mangaRegistry = host.Services.GetRequiredService<Sentrychan.Core.Interfaces.IMangaSourceRegistry>();
+            try
+            {
+                var srcLog = host.Services.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
+                                 .CreateLogger("Sources");
+                PluginSourceLoader.SeedAndLoad(host.Services, mangaRegistry, srcLog);
+                SeedProviderDefaults(host.Services, srcLog);
+            }
+            catch (Exception ex) { Console.WriteLine($"Source plugin load failed: {ex.Message}"); }
+
+            // Teach AsyncImage which manga sources need a Referer for their image CDN.
+            foreach (var src in mangaRegistry.Sources)
+                if (!string.IsNullOrEmpty(src.ImageReferer))
+                    Sentrychan.UI.Controls.AsyncImage.RegisterReferer(src.SourceName, src.ImageReferer!);
+
             host.StartAsync().GetAwaiter().GetResult();
 
             // Restore saved auth session (silent, non-blocking)
@@ -375,22 +379,6 @@ public static class Program
             // Pending rows — give them a chance to start now that slots are empty.
             _ = host.Services.GetRequiredService<Sentrychan.Core.Services.DownloadQueueManager>()
                     .PromotePendingAsync(CancellationToken.None);
-
-            // Load source-pack plugins (seeding any bundled pack into the user folder first),
-            // BEFORE the referer seeding below so plugin sources are registered by then.
-            var mangaRegistry = host.Services.GetRequiredService<Sentrychan.Core.Interfaces.IMangaSourceRegistry>();
-            try
-            {
-                var srcLog = host.Services.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
-                                 .CreateLogger("Sources");
-                PluginSourceLoader.SeedAndLoad(host.Services, mangaRegistry, srcLog);
-            }
-            catch (Exception ex) { Console.WriteLine($"Source plugin load failed: {ex.Message}"); }
-
-            // Teach AsyncImage which manga sources need a Referer for their image CDN.
-            foreach (var src in mangaRegistry.Sources)
-                if (!string.IsNullOrEmpty(src.ImageReferer))
-                    Sentrychan.UI.Controls.AsyncImage.RegisterReferer(src.SourceName, src.ImageReferer!);
 
             // Load notification preferences (level + Windows-vs-in-app).
             try
@@ -441,6 +429,44 @@ public static class Program
         }
 
         host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Adds the default feeds and release-group preference that loaded source packs suggest —
+    /// but only on an install that has none yet, so it never overrides a user's own choices.
+    /// With no pack loaded this does nothing, which is what keeps the public build from
+    /// subscribing itself to anything.
+    /// </summary>
+    private static void SeedProviderDefaults(IServiceProvider services, Microsoft.Extensions.Logging.ILogger log)
+    {
+        var releases = services.GetRequiredService<IReleaseProviders>();
+        var feeds    = releases.DefaultFeeds;
+        var groups   = releases.DefaultPreferredGroups;
+        if (feeds.Count == 0 && string.IsNullOrWhiteSpace(groups)) return;
+
+        using var db = services
+            .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<AppDbContext>>()
+            .CreateDbContext();
+
+        if (feeds.Count > 0 && !db.RssFeeds.Any())
+        {
+            foreach (var f in feeds)
+                db.RssFeeds.Add(new Sentrychan.Core.Models.RssFeed
+                {
+                    Url              = f.Url,
+                    FeedType         = f.Type,
+                    PreferredQuality = f.PreferredQuality,
+                    IsEnabled        = true,
+                    AddedAt          = DateTime.UtcNow
+                });
+            Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+                log, "[Sources] seeded {Count} default feed(s) from loaded packs", feeds.Count);
+        }
+
+        if (!string.IsNullOrWhiteSpace(groups) && !db.AppConfigs.Any(c => c.Key == "PreferredReleaseGroups"))
+            db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = "PreferredReleaseGroups", Value = groups! });
+
+        db.SaveChanges();
     }
 
     /// <summary>

@@ -22,7 +22,7 @@
             <Grid ColumnDefinitions="*, Auto">
                 <TextBox Grid.Column="0"
                          Text="{Binding SearchQuery}"
-                         Watermark="Search Nyaa (e.g. 'Frieren 1080p') — Enter to search"
+                         Watermark="Search releases (e.g. 'Frieren 1080p') — Enter to search"
                          FontSize="14" Padding="12"
                          CornerRadius="8 0 0 8"
                          KeyDown="SearchBox_KeyDown"
@@ -132,7 +132,7 @@
                     <ScrollViewer Grid.Row="1" IsVisible="{Binding TrendingResults.Count}">
                         <ItemsControl ItemsSource="{Binding TrendingResults}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:NyaaResultRowVm">
+                                <DataTemplate x:DataType="vm:ReleaseResultRowVm">
                                     <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="16,11">
                                         <Grid ColumnDefinitions="2*,1*,1*,1*,80">
                                             <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center" Margin="0,0,16,0">
@@ -205,7 +205,7 @@
                     <ScrollViewer Grid.Row="1" IsVisible="{Binding SearchResults.Count}">
                         <ItemsControl ItemsSource="{Binding SearchResults}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:NyaaResultRowVm">
+                                <DataTemplate x:DataType="vm:ReleaseResultRowVm">
                                     <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="16,11">
                                         <Grid ColumnDefinitions="2*,1*,1*,1*,80">
                                             <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center" Margin="0,0,16,0">

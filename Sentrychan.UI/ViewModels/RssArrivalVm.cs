@@ -12,7 +12,7 @@ public class RssArrivalVm : ViewModelBase
 {
     public string Title { get; init; } = string.Empty;
     public string EpisodePart { get; init; } = string.Empty;   // e.g. "Ep 12"
-    public string ReleaseGroup { get; init; } = string.Empty;  // e.g. "[SubsPlease]"
+    public string ReleaseGroup { get; init; } = string.Empty;  // e.g. "[Group]"
     public string Quality { get; init; } = string.Empty;       // e.g. "1080p"
     public string FeedUrl { get; init; } = string.Empty;
     public string DownloadLink { get; init; } = string.Empty;
@@ -52,5 +52,8 @@ public class RssArrivalVm : ViewModelBase
         }
     }
 
-    public bool IsCensored => FeedUrl.Contains("sukebei", StringComparison.OrdinalIgnoreCase);
+    // Whether a feed is adult is a loaded provider's call; with none, nothing is flagged.
+    public bool IsCensored =>
+        (App.Services?.GetService(typeof(Sentrychan.Core.Interfaces.IReleaseProviders))
+            as Sentrychan.Core.Interfaces.IReleaseProviders)?.IsAdultFeed(FeedUrl) == true;
 }

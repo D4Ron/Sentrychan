@@ -130,36 +130,8 @@ public class RssFeedsViewModel : ViewModelBase
         IsLoading = true;
         Feeds.Clear();
 
-        // Always show nyaa.si default first
-        Feeds.Add(new RssFeedRowVm
-        {
-            IsDefault = true,
-            IsSecretFeed = false,
-            Feed = new RssFeed
-            {
-                Url = "https://nyaa.si/?page=rss",
-                FeedType = FeedType.Priority,
-                IsEnabled = true
-            }
-        });
-
-        // Show sukebei only if secret mode is active
-        if (_themeService?.IsSecretMode == true)
-        {
-            Feeds.Add(new RssFeedRowVm
-            {
-                IsDefault = true,
-                IsSecretFeed = true,
-                Feed = new RssFeed
-                {
-                    Url = "https://sukebei.nyaa.si/?page=rss",
-                    FeedType = FeedType.Priority,
-                    IsEnabled = true
-                }
-            });
-        }
-
-        // Load user-added feeds from DB
+        // Only the user's own feeds. (This list used to prepend display-only "default"
+        // rows naming specific sites; they were never read by the monitor.)
         if (_dbFactory != null)
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -183,7 +155,8 @@ public class RssFeedsViewModel : ViewModelBase
         if (!NewFeedUrl.StartsWith("http://") && !NewFeedUrl.StartsWith("https://"))
         { AddFeedError = "URL must start with http:// or https://"; return; }
 
-        if (NewFeedUrl.Contains("sukebei") && !(_themeService?.IsSecretMode == true))
+        var releases = App.Services?.GetService(typeof(IReleaseProviders)) as IReleaseProviders;
+        if (releases?.IsAdultFeed(NewFeedUrl) == true && !(_themeService?.IsSecretMode == true))
         { AddFeedError = "That feed requires secret mode."; return; }
 
         if (_dbFactory == null) return;

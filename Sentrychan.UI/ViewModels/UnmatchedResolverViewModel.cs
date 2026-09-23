@@ -582,15 +582,15 @@ public class UnmatchedResolverViewModel : ViewModelBase
     private string CleanTitleForSearch(string fileName)
     {
         var name = Path.GetFileNameWithoutExtension(fileName);
+
+        // Drop a leading "[Group] " tag while the brackets still mark it — once
+        // normalized, it can't be told apart from the first word of the title.
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"^\s*\[[^\]]*\]\s*", string.Empty);
         var normalized = _normalizer.NormalizeTitle(name);
 
         var words = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
 
-        // Drop leading release-group remnants and trailing episode/quality tokens
-        var knownGroups = new[] { "subsplease", "erai", "commie", "horriblesubs", "nyaa", "asw", "judas" };
-        if (words.Count > 0 && knownGroups.Any(g => words[0].StartsWith(g)))
-            words.RemoveAt(0);
-
+        // Drop trailing episode/quality tokens
         words.RemoveAll(w => w is "1080p" or "720p" or "480p" or "x265" or "x264" or "hevc" or "aac");
 
         for (int i = words.Count - 1; i >= 0; i--)

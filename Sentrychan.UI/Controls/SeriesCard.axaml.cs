@@ -109,7 +109,7 @@ public partial class SeriesCard : UserControl
         {
             ApplyPlaceholderColor(series);
             UpdateCensorSplit(series);
-            UpdateSukebeiBadge(series);
+            UpdateAdultBadge(series);
             ApplyCensorState();
         }
     }
@@ -139,11 +139,9 @@ public partial class SeriesCard : UserControl
         }
     }
 
-    private void UpdateSukebeiBadge(Series series)
+    private void UpdateAdultBadge(Series series)
     {
-        // Check if from sukebei (placeholder logic for now)
-        // bool isSukebei = series.SourceUrl?.Contains("sukebei") ?? false;
-        // SukebeiBadge.IsVisible = isSukebei && (_themeService?.IsSecretMode ?? false);
+        // Placeholder: nothing marks a Series as adult yet, so AdultBadge stays hidden.
     }
 
     public void SetCensorMode(bool active)
@@ -153,7 +151,7 @@ public partial class SeriesCard : UserControl
         
         if (DataContext is Series series)
         {
-            UpdateSukebeiBadge(series);
+            UpdateAdultBadge(series);
         }
     }
 

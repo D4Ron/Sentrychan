@@ -17,7 +17,7 @@
             <TextBlock Text="Add RSS Feed"
                        FontSize="22" FontWeight="Bold"
                        Margin="0,0,0,4"/>
-            <TextBlock Text="Add a Nyaa or other RSS feed to monitor for new episodes"
+            <TextBlock Text="Add an RSS feed to monitor for new episodes"
                        Foreground="{StaticResource TextSecondaryBrush}"
                        FontSize="13"/>
         </StackPanel>
@@ -29,7 +29,7 @@
                 <TextBlock Text="Feed URL" FontSize="12"
                            Foreground="{StaticResource TextSecondaryBrush}"/>
                 <TextBox Text="{Binding FeedUrl}"
-                         Watermark="https://nyaa.si/?page=rss&amp;..."/>
+                         Watermark="https://example.org/rss"/>
             </StackPanel>
 
             <StackPanel Spacing="4">

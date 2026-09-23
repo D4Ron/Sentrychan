@@ -30,6 +30,10 @@ public class LatestArrivalsViewModel : ViewModelBase
     private readonly Sentrychan.UI.Services.IThemeService _themeService;
     private readonly ITitleResolverService? _titleResolver;
 
+    // Anything site-specific — feed paging, adult-feed detection, cover and swarm lookups —
+    // comes from loaded source packs through here. With none loaded, all of it is a no-op.
+    private readonly IReleaseProviders? _releases;
+
     public ObservableCollection<SeasonalAnimeVm> AnimeList { get; } = [];
     public ObservableCollection<Sentrychan.Core.Models.RssFeed> Feeds { get; } = [];
 
@@ -99,10 +103,6 @@ public class LatestArrivalsViewModel : ViewModelBase
     // cascade that used to leave every poster blank.
     private const int PageSize = 36;
 
-    // nyaa/sukebei RSS honours &p=N (75 items/page). SubsPlease's own feed ignores
-    // it and re-serves page 1, so it's hard-capped at the 50 items it returns.
-    private const int NyaaPagesToFetch = 3;
-
     private List<RssEntry> _allEntries = [];
     private List<Sentrychan.Core.Models.Series> _librarySeries = [];
     private HashSet<int> _libraryMalIds = [];
@@ -144,8 +144,8 @@ public class LatestArrivalsViewModel : ViewModelBase
 
     /// <summary>One parsed RSS entry after normalization/dedup.
     /// RawTitle/Link identify the exact release so it can be downloaded directly;
-    /// ViewUrl (the RSS guid) is the nyaa/sukebei page. The remaining fields are
-    /// the torrent metadata carried in the feed's nyaa: namespace.</summary>
+    /// ViewUrl (the RSS guid) is the release's own page. The remaining fields are
+    /// whatever torrent metadata the feed carries (read by element name, any namespace).</summary>
     private sealed record RssEntry(
         string Title, string RawTitle, string Link, string ViewUrl,
         int? Episode, string Group, string FeedUrl,
@@ -181,6 +181,7 @@ public class LatestArrivalsViewModel : ViewModelBase
         _themeService = themeService;
         _onOpenDetails = onOpenDetails;
         _titleResolver = App.Services?.GetService(typeof(ITitleResolverService)) as ITitleResolverService;
+        _releases = App.Services?.GetService(typeof(IReleaseProviders)) as IReleaseProviders;
 
         RefreshCommand  = ReactiveCommand.CreateFromTask(LoadLatestAsync);
         NextPageCommand = ReactiveCommand.Create(() => GoToPage(CurrentPage + 1));
@@ -188,19 +189,13 @@ public class LatestArrivalsViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// nyaa/sukebei RSS supports &amp;p=N, so we pull a few pages for a deeper list.
-    /// Every other feed (notably SubsPlease's own, which ignores &amp;p= and would just
-    /// re-serve page 1) is fetched once.
+    /// The feed itself, plus any further pages a loaded provider knows how to fetch for a
+    /// deeper list. Without a provider every feed is fetched once.
     /// </summary>
-    private static IEnumerable<string> BuildFeedUrls(string feedUrl)
-    {
-        yield return feedUrl;
+    private IEnumerable<string> BuildFeedUrls(string feedUrl) =>
+        _releases?.FeedPages(feedUrl) ?? [feedUrl];
 
-        if (feedUrl.IndexOf("nyaa", StringComparison.OrdinalIgnoreCase) < 0) yield break;
-
-        for (int p = 2; p <= NyaaPagesToFetch; p++)
-            yield return feedUrl.Contains('?') ? $"{feedUrl}&p={p}" : $"{feedUrl}?p={p}";
-    }
+    private bool IsAdultFeed(string feedUrl) => _releases?.IsAdultFeed(feedUrl) == true;
 
     public async Task InitializeAsync()
     {
@@ -224,17 +219,8 @@ public class LatestArrivalsViewModel : ViewModelBase
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            // Only the user's own feeds — nothing is injected here.
             var feeds = await db.RssFeeds.Where(f => f.IsEnabled).ToListAsync(ct);
-
-            if (_themeService.IsSecretMode && !feeds.Any(f => f.Url.Contains("sukebei", StringComparison.OrdinalIgnoreCase)))
-            {
-                feeds.Add(new Sentrychan.Core.Models.RssFeed
-                {
-                    Id = -2,
-                    Url = "https://sukebei.nyaa.si/?page=rss",
-                    IsEnabled = true
-                });
-            }
 
             if (feeds.Count == 0)
             {
@@ -249,12 +235,8 @@ public class LatestArrivalsViewModel : ViewModelBase
                 Feeds.Add(new Sentrychan.Core.Models.RssFeed { Id = -1, Url = "All Feeds", IsEnabled = true });
                 foreach (var f in feeds) Feeds.Add(f);
 
-                // Default to the SubsPlease feed the first time; keep the user's
-                // choice afterward.
+                // Keep the user's choice across reloads.
                 var newSelection = Feeds.FirstOrDefault(f => f.Id == previousSelectionId);
-                if (newSelection == null && previousSelectionId == -1)
-                    newSelection = Feeds.FirstOrDefault(f =>
-                        f.Url.Contains("subsplease", StringComparison.OrdinalIgnoreCase));
                 if (newSelection != null)
                 {
                     _selectedFeed = newSelection;
@@ -262,10 +244,10 @@ public class LatestArrivalsViewModel : ViewModelBase
                 }
             });
 
-            // First load defaults to SubsPlease (its releases are the app's backbone).
-            if (SelectedFeed == null)
-                _selectedFeed = feeds.FirstOrDefault(f =>
-                    f.Url.Contains("subsplease", StringComparison.OrdinalIgnoreCase));
+            // First load opens on whichever feed a loaded provider prefers; with none it's
+            // "All Feeds".
+            if (SelectedFeed == null && _releases != null)
+                _selectedFeed = feeds.FirstOrDefault(f => _releases.IsPreferredLatestFeed(f.Url));
 
             var feedsToProcess = SelectedFeed != null && SelectedFeed.Id != -1
                                  ? feeds.Where(f => f.Id == SelectedFeed.Id).ToList()
@@ -312,7 +294,7 @@ public class LatestArrivalsViewModel : ViewModelBase
                         }
                         else
                         {
-                            var normalized = _normalizer.NormalizeTitle(item.Title);
+                            var normalized = _normalizer.NormalizeTitle(StripLeadingGroup(item.Title));
                             titlePart = RemoveSourceGroupAndEpisode(normalized);
                             episode = _normalizer.ExtractEpisodeNumber(item.Title);
                             group = ExtractGroup(item.Title);
@@ -406,8 +388,7 @@ public class LatestArrivalsViewModel : ViewModelBase
         {
             foreach (var entry in pageEntries)
             {
-                bool isCensored = _themeService.IsSecretMode &&
-                    entry.FeedUrl.Contains("sukebei", StringComparison.OrdinalIgnoreCase);
+                bool isCensored = _themeService.IsSecretMode && IsAdultFeed(entry.FeedUrl);
 
                 var placeholder = new AnimeResult
                 {
@@ -441,7 +422,7 @@ public class LatestArrivalsViewModel : ViewModelBase
             else
             {
                 // Secret-mode ladder: offline DB (covers adult anime, with
-                // posters) → sukebei view-page thumbnail scrape.
+                // posters) → provider title cover → release-page thumbnail.
                 _ = ResolveSecretDetailsAsync(placeholderMap, _libraryMalIds, ct);
             }
         }
@@ -670,10 +651,9 @@ public class LatestArrivalsViewModel : ViewModelBase
 
     private static System.Net.Http.HttpClient CreateThumbClient()
     {
-        // sukebei gzips EVERY response whether or not you negotiate for it, and
-        // HttpClient does not decompress by default — so GetStringAsync was handing
-        // the scraper raw gzip bytes and every regex silently missed. This one line
-        // is why doujin thumbnails never resolved.
+        // Some sites gzip every response whether or not you negotiate for it, and
+        // HttpClient does not decompress by default — so GetStringAsync handed the
+        // scraper raw gzip bytes and every regex silently missed.
         var handler = new System.Net.Http.HttpClientHandler
         {
             AutomaticDecompression = System.Net.DecompressionMethods.GZip
@@ -685,68 +665,18 @@ public class LatestArrivalsViewModel : ViewModelBase
         return c;
     }
 
-    // Gallery links in a torrent description: e-hentai.org/g/{gid}/{token}/
-    private static readonly System.Text.RegularExpressions.Regex EhGalleryPattern =
-        new(@"(?:e-hentai|exhentai)\.org/g/(\d+)/([0-9a-fA-F]{10})",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase
-          | System.Text.RegularExpressions.RegexOptions.Compiled);
-
     /// <summary>
-    /// Doujin uploaders rarely embed a cover image — sukebei renders descriptions with
-    /// client-side markdown, so the server HTML contains no &lt;img&gt; at all, and the
-    /// "cover" is usually a link to an image-host viewer page (not a direct image, and
-    /// often with no file extension). What they DO almost always include is an e-hentai
-    /// gallery link, and e-hentai exposes a keyless metadata API that hands back a real
-    /// cover thumbnail. That's far more reliable than scraping arbitrary hosts.
-    /// </summary>
-    private static async Task<string?> TryEhentaiCoverAsync(string html, CancellationToken ct)
-    {
-        var m = EhGalleryPattern.Match(html);
-        if (!m.Success) return null;
-
-        var gid   = m.Groups[1].Value;
-        var token = m.Groups[2].Value;
-        var key   = $"eh:{gid}:{token}";
-        if (Sentrychan.UI.Services.ThumbUrlCache.TryGet(key, out var cached)) return cached;
-
-        string? thumb = null;
-        try
-        {
-            var payload = $"{{\"method\":\"gdata\",\"gidlist\":[[{gid},\"{token}\"]],\"namespace\":1}}";
-            using var content = new System.Net.Http.StringContent(
-                payload, System.Text.Encoding.UTF8, "application/json");
-            using var resp = await ThumbHttp.PostAsync("https://api.e-hentai.org/api.php", content, ct);
-            if (resp.IsSuccessStatusCode)
-            {
-                var json = await resp.Content.ReadAsStringAsync(ct);
-                using var doc = System.Text.Json.JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("gmetadata", out var meta)
-                    && meta.GetArrayLength() > 0
-                    && meta[0].TryGetProperty("thumb", out var t))
-                {
-                    var v = t.GetString();
-                    if (!string.IsNullOrWhiteSpace(v)) thumb = v;
-                }
-            }
-        }
-        catch { /* gallery may be removed or the API busy — fall through */ }
-
-        Sentrychan.UI.Services.ThumbUrlCache.Set(key, thumb);
-        return thumb;
-    }
-
-    /// <summary>
-    /// Secret-mode ladder: 1) the offline anime DB also covers adult ANIME
-    /// (MAL/AniDB index hentai) — canonical id + poster, no scraping needed.
-    /// 2) For doujins/manga/unknowns: fetch the sukebei view page and use the
-    /// first description image as the thumbnail.
+    /// Secret-mode ladder: 1) the offline anime DB (it also indexes adult anime) —
+    /// canonical id + poster, no scraping needed. 2) a cover a loaded provider can
+    /// derive from the title. 3) the first image on the release's own page.
+    /// Steps 2 and 3's site-specific lookups live in source packs.
     /// </summary>
     private async Task ResolveSecretDetailsAsync(
         List<(SeasonalAnimeVm Vm, RssEntry Entry)> rows,
         HashSet<int> libraryMalIds,
         CancellationToken ct)
     {
-        int fromDb = 0, jav = 0, scraped = 0;
+        int fromDb = 0, fromTitle = 0, scraped = 0;
 
         // These targets are a CDN and static view pages — not a rate-limited API like
         // Jikan — so they're fetched with bounded concurrency instead of one-at-a-time
@@ -793,24 +723,24 @@ public class LatestArrivalsViewModel : ViewModelBase
                     }
                 }
 
-                // 2) JAV product code → DMM cover CDN (deterministic, keyless)
-                var javCover = await GetJavCoverUrlAsync(entry.RawTitle, ct);
-                if (!string.IsNullOrEmpty(javCover))
+                // 2) A cover a loaded provider can derive from the title alone
+                var titleCover = await CoverFromTitleAsync(entry.RawTitle, ct);
+                if (!string.IsNullOrEmpty(titleCover))
                 {
-                    var javResult = new AnimeResult
+                    var titleResult = new AnimeResult
                     {
                         MalId  = entry.RawTitle.GetHashCode(),
                         Title  = entry.Title,
                         Status = SubLabel(entry),
-                        Images = new AnimeImages { Jpg = new AnimeImageSet { LargeImageUrl = javCover } }
+                        Images = new AnimeImages { Jpg = new AnimeImageSet { LargeImageUrl = titleCover } }
                     };
-                    var jEntry = entry;
+                    var tEntry = entry;
                     SwapRow(placeholderVm, new SeasonalAnimeVm(
-                        javResult, _seriesService, _mainWindowVm, _onOpenDetails,
+                        titleResult, _seriesService, _mainWindowVm, _onOpenDetails,
                         isInLibrary: false, isCensored: true,
-                        onDownload: () => DownloadEntryAsync(jEntry, 0),
-                        onShowDetails: () => ShowReleaseDetailsAsync(jEntry, javResult, 0)));
-                    Interlocked.Increment(ref jav);
+                        onDownload: () => DownloadEntryAsync(tEntry, 0),
+                        onShowDetails: () => ShowReleaseDetailsAsync(tEntry, titleResult, 0)));
+                    Interlocked.Increment(ref fromTitle);
                     return;
                 }
 
@@ -849,47 +779,30 @@ public class LatestArrivalsViewModel : ViewModelBase
         // Persist what we learned so the next cold start doesn't re-scrape any of it.
         Sentrychan.UI.Services.ThumbUrlCache.Flush();
 
-        Console.WriteLine($"[Latest] Secret resolution — {fromDb} offline DB, {jav} JAV covers, {scraped} scraped thumbnails");
+        Console.WriteLine($"[Latest] Secret resolution — {fromDb} offline DB, {fromTitle} title covers, {scraped} scraped thumbnails");
     }
 
-    private static readonly System.Text.RegularExpressions.Regex JavCodePattern =
-        new(@"\b([A-Za-z]{2,6})-(\d{2,5})\b", System.Text.RegularExpressions.RegexOptions.Compiled);
-
     /// <summary>
-    /// JAV releases carry a product code (e.g. SSIS-001). DMM's image CDN serves the
-    /// cover at a deterministic URL: {label}{number:D5} → pics.dmm.co.jp/.../{cid}pl.jpg.
-    /// A content-length gate rejects DMM's ~19KB "now printing" placeholder for
-    /// codes it doesn't have. No API key, no scraping. Cached per code.
+    /// Asks loaded providers for a cover derivable from the title, persisting the answer
+    /// (including "none") so the next cold start doesn't ask again.
     /// </summary>
-    private static async Task<string?> GetJavCoverUrlAsync(string rawTitle, CancellationToken ct)
+    private async Task<string?> CoverFromTitleAsync(string rawTitle, CancellationToken ct)
     {
-        var m = JavCodePattern.Match(rawTitle);
-        if (!m.Success) return null;
+        if (_releases == null) return null;
 
-        var cid = m.Groups[1].Value.ToLowerInvariant() + m.Groups[2].Value.PadLeft(5, '0');
-        if (Sentrychan.UI.Services.ThumbUrlCache.TryGet($"jav:{cid}", out var cached)) return cached;
+        var key = $"titlecover:{rawTitle}";
+        if (Sentrychan.UI.Services.ThumbUrlCache.TryGet(key, out var cached)) return cached;
 
-        string? result = null;
-        var url = $"https://pics.dmm.co.jp/digital/video/{cid}/{cid}pl.jpg";
-        try
-        {
-            // Header-only fetch — check size without downloading the whole image.
-            using var resp = await ThumbHttp.GetAsync(
-                url, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, ct);
-            if (resp.IsSuccessStatusCode && (resp.Content.Headers.ContentLength ?? 0) >= 25000)
-                result = url;
-        }
-        catch { /* CDN miss — leave null */ }
-
-        Sentrychan.UI.Services.ThumbUrlCache.Set($"jav:{cid}", result);
-        return result;
+        var cover = await _releases.CoverFromTitleAsync(rawTitle, ct);
+        Sentrychan.UI.Services.ThumbUrlCache.Set(key, cover);
+        return cover;
     }
 
     /// <summary>
-    /// Grabs the first content image from a nyaa/sukebei view page (uploaders
-    /// almost always lead the description with a cover). Cached per URL.
+    /// Grabs a cover from the release's own page (uploaders almost always lead the
+    /// description with one). Cached per URL.
     /// </summary>
-    private static async Task<string?> GetPageThumbnailAsync(string viewUrl, CancellationToken ct)
+    private async Task<string?> GetPageThumbnailAsync(string viewUrl, CancellationToken ct)
     {
         if (Sentrychan.UI.Services.ThumbUrlCache.TryGet($"page:{viewUrl}", out var cached)) return cached;
 
@@ -904,10 +817,11 @@ public class LatestArrivalsViewModel : ViewModelBase
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (og.Success) result = og.Groups["u"].Value;
 
-            // Then: an e-hentai gallery link → keyless metadata API → real cover.
-            // This is the doujin path; those descriptions almost never contain a
-            // direct image, so the regex fallback below can't help them.
-            result ??= await TryEhentaiCoverAsync(html, ct);
+            // Then: anything a loaded provider can derive from the page (e.g. a linked
+            // gallery). Pages like that rarely embed a direct image, so the generic
+            // fallback below can't help them.
+            if (result == null && _releases != null)
+                result = await _releases.CoverFromPageAsync(html, ct);
 
             // Fallback: first content image embedded in the description
             if (result == null)
@@ -990,65 +904,36 @@ public class LatestArrivalsViewModel : ViewModelBase
 
         vm.DownloadRequested += () => _ = DownloadEntryAsync(entry, malId);
 
-        // SubsPlease's own RSS carries no seeder/leecher data, so this dialog would
-        // show 0/0. Each such item still links to its nyaa page, where the real swarm
-        // lives — fetch it in the background and fill the numbers in once available.
+        // Some feeds carry no seeder/leecher data, so this dialog would show 0/0. A loaded
+        // provider may know where the real numbers live — ask in the background and fill
+        // them in once available.
         if (entry.Seeders <= 0 && entry.Leechers <= 0)
-            _ = EnrichSwarmFromNyaaAsync(vm, entry.Link, entry.ViewUrl);
+            _ = EnrichSwarmAsync(vm, entry.Link, entry.ViewUrl);
 
         var dialog = new Views.Dialogs.ReleaseDetailsDialog(vm);
         await dialog.ShowDialog(desktop.MainWindow);
     }
 
-    // nyaa view id from either a /view/{id} or /view/{id}/torrent URL.
-    private static readonly System.Text.RegularExpressions.Regex NyaaIdInUrl =
-        new(@"nyaa\.si/view/(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase
-                                  | System.Text.RegularExpressions.RegexOptions.Compiled);
-    // "Seeders:</div> ... <span ...>1234</span>" on a nyaa view page.
-    private static readonly System.Text.RegularExpressions.Regex NyaaSwarmRow =
-        new(@"(Seeders|Leechers|Completed)\s*:\s*</div>\s*<div[^>]*>\s*<span[^>]*>\s*([\d,]+)",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase
-          | System.Text.RegularExpressions.RegexOptions.Compiled);
-
     /// <summary>
-    /// Scrapes seeders/leechers/downloads off the release's nyaa view page and fills
-    /// them into an already-open details dialog. Used for feeds (SubsPlease) that omit
-    /// swarm data from their RSS. Best-effort: on any failure the dialog just keeps 0s.
+    /// Fills swarm numbers into an already-open details dialog from whichever provider can
+    /// supply them. Best-effort: with no provider, or on failure, the dialog keeps its 0s.
     /// </summary>
-    private async Task EnrichSwarmFromNyaaAsync(ReleaseDetailsViewModel vm, string? link, string? viewUrl)
+    private async Task EnrichSwarmAsync(ReleaseDetailsViewModel vm, string? link, string? viewUrl)
     {
-        var m = NyaaIdInUrl.Match(link ?? string.Empty);
-        if (!m.Success) m = NyaaIdInUrl.Match(viewUrl ?? string.Empty);
-        if (!m.Success) return;
-
-        var pageUrl = $"https://nyaa.si/view/{m.Groups[1].Value}";
+        if (_releases == null) return;
         try
         {
-            var html = await ThumbHttp.GetStringAsync(pageUrl, CancellationToken.None);
+            var swarm = await _releases.SwarmAsync(link, viewUrl, CancellationToken.None);
+            if (swarm == null) return;
 
-            int seeders = 0, leechers = 0, downloads = 0;
-            foreach (System.Text.RegularExpressions.Match row in NyaaSwarmRow.Matches(html))
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                if (!int.TryParse(row.Groups[2].Value.Replace(",", ""), out var n)) continue;
-                switch (row.Groups[1].Value.ToLowerInvariant())
-                {
-                    case "seeders":   seeders   = n; break;
-                    case "leechers":  leechers  = n; break;
-                    case "completed": downloads = n; break;
-                }
-            }
-
-            if (seeders > 0 || leechers > 0 || downloads > 0)
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    vm.Seeders   = seeders;
-                    vm.Leechers  = leechers;
-                    vm.Downloads = downloads;
-                });
-            }
+                vm.Seeders   = swarm.Seeders;
+                vm.Leechers  = swarm.Leechers;
+                vm.Downloads = swarm.Downloads;
+            });
         }
-        catch { /* leave the 0s — the page may be down or the layout changed */ }
+        catch { /* leave the 0s */ }
     }
 
     private void SwapRow(SeasonalAnimeVm placeholder, SeasonalAnimeVm resolved)
@@ -1075,19 +960,21 @@ public class LatestArrivalsViewModel : ViewModelBase
         return match.Success ? match.Groups[1].Value : "Unknown";
     }
 
+    /// <summary>
+    /// Drops a leading "[Group] " tag from a raw release title. Done before normalizing,
+    /// while the brackets still mark it — afterwards the group is indistinguishable from
+    /// the first word of the title.
+    /// </summary>
+    private static string StripLeadingGroup(string rawTitle) =>
+        System.Text.RegularExpressions.Regex.Replace(rawTitle, @"^\s*\[[^\]]*\]\s*", string.Empty);
+
     private string RemoveSourceGroupAndEpisode(string normalizedTitle)
     {
-        // Simple heuristic to extract the base name from a normalized RSS title
-        // e.g. "subsplease jujutsu kaisen 24 1080p" -> "jujutsu kaisen"
+        // Simple heuristic to extract the base name from a normalized RSS title whose
+        // leading group tag has already been stripped,
+        // e.g. "jujutsu kaisen 24 1080p" -> "jujutsu kaisen"
 
         var words = normalizedTitle.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-
-        // Remove common release groups (often the first word if brackets were removed)
-        var knownGroups = new[] { "subsplease", "erai", "commie", "horriblesubs", "nyaa" };
-        if (words.Count > 0 && knownGroups.Any(g => words[0].StartsWith(g)))
-        {
-            words.RemoveAt(0);
-        }
 
         // Remove resolution tags
         words.RemoveAll(w => w == "1080p" || w == "720p" || w == "480p" || w == "x265" || w == "x264");
