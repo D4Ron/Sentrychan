@@ -42,6 +42,12 @@ public interface IReleaseProvider
     /// <summary>Release-group preference to seed on a fresh install, comma separated.</summary>
     string? DefaultPreferredGroups => null;
 
+    /// <summary>
+    /// Feeds that are live only while secret mode is on. Never stored as the user's own:
+    /// they are added on the fly, and only when the user hasn't stored an adult feed themselves.
+    /// </summary>
+    IReadOnlyList<ProviderFeed> SecretModeFeeds => Array.Empty<ProviderFeed>();
+
     /// <summary>Whether a feed belongs to an adult index, and so is gated behind secret mode.</summary>
     bool IsAdultFeed(string feedUrl) => false;
 
@@ -92,6 +98,7 @@ public interface IReleaseProviders
 
     IReadOnlyList<ProviderFeed> DefaultFeeds { get; }
     string? DefaultPreferredGroups { get; }
+    IReadOnlyList<ProviderFeed> SecretModeFeeds { get; }
     bool IsAdultFeed(string feedUrl);
 
     /// <summary>The feed URL itself, followed by any extra pages a provider knows how to fetch.</summary>

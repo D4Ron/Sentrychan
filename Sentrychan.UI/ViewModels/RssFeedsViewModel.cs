@@ -130,8 +130,20 @@ public class RssFeedsViewModel : ViewModelBase
         IsLoading = true;
         Feeds.Clear();
 
-        // Only the user's own feeds. (This list used to prepend display-only "default"
-        // rows naming specific sites; they were never read by the monitor.)
+        // In secret mode, show the feeds a loaded pack adds on the fly, as locked rows —
+        // they're live in Latest but aren't the user's to edit or remove.
+        if (_themeService?.IsSecretMode == true
+            && App.Services?.GetService(typeof(IReleaseProviders)) is IReleaseProviders releases)
+        {
+            foreach (var pf in releases.SecretModeFeeds)
+                Feeds.Add(new RssFeedRowVm
+                {
+                    IsDefault = true,
+                    IsSecretFeed = true,
+                    Feed = new RssFeed { Url = pf.Url, FeedType = pf.Type, IsEnabled = true }
+                });
+        }
+
         if (_dbFactory != null)
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);

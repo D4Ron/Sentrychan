@@ -81,6 +81,9 @@ public sealed class ReleaseProviders : IReleaseProviders
     public IReadOnlyList<ProviderFeed> DefaultFeeds =>
         Providers.SelectMany(p => Guard(() => p.DefaultFeeds, Array.Empty<ProviderFeed>())).ToList();
 
+    public IReadOnlyList<ProviderFeed> SecretModeFeeds =>
+        Providers.SelectMany(p => Guard(() => p.SecretModeFeeds, Array.Empty<ProviderFeed>())).ToList();
+
     public string? DefaultPreferredGroups =>
         Providers.Select(p => Guard(() => p.DefaultPreferredGroups, null))
                  .FirstOrDefault(g => !string.IsNullOrWhiteSpace(g));

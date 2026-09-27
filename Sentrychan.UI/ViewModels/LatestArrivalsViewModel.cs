@@ -219,8 +219,24 @@ public class LatestArrivalsViewModel : ViewModelBase
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
-            // Only the user's own feeds — nothing is injected here.
             var feeds = await db.RssFeeds.Where(f => f.IsEnabled).ToListAsync(ct);
+
+            // Secret mode adds a loaded pack's adult feeds on the fly (never stored as the
+            // user's own) — unless the user already keeps an adult feed. Same rule as when this
+            // was a hardcoded feed; without a pack nothing is added.
+            if (_themeService.IsSecretMode && _releases != null
+                && !feeds.Any(f => _releases.IsAdultFeed(f.Url)))
+            {
+                var injectedId = -2;   // -1 is the "All Feeds" row
+                foreach (var pf in _releases.SecretModeFeeds)
+                    feeds.Add(new Sentrychan.Core.Models.RssFeed
+                    {
+                        Id        = injectedId--,
+                        Url       = pf.Url,
+                        FeedType  = pf.Type,
+                        IsEnabled = true
+                    });
+            }
 
             if (feeds.Count == 0)
             {

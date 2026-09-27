@@ -255,57 +255,127 @@ public class AsyncImage : Image
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"AsyncImage failed to load {url}: {ex.Message}");
+            if (Log != null)
+                Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(Log,
+                    "[AsyncImage] failed to load {Url}: {Error}", url, ex.Message);
             if (Url == url) { Source = null; IsLoading = false; }
         }
     }
 
+    // Failures used to go to Debug.WriteLine, which a release build never shows — so a page
+    // that rendered black left no trace anywhere. Log them where the rest of the app logs.
+    private static Microsoft.Extensions.Logging.ILogger? _log;
+    private static Microsoft.Extensions.Logging.ILogger? Log =>
+        _log ??= (App.Services?.GetService(typeof(Microsoft.Extensions.Logging.ILoggerFactory))
+                  as Microsoft.Extensions.Logging.ILoggerFactory)?.CreateLogger("AsyncImage");
+
+    /// <summary>Bytes plus where they came from, so only what actually decoded gets cached.</summary>
+    private readonly record struct ImageBytes(byte[] Bytes, bool FromDisk, bool FromNetwork);
+
     private static async Task<Bitmap?> LoadBitmapAsync(string normalizedUrl, string? sourceName)
     {
-        var bytes = await LoadBytesAsync(normalizedUrl, sourceName);
-        if (bytes == null) return null;
-        // Decode off the UI thread — decoding full pages inline causes visible jank.
-        return await Task.Run(() => { using var ms = new MemoryStream(bytes); return new Bitmap(ms); });
+        var loaded = await LoadBytesAsync(normalizedUrl, sourceName);
+        if (loaded is not { } img) return null;
+
+        var bmp = await TryDecodeAsync(img.Bytes);
+
+        // A disk entry that won't decode is poisoned — typically an error page an older build
+        // saved as if it were the image, which then rendered black on every load forever.
+        // Evict it and fetch fresh rather than serving it again.
+        if (bmp == null && img.FromDisk)
+        {
+            EvictDisk(normalizedUrl);
+            loaded = await LoadBytesAsync(normalizedUrl, sourceName, bypassDisk: true);
+            if (loaded is not { } fresh) return null;
+            img = fresh;
+            bmp = await TryDecodeAsync(img.Bytes);
+        }
+
+        if (bmp == null)
+        {
+            LogUndecodable(normalizedUrl, img.Bytes);
+            return null;
+        }
+
+        // Only now, once it has decoded, is it safe to keep.
+        if (img.FromNetwork) _ = WriteDiskCacheAsync(normalizedUrl, img.Bytes);
+        return bmp;
     }
 
-    /// <summary>Raw image bytes from local file / persistent disk cache / network (referer-aware).</summary>
-    private static async Task<byte[]?> LoadBytesAsync(string normalizedUrl, string? sourceName)
+    /// <summary>Decodes off the UI thread (full pages inline cause visible jank). Null if undecodable.</summary>
+    private static Task<Bitmap?> TryDecodeAsync(byte[] bytes) => Task.Run<Bitmap?>(() =>
+    {
+        try { using var ms = new MemoryStream(bytes); return new Bitmap(ms); }
+        catch { return null; }
+    });
+
+    /// <summary>Cheap header check: can Skia open these bytes as an image at all?</summary>
+    private static bool LooksLikeImage(byte[] bytes)
+    {
+        try
+        {
+            using var data = SKData.CreateCopy(bytes);
+            using var codec = SKCodec.Create(data);
+            return codec != null;
+        }
+        catch { return false; }
+    }
+
+    private static void EvictDisk(string url)
+    {
+        try
+        {
+            var path = DiskPathFor(url);
+            if (path != null && File.Exists(path)) File.Delete(path);
+        }
+        catch { /* locked — it will be evicted on a later load */ }
+    }
+
+    private static void LogUndecodable(string url, byte[] bytes)
+    {
+        if (Log is not { } log) return;
+        var head = Encoding.ASCII.GetString(bytes, 0, Math.Min(bytes.Length, 24));
+        head = new string(head.Select(c => c is >= ' ' and <= '~' ? c : '.').ToArray());
+        Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(log,
+            "[AsyncImage] {Url} is not a decodable image ({Bytes} bytes, starts '{Head}')",
+            url, bytes.Length, head);
+    }
+
+    /// <summary>
+    /// Raw image bytes from a local file, the persistent disk cache, or the network
+    /// (referer-aware). Never writes the disk cache — callers do, once the bytes decode.
+    /// </summary>
+    private static async Task<ImageBytes?> LoadBytesAsync(string normalizedUrl, string? sourceName, bool bypassDisk = false)
     {
         if (File.Exists(normalizedUrl))
-            return await File.ReadAllBytesAsync(normalizedUrl);
+            return new ImageBytes(await File.ReadAllBytesAsync(normalizedUrl), FromDisk: false, FromNetwork: false);
 
         if (!normalizedUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
             return null;
 
         // Persistent disk hit → skip the network entirely.
-        var diskPath = DiskPathFor(normalizedUrl);
+        var diskPath = bypassDisk ? null : DiskPathFor(normalizedUrl);
         if (diskPath != null && File.Exists(diskPath))
         {
             try
             {
                 var cached = await File.ReadAllBytesAsync(diskPath);
                 try { File.SetLastAccessTimeUtc(diskPath, DateTime.UtcNow); } catch { /* touch is optional */ }
-                return cached;
+                return new ImageBytes(cached, FromDisk: true, FromNetwork: false);
             }
-            catch { /* corrupt/locked cache file → fall through and re-download */ }
+            catch { /* locked/unreadable cache file → fall through and re-download */ }
         }
 
-        byte[] bytes;
+        using var req = new HttpRequestMessage(HttpMethod.Get, normalizedUrl);
+        // Some source CDNs (MangaPill) hotlink-protect: send their Referer.
         if (!string.IsNullOrEmpty(sourceName) && _refererBySource.TryGetValue(sourceName, out var referer))
-        {
-            // Some source CDNs (MangaPill) hotlink-protect: send their Referer.
-            using var req = new HttpRequestMessage(HttpMethod.Get, normalizedUrl);
             req.Headers.Referrer = new Uri(referer);
-            using var resp = await _http.SendAsync(req);
-            bytes = await resp.Content.ReadAsByteArrayAsync();
-        }
-        else
-        {
-            bytes = await _http.GetByteArrayAsync(normalizedUrl);
-        }
 
-        _ = WriteDiskCacheAsync(normalizedUrl, bytes); // persist for next session (best-effort)
-        return bytes;
+        using var resp = await _http.SendAsync(req);
+        // An error response is not an image. This path used to read the body regardless of
+        // status, so a CDN's 403/429 page came back as "the image" and was cached to disk.
+        resp.EnsureSuccessStatusCode();
+        return new ImageBytes(await resp.Content.ReadAsByteArrayAsync(), FromDisk: false, FromNetwork: true);
     }
 
     /// <summary>
@@ -317,7 +387,7 @@ public class AsyncImage : Image
         if (string.IsNullOrEmpty(url)) return;
         var normalized = Normalize(url);
         // GIFs animate from bytes on display and skip the still-frame cache — just warm the disk.
-        if (LooksLikeGif(normalized)) { _ = LoadBytesAsync(normalized, sourceName); return; }
+        if (LooksLikeGif(normalized)) { _ = WarmDiskAsync(normalized, sourceName); return; }
         if (_cache.ContainsKey(normalized)) return;
 
         _ = Task.Run(async () =>
@@ -347,8 +417,35 @@ public class AsyncImage : Image
 
     private static async Task<List<GifFrame>?> DecodeGifFramesAsync(string url, string? sourceName)
     {
-        var bytes = await LoadBytesAsync(url, sourceName);
-        return bytes == null ? null : await Task.Run(() => DecodeGifFrames(bytes));
+        var loaded = await LoadBytesAsync(url, sourceName);
+        if (loaded is not { } img) return null;
+
+        var frames = await Task.Run(() => DecodeGifFrames(img.Bytes));
+        if (frames == null && img.FromDisk)
+        {
+            // Poisoned disk entry — evict and fetch fresh (see LoadBitmapAsync).
+            EvictDisk(url);
+            loaded = await LoadBytesAsync(url, sourceName, bypassDisk: true);
+            if (loaded is not { } fresh) return null;
+            img = fresh;
+            frames = await Task.Run(() => DecodeGifFrames(img.Bytes));
+        }
+
+        if (frames == null) LogUndecodable(url, img.Bytes);
+        else if (img.FromNetwork) _ = WriteDiskCacheAsync(url, img.Bytes);
+        return frames;
+    }
+
+    /// <summary>Fetches bytes ahead of display and keeps them only if they are an image.</summary>
+    private static async Task WarmDiskAsync(string url, string? sourceName)
+    {
+        try
+        {
+            var loaded = await LoadBytesAsync(url, sourceName);
+            if (loaded is { FromNetwork: true } img && LooksLikeImage(img.Bytes))
+                await WriteDiskCacheAsync(url, img.Bytes);
+        }
+        catch { /* prefetch is best-effort */ }
     }
 
     private static List<GifFrame>? DecodeGifFrames(byte[] bytes)
@@ -366,6 +463,9 @@ public class AsyncImage : Image
             var len = info.RowBytes * info.Height;
 
             using var running = new SKBitmap(info); // accumulating canvas (handles frame disposal)
+            // Skia doesn't zero new bitmaps: without this, anything frame 0 leaves uncovered
+            // (partial frames, transparent pixels) shows whatever memory held — often black.
+            running.Erase(SKColors.Transparent);
             var frames = new List<GifFrame>(Math.Min(Math.Max(count, 1), MaxGifFrames));
 
             for (int i = 0; i < count && i < MaxGifFrames; i++)
