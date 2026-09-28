@@ -1663,9 +1663,11 @@ public class MainWindowViewModel : ViewModelBase,
         try
         {
             // The user picked this exact release, so no confirmation round-trip via the inbox.
-            await _downloadQueue.EnqueueAsync(link, series.Id, pick.Episode, series.Title,
-                pick.Release.Title, CancellationToken.None);
-            ShowToast("Download started", $"{series.Title} · Episode {pick.Episode} ({pick.Release.ReleaseGroup})");
+            // A v2 of an episode you already have is a deliberate replacement, not a duplicate.
+            var isReRelease = new ReleaseRowVm(pick.Release).HasVersion;
+            var outcome = await _downloadQueue.EnqueueAsync(link, series.Id, pick.Episode, series.Title,
+                pick.Release.Title, CancellationToken.None, allowExistingFile: isReRelease);
+            ToastEnqueue(outcome, $"{series.Title} · Episode {pick.Episode} ({pick.Release.ReleaseGroup})");
         }
         catch (Exception ex)
         {
@@ -1719,7 +1721,7 @@ public class MainWindowViewModel : ViewModelBase,
             var confirmed = await dialog.ShowDialog<List<Sentrychan.Core.Interfaces.FillGapResult>?>(GetMainWindow()!);
             if (confirmed == null) return;
 
-            int queued = 0, repairing = 0;
+            int queued = 0, repairing = 0, duplicates = 0;
             var repairer = App.Services.GetRequiredService<Sentrychan.Core.Services.EpisodeRepairService>();
             foreach (var pick in confirmed.Where(r => r.IsSelected && r.CanDownload))
             {
@@ -1743,17 +1745,20 @@ public class MainWindowViewModel : ViewModelBase,
                 if (pick.DamagedPath != null)
                     Sentrychan.Core.Services.RecycleBin.Send(pick.DamagedPath);
 
-                await _downloadQueue.EnqueueAsync(
+                var outcome = await _downloadQueue.EnqueueAsync(
                     link, series.Id, pick.EpisodeNumber, series.Title,
                     pick.BestMatch.Title, CancellationToken.None);
-                queued++;
+                if (outcome.Accepted) queued++;
+                else if (outcome.IsDuplicate) duplicates++;
             }
 
-            if (queued + repairing > 0)
-                ShowToast("Batch download started",
-                    repairing == 0
-                        ? $"{series.Title} · {queued} download(s) queued"
-                        : $"{series.Title} · {queued} download(s) queued, {repairing} damaged episode(s) being repaired");
+            var parts = new List<string>();
+            if (queued > 0)     parts.Add($"{queued} download(s) queued");
+            if (repairing > 0)  parts.Add($"{repairing} damaged episode(s) being repaired");
+            if (duplicates > 0) parts.Add($"{duplicates} skipped — already downloading or in your library");
+            if (parts.Count > 0)
+                ShowToast(queued + repairing > 0 ? "Batch download started" : "Nothing new to download",
+                    $"{series.Title} · {string.Join(", ", parts)}");
         }
         catch (Exception ex)
         {
@@ -1763,6 +1768,17 @@ public class MainWindowViewModel : ViewModelBase,
         {
             UpdateStatus(IsMonitoring ? "● Monitoring" : "● Idle", IsMonitoring ? "#00FF00" : "#808080");
         }
+    }
+
+    /// <summary>One toast per enqueue outcome, so a refused duplicate is never silent.</summary>
+    public void ToastEnqueue(Sentrychan.Core.Services.EnqueueOutcome outcome, string what)
+    {
+        if (outcome.Accepted)
+            ShowToast(outcome.Reason == null ? "Download started" : "Download queued", what);
+        else if (outcome.IsDuplicate)
+            ShowToast("Already have it", $"{what} — {outcome.Reason}");
+        else
+            ShowToast("Download failed", $"{what} — {outcome.Reason}");
     }
 
     private async Task RemoveSeriesAsync(Series series)
@@ -1931,13 +1947,15 @@ public class MainWindowViewModel : ViewModelBase,
                         if (s != null) seriesId = s.Id;
                     }
 
-                    await _downloadQueue.EnqueueAsync(
+                    var outcome = await _downloadQueue.EnqueueAsync(
                         candidate.DownloadLink,
                         seriesId,
                         notification.EpisodeNumber,
                         seriesTitle,
                         candidate.RssTitle,
                         CancellationToken.None);
+                    if (outcome.IsDuplicate)
+                        ToastEnqueue(outcome, $"{seriesTitle} · Episode {notification.EpisodeNumber}");
                 }
                 catch (Exception ex)
                 {
@@ -2312,7 +2330,7 @@ public class MainWindowViewModel : ViewModelBase,
                 if (_downloadQueue == null) return;
                 try
                 {
-                    await _downloadQueue.EnqueueAsync(
+                    var outcome = await _downloadQueue.EnqueueAsync(
                         card.DownloadLink,
                         card.SeriesId,
                         card.EpisodeNumber,
@@ -2321,7 +2339,7 @@ public class MainWindowViewModel : ViewModelBase,
                         CancellationToken.None);
                     // Advance the cursor so the monitor won't re-offer this episode.
                     await AdvanceSeriesCursorAsync(card.SeriesId, card.EpisodeNumber);
-                    ShowToast("Download started", $"{card.SeriesTitle} · Episode {card.EpisodeNumber}");
+                    ToastEnqueue(outcome, $"{card.SeriesTitle} · Episode {card.EpisodeNumber}");
                 }
                 catch (Exception ex)
                 {

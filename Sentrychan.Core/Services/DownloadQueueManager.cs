@@ -8,6 +8,15 @@ using Sentrychan.Core.Data;
 
 namespace Sentrychan.Core.Services;
 
+/// <summary>What happened to an enqueue request. <see cref="Reason"/> is user-facing.</summary>
+public sealed record EnqueueOutcome(bool Accepted, bool IsDuplicate, string? Reason)
+{
+    public static readonly EnqueueOutcome Started = new(true, false, null);
+    public static readonly EnqueueOutcome Queued  = new(true, false, "waiting for a free download slot");
+    public static EnqueueOutcome Duplicate(string reason) => new(false, true, reason);
+    public static EnqueueOutcome Failed(string reason)    => new(false, false, reason);
+}
+
 /// <summary>
 /// Single entry point for starting any download. Every trigger — RSS auto-download,
 /// confirmation popup, source pick, the Download Hub, and retries — goes through here.
@@ -29,16 +38,20 @@ public class DownloadQueueManager
     /// <summary>AppConfigs key — max simultaneous downloads. 0/absent = unlimited.</summary>
     public const string MaxConcurrentKey = "MaxConcurrentDownloads";
 
+    private readonly IVideoFileLocator? _locator;
+
     public DownloadQueueManager(
         IDownloadBackendRouter router,
         IDbContextFactory<AppDbContext> dbFactory,
         IMediator mediator,
-        ILogger<DownloadQueueManager> logger)
+        ILogger<DownloadQueueManager> logger,
+        IVideoFileLocator? locator = null)
     {
         _router = router;
         _dbFactory = dbFactory;
         _mediator = mediator;
         _logger = logger;
+        _locator = locator;
     }
 
     private async Task<int> ReadLimitAsync(AppDbContext db, CancellationToken ct)
@@ -67,22 +80,74 @@ public class DownloadQueueManager
     }
 
     /// <summary>
+    /// Why a download would be a duplicate, or null if it wouldn't. Checked in order:
+    /// the same release already in flight, the same episode already in flight, and a
+    /// healthy copy of the episode already in the library. A damaged copy doesn't count —
+    /// replacing it is the point.
+    /// </summary>
+    public async Task<string?> FindDuplicateAsync(
+        string url, int seriesId, int episodeNumber, string seriesTitle, string? rssTitle,
+        bool allowExistingFile = false, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // Only transfers we can vouch for count as in flight. A job handed to an external
+        // downloader (FDM / browser) stays "Downloading" forever as far as we know — rows
+        // months old — and must not block that episode for good.
+        var recent = DateTime.UtcNow.AddDays(-1);
+        var open = db.DownloadJobs.Where(j =>
+            (j.Status == JobStatus.Downloading || j.Status == JobStatus.Pending) &&
+            (j.Backend == DownloadBackend.MonoTorrent || j.Backend == DownloadBackend.QBittorrent || j.CreatedAt > recent));
+
+        if (await open.AnyAsync(j => j.DownloadLink == url ||
+                                     (rssTitle != null && rssTitle != "" && j.ExpectedFileName == rssTitle), ct))
+            return "that release is already downloading";
+
+        // Episode 0 is a batch or an unnumbered release — nothing per-episode to compare.
+        if (seriesId <= 0 || episodeNumber <= 0) return null;
+
+        if (await open.AnyAsync(j => j.SeriesId == seriesId && j.EpisodeNumber == episodeNumber, ct))
+            return $"episode {episodeNumber} is already downloading";
+
+        if (!allowExistingFile && _locator != null)
+        {
+            var existing = await _locator.FindVideoFileAsync(seriesTitle, episodeNumber, ct);
+            if (existing != null && !await Task.Run(() => VideoIntegrity.LooksIncomplete(existing, ct), ct))
+                return $"episode {episodeNumber} is already in your library";
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Unified enqueue. Resolves the staging folder, hands the link to the active backend,
     /// and records a single Downloading job. The FileMovementPipeline completes it once the
     /// file finishes (via torrent-completion event or filesystem detection).
+    ///
+    /// Refuses duplicates (see <see cref="FindDuplicateAsync"/>): an episode arriving on two
+    /// feeds, a double click, or a batch re-queuing what's already there used to download
+    /// twice. <paramref name="allowExistingFile"/> is for a deliberate replacement, such as
+    /// picking a v2 of an episode you have.
     /// </summary>
-    public async Task EnqueueAsync(
+    public async Task<EnqueueOutcome> EnqueueAsync(
         string url,
         int seriesId,
         int episodeNumber,
         string seriesTitle,
         string rssTitle,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool allowExistingFile = false)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
             _logger.LogWarning("Enqueue ignored — empty download link for {Title}", seriesTitle);
-            return;
+            return EnqueueOutcome.Failed("no download link");
+        }
+
+        var duplicate = await FindDuplicateAsync(url, seriesId, episodeNumber, seriesTitle, rssTitle, allowExistingFile, ct);
+        if (duplicate != null)
+        {
+            _logger.LogInformation("Not downloading {Title} Ep {Ep} again — {Reason}", seriesTitle, episodeNumber, duplicate);
+            return EnqueueOutcome.Duplicate(duplicate);
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -115,7 +180,7 @@ public class DownloadQueueManager
             _logger.LogInformation(
                 "Queued {Title} Ep {Ep} — at the {Limit}-download limit, will start when a slot frees",
                 seriesTitle, episodeNumber, limit);
-            return;
+            return EnqueueOutcome.Queued;
         }
 
         string? handle = null;
@@ -126,6 +191,15 @@ public class DownloadQueueManager
         catch (Exception ex)
         {
             _logger.LogError(ex, "Backend {Backend} failed to add {Url}", active.Name, url);
+        }
+
+        // Different link, same torrent (a magnet and a .torrent URL for one release): the
+        // backend hands back the transfer it already has. One row per transfer.
+        if (handle != null && await db.DownloadJobs.AnyAsync(j => j.TorrentHash == handle &&
+                (j.Status == JobStatus.Downloading || j.Status == JobStatus.Pending), ct))
+        {
+            _logger.LogInformation("Not downloading {Title} Ep {Ep} again — same torrent already running", seriesTitle, episodeNumber);
+            return EnqueueOutcome.Duplicate("that release is already downloading");
         }
 
         db.DownloadJobs.Add(new DownloadJob
@@ -155,7 +229,9 @@ public class DownloadQueueManager
             await _mediator.Publish(new MonitorStatusEvent(
                 MonitorStatus.Error,
                 ErrorMessage: $"Download failed to start: {seriesTitle} Ep {episodeNumber} via {active.Name}"), ct);
+            return EnqueueOutcome.Failed($"{active.Name} couldn't start it");
         }
+        return EnqueueOutcome.Started;
     }
 
     /// <summary>

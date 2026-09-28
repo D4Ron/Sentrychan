@@ -618,8 +618,8 @@ public class LatestArrivalsViewModel : ViewModelBase
 
             if (lib != null)
             {
-                await queue.EnqueueAsync(entry.Link, lib.Id, entry.Episode ?? 0, lib.Title, entry.RawTitle);
-                _mainWindowVm.ShowToast("Download started",
+                var outcome = await queue.EnqueueAsync(entry.Link, lib.Id, entry.Episode ?? 0, lib.Title, entry.RawTitle);
+                _mainWindowVm.ToastEnqueue(outcome,
                     entry.Episode.HasValue ? $"{lib.Title} · Episode {entry.Episode}" : lib.Title);
                 return;
             }
@@ -642,16 +642,16 @@ public class LatestArrivalsViewModel : ViewModelBase
                     if (addVm.AddedSeries != null)
                     {
                         _mainWindowVm.AddSeriesToLibrary(addVm.AddedSeries);
-                        await queue.EnqueueAsync(entry.Link, addVm.AddedSeries.Id,
+                        var added = await queue.EnqueueAsync(entry.Link, addVm.AddedSeries.Id,
                             entry.Episode ?? 0, addVm.AddedSeries.Title, entry.RawTitle);
-                        _mainWindowVm.ShowToast("Download started", addVm.AddedSeries.Title);
+                        _mainWindowVm.ToastEnqueue(added, addVm.AddedSeries.Title);
                     }
                     break;
 
                 case "download":
                     // SeriesId 0 routes the completed file to Library/_Standalone/<title>
-                    await queue.EnqueueAsync(entry.Link, 0, entry.Episode ?? 0, entry.Title, entry.RawTitle);
-                    _mainWindowVm.ShowToast("Download started", $"{entry.Title} → _Standalone");
+                    var standalone = await queue.EnqueueAsync(entry.Link, 0, entry.Episode ?? 0, entry.Title, entry.RawTitle);
+                    _mainWindowVm.ToastEnqueue(standalone, $"{entry.Title} → _Standalone");
                     break;
             }
         }

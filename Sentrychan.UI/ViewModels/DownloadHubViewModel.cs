@@ -275,6 +275,16 @@ public class DownloadHubViewModel : ViewModelBase
             return;
         }
 
+        // Same duplicate rule as every other download path (this one adds the job itself).
+        var queue = App.Services?.GetService(typeof(Sentrychan.Core.Services.DownloadQueueManager)) as Sentrychan.Core.Services.DownloadQueueManager;
+        var duplicate = queue == null ? null
+            : await queue.FindDuplicateAsync(downloadUrl, 0, 0, rawResult.Title, rawResult.Title, ct: ct);
+        if (duplicate != null)
+        {
+            StatusMessage = $"Not downloading again — {duplicate}.";
+            return;
+        }
+
         var backend = await _picker.PickBackendAsync(DownloadContext.Hub, ct);
         if (backend == null) return;
 
@@ -292,7 +302,12 @@ public class DownloadHubViewModel : ViewModelBase
                 : System.IO.Path.Combine(envPath, safeName);
 
             var handle = await backend.AddAsync(downloadUrl, savePath, rawResult.Title, ct);
-            if (handle != null)
+            if (handle != null && await db.DownloadJobs.AnyAsync(j => j.TorrentHash == handle &&
+                    (j.Status == JobStatus.Downloading || j.Status == JobStatus.Pending), ct))
+            {
+                StatusMessage = "Not downloading again — that release is already downloading.";
+            }
+            else if (handle != null)
             {
                 db.DownloadJobs.Add(new DownloadJob
                 {
