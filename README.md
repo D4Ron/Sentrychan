@@ -142,11 +142,12 @@ dotnet run --project Sentrychan.App
 | `Sentrychan.Core` | Services, EF Core (SQLite), models, interfaces. No UI dependencies. |
 | `Sentrychan.UI` | Avalonia 11 views and ReactiveUI view-models. |
 | `Sentrychan.App` | Composition root, DI wiring, plugin loading. |
-| `Sentrychan.Sources` | Optional source-pack plug-in, loaded by reflection at runtime. |
 
-`Sentrychan.App` references `Sentrychan.Sources` with `ReferenceOutputAssembly="false"`,
-so no source types are ever compiled into the shipped binary. Build a source-less
-client with:
+This repository contains no sources. Source packs are separate, third-party
+plug-ins: a DLL placed in `%APPDATA%\Sentrychan\sources` is loaded by reflection at
+startup, and implements the contracts in `Sentrychan.Core/Interfaces`
+(`IMangaSourceService`, `IReleaseProvider`, `IAiringScheduleService`). The client
+never compiles a source's types in. The build is source-less by default:
 
 ```powershell
 dotnet publish Sentrychan.App -p:IncludeSources=false

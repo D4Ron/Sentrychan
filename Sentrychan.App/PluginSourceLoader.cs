@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,9 @@ public static class PluginSourceLoader
 
     private static string BundledSourcesDir => Path.Combine(AppContext.BaseDirectory, "sources");
 
+    /// <summary>Pack file names a newer bundled pack replaces.</summary>
+    private static readonly string[] RetiredPackFiles = ["Sentrychan.Sources.dll"];
+
     public static void SeedAndLoad(IServiceProvider services, IMangaSourceRegistry registry, ILogger logger)
     {
         try { Directory.CreateDirectory(UserSourcesDir); } catch { /* best-effort */ }
@@ -38,12 +42,26 @@ public static class PluginSourceLoader
         try
         {
             if (!Directory.Exists(BundledSourcesDir)) return;
-            foreach (var dll in Directory.GetFiles(BundledSourcesDir, "*.dll"))
+            var bundled = Directory.GetFiles(BundledSourcesDir, "*.dll");
+            foreach (var dll in bundled)
             {
                 var dest = Path.Combine(UserSourcesDir, Path.GetFileName(dll));
                 if (!File.Exists(dest) || File.GetLastWriteTimeUtc(dll) > File.GetLastWriteTimeUtc(dest))
                     File.Copy(dll, dest, overwrite: true);
             }
+
+            // The bundled pack was renamed; the old copy would load beside the new one. Only
+            // retired when this build ships a replacement, so a user's own import is kept.
+            if (bundled.Length > 0)
+                foreach (var retired in RetiredPackFiles)
+                {
+                    var old = Path.Combine(UserSourcesDir, retired);
+                    if (File.Exists(old) && !bundled.Any(b => Path.GetFileName(b).Equals(retired, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        File.Delete(old);
+                        logger.LogInformation("[Sources] removed superseded pack {File}", retired);
+                    }
+                }
         }
         catch (Exception ex) { logger.LogWarning(ex, "[Sources] seeding bundled pack failed"); }
     }

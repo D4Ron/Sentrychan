@@ -5,17 +5,21 @@
     <ProjectReference Include="..\Sentrychan.UI\Sentrychan.UI.csproj" />
   </ItemGroup>
 
-  <!-- The source pack is built but NOT referenced (its types are never compiled in), so the
-       app carries no sources. When IncludeSources != false (default: dev + beta), its DLL is
-       bundled into sources/ next to the exe and auto-seeds the user folder on first run.
-       Public build: `dotnet publish -p:IncludeSources=false` → nothing bundled, source-less app. -->
+  <!-- Source packs are not part of this repository. A developer who keeps one locally at
+       _local\source-pack (git-ignored) gets it built alongside the app and bundled into
+       sources/ next to the exe, which seeds the user folder on first run. Its types are
+       never compiled in (ReferenceOutputAssembly=false). Without a local pack, or with
+       `-p:IncludeSources=false`, the app is built source-less. -->
+  <PropertyGroup>
+    <SourcePackDir Condition="'$(SourcePackDir)' == ''">$(MSBuildThisFileDirectory)..\_local\source-pack\</SourcePackDir>
+  </PropertyGroup>
   <ItemGroup Condition="'$(IncludeSources)' != 'false'">
-    <ProjectReference Include="..\Sentrychan.Sources\Sentrychan.Sources.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="$(SourcePackDir)src\*.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <Target Name="BundleSourcePack" AfterTargets="Build" Condition="'$(IncludeSources)' != 'false'">
     <ItemGroup>
-      <_SourcePackDll Include="$(MSBuildThisFileDirectory)..\Sentrychan.Sources\bin\$(Configuration)\net9.0\Sentrychan.Sources.dll" />
+      <_SourcePackDll Include="$(SourcePackDir)src\bin\$(Configuration)\net9.0\*.Sources.dll" />
     </ItemGroup>
     <MakeDir Directories="$(OutDir)sources" />
     <Copy SourceFiles="@(_SourcePackDll)" DestinationFolder="$(OutDir)sources" SkipUnchangedFiles="true"

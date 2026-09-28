@@ -27,3 +27,8 @@ CLAUDE.md
 # whole legal separation. Never remove this rule.
 /sources/
 *.Sources.dll
+
+# Local-only material that must never be published (e.g. the source pack, kept
+# at _local\source-pack with its own history). Never remove this rule.
+/_local/
+

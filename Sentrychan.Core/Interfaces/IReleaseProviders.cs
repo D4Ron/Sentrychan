@@ -32,7 +32,7 @@ public record EpisodeQuery(string Title, int Episode)
 /// PluginSourceLoader — exactly like <see cref="IMangaSourceService"/>. That is what makes
 /// the public build genuinely neutral: with no pack installed, nothing below is ever called,
 /// no index is contacted and no feed is suggested. Do not add an implementation to Core, UI
-/// or App; put it in Sentrychan.Sources.
+/// or App; it belongs in a source pack.
 ///
 /// Every member except <see cref="ProviderName"/> has a default, so a provider implements
 /// only the capabilities it actually offers.

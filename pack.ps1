@@ -50,15 +50,17 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
 
 # 1b. Beta flavor bundles the source pack into publish\sources so it seeds on first run.
 #     Public flavor ships nothing here (users import a pack themselves).
+#     The pack is kept outside the repository, at _local\source-pack (git-ignored).
 if (-not $Public) {
     Write-Host "      Bundling source pack..." -ForegroundColor DarkGray
-    & dotnet build "Sentrychan.Sources/Sentrychan.Sources.csproj" -c Release --nologo | Out-Null
-    $srcDll = "Sentrychan.Sources/bin/Release/net9.0/Sentrychan.Sources.dll"
-    if (Test-Path $srcDll) {
-        New-Item -ItemType Directory -Force -Path "$PublishDir/sources" | Out-Null
-        Copy-Item $srcDll "$PublishDir/sources/" -Force
-        Write-Host "      Bundled -> $PublishDir\sources\Sentrychan.Sources.dll" -ForegroundColor DarkGray
-    } else { throw "Source pack DLL not found at $srcDll" }
+    $packProj = Get-ChildItem "_local/source-pack/src/*.csproj" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $packProj) { throw "No source pack at _local\source-pack - build with -Public, or restore the pack there." }
+    & dotnet build $packProj.FullName -c Release --nologo | Out-Null
+    $srcDll = Get-ChildItem "_local/source-pack/src/bin/Release/net9.0/*.Sources.dll" | Select-Object -First 1
+    if (-not $srcDll) { throw "Source pack DLL not found after building $($packProj.Name)" }
+    New-Item -ItemType Directory -Force -Path "$PublishDir/sources" | Out-Null
+    Copy-Item $srcDll.FullName "$PublishDir/sources/" -Force
+    Write-Host "      Bundled -> $PublishDir\sources\$($srcDll.Name)" -ForegroundColor DarkGray
 }
 
 # 2. Hand the published folder to Velopack.
