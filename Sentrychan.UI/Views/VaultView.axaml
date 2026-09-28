@@ -36,7 +36,8 @@
                         IsEnabled="{Binding !IsBusy}" Classes="ghost" VerticalAlignment="Center"/>
             </Grid>
 
-            <TextBlock Text="{Binding Status}" Classes="note" Foreground="{DynamicResource AccentLightBrush}"
+            <!-- Not the accent colour: in secret mode the accent is red, and success read as an error. -->
+            <TextBlock Text="{Binding Status}" Classes="note" Foreground="{DynamicResource TextPrimaryBrush}"
                        IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
             <!-- Videos -->

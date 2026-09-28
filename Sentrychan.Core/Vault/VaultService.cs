@@ -387,6 +387,7 @@ public sealed class VaultService
     {
         >= 1L << 30 => $"{bytes / (double)(1L << 30):F1} GB",
         >= 1L << 20 => $"{bytes / (double)(1L << 20):F0} MB",
+        0           => "0 KB",
         _           => $"{Math.Max(1, bytes / 1024)} KB",
     };
 }
