@@ -309,6 +309,15 @@ public static class Program
                 Console.WriteLine($"[Program] Healed {corrupted.Count} corrupted config value(s)");
             }
 
+            // The add-feed form had the same bug, so a feed's quality could be that literal
+            // too. The real choice can't be recovered; fall back to the global preference.
+            var badFeeds = db.RssFeeds.Where(f => f.PreferredQuality != null && f.PreferredQuality.StartsWith("Avalonia.")).ToList();
+            if (badFeeds.Count > 0)
+            {
+                foreach (var f in badFeeds) f.PreferredQuality = null;
+                db.SaveChanges();
+            }
+
             // No feeds are seeded here. The app ships knowing no content site; default feeds,
             // if any, come from a loaded source pack (see SeedProviderDefaults).
         }

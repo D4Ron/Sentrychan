@@ -1,4 +1,4 @@
-﻿<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sentrychan.UI.ViewModels"
              x:Class="Sentrychan.UI.Views.RssFeedsView"
@@ -39,7 +39,8 @@
         </StackPanel>
 
         <!-- Feed List -->
-        <ScrollViewer Grid.Row="1" Padding="18,12" IsVisible="{Binding !!Feeds.Count}">
+        <!-- No inner scroll: the list sits on the scrolling Settings page, and a nested scroller trapped the wheel. -->
+        <Border Grid.Row="1" Padding="18,12" IsVisible="{Binding !!Feeds.Count}">
             <ItemsControl ItemsSource="{Binding Feeds}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -129,27 +130,27 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-        </ScrollViewer>
+        </Border>
 
         <!-- Add Feed Form -->
         <Border Grid.Row="2" Padding="18,14"
                 BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,1,0,0">
             <StackPanel Spacing="6">
-                <Grid ColumnDefinitions="*,100,120,Auto">
+                <Grid ColumnDefinitions="*,140,160,Auto">
                     <TextBox Grid.Column="0" Text="{Binding NewFeedUrl}"
                              Watermark="https://example.org/rss" Height="32"/>
                     <ComboBox Grid.Column="1" SelectedItem="{Binding NewFeedType}"
                               Height="32" Margin="8,0,0,0">
-                        <ComboBoxItem Content="Primary"/>
-                        <ComboBoxItem Content="Secondary"/>
+                        <x:String>Primary</x:String>
+                        <x:String>Secondary</x:String>
                     </ComboBox>
                     <ComboBox Grid.Column="2" SelectedItem="{Binding NewFeedQuality}"
                               Height="32" Margin="8,0,0,0">
-                        <ComboBoxItem Content="Use Global"/>
-                        <ComboBoxItem Content="1080p"/>
-                        <ComboBoxItem Content="720p"/>
-                        <ComboBoxItem Content="480p"/>
-                        <ComboBoxItem Content="Any"/>
+                        <x:String>Use Global</x:String>
+                        <x:String>1080p</x:String>
+                        <x:String>720p</x:String>
+                        <x:String>480p</x:String>
+                        <x:String>Any</x:String>
                     </ComboBox>
                     <Button Grid.Column="3" Content="Add Feed"
                             Command="{Binding AddFeedCommand}"
@@ -157,7 +158,7 @@
                             Height="32" Padding="14,0" Margin="8,0,0,0"/>
                 </Grid>
                 <TextBlock Text="{Binding AddFeedError}"
-                           Foreground="#F44336" FontSize="11"
+                           Foreground="{DynamicResource StatusRedBrush}" FontSize="11"
                            IsVisible="{Binding AddFeedError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
             </StackPanel>
         </Border>

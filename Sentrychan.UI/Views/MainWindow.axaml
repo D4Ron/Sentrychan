@@ -229,6 +229,9 @@
                     <Panel IsVisible="{Binding IsShowingVault}">
                         <views:VaultView DataContext="{Binding VaultVm}"/>
                     </Panel>
+                    <Panel IsVisible="{Binding IsShowingSettings}">
+                        <views:SettingsView DataContext="{Binding SettingsVm}"/>
+                    </Panel>
                     <Panel IsVisible="{Binding IsShowingManga}">
                         <views:MangaLibraryView DataContext="{Binding MangaLibraryVm}"/>
                     </Panel>

@@ -216,6 +216,11 @@ public class SettingsViewModel : ViewModelBase
     {
         IsStatusError = false;
         StatusMessage = message;
+        // A success note needn't linger in the save bar; errors stay until fixed.
+        _ = Task.Delay(4000).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (StatusMessage == message && !IsStatusError) StatusMessage = string.Empty;
+        }));
     }
 
     // ── About ──────────────────────────────────────────────────────
@@ -365,14 +370,88 @@ public class SettingsViewModel : ViewModelBase
         ApplyUpdateCommand = ReactiveCommand.CreateFromTask(ApplyUpdateAsync);
 
         RssFeedsVm = new RssFeedsViewModel(dbFactory, themeService, rssMonitor);
+        InitPageBehaviour();
+    }
+
+    // ── Page behaviour ─────────────────────────────────────────────
+    // Settings is a page, not a modal dialog, so nothing forces a Save/Cancel decision:
+    // edits wait in the save bar until saved or discarded, and survive navigating away.
+
+    // Status and progress text change constantly and aren't settings.
+    private static readonly System.Collections.Generic.HashSet<string> NotSettings =
+    [
+        nameof(StatusMessage), nameof(IsStatusError), nameof(IsDirty), nameof(QBitTestResult),
+        nameof(MalImportResult), nameof(UpdateStatus), nameof(IsCheckingUpdate), nameof(UpdateAvailable),
+        nameof(ConfirmingReset), nameof(ShowSaveBar),
+    ];
+
+    private bool _loading;
+
+    private bool _isDirty;
+    public bool IsDirty
+    {
+        get => _isDirty;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isDirty, value);
+            this.RaisePropertyChanged(nameof(ShowSaveBar));
+        }
+    }
+
+    public bool ShowSaveBar => IsDirty || !string.IsNullOrEmpty(StatusMessage);
+
+    /// <summary>Raised after a successful save, so the main window can pick up what changed.</summary>
+    public event Action? Saved;
+
+    public ReactiveCommand<Unit, Unit> DiscardCommand { get; private set; } = null!;
+
+    /// <summary>Opens the (separate) account window; wired by the main window.</summary>
+    public Func<Task>? OpenAccount { get; set; }
+    public ReactiveCommand<Unit, Unit> OpenAccountCommand { get; private set; } = null!;
+
+    private bool _confirmingReset;
+    /// <summary>Reset wipes the library; the first click only arms it.</summary>
+    public bool ConfirmingReset { get => _confirmingReset; set => this.RaiseAndSetIfChanged(ref _confirmingReset, value); }
+    public ReactiveCommand<Unit, Unit> CancelResetCommand { get; private set; } = null!;
+
+    private void InitPageBehaviour()
+    {
+        Changed.Subscribe(e =>
+        {
+            if (_loading || e.PropertyName == null || NotSettings.Contains(e.PropertyName)) return;
+            IsDirty = true;
+        });
+        this.WhenAnyValue(x => x.StatusMessage).Subscribe(_ => this.RaisePropertyChanged(nameof(ShowSaveBar)));
+
+        DiscardCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await LoadAsync();
+            // Theme and layout preview live while picked; put the saved ones back.
+            _themeService?.ApplyNamedTheme(SelectedTheme);
+            LayoutMode = _layoutMode;
+            IsDirty = false;
+            Succeed("Changes discarded");
+        });
+        OpenAccountCommand = ReactiveCommand.CreateFromTask(async () => { if (OpenAccount != null) await OpenAccount(); });
+        CancelResetCommand = ReactiveCommand.Create(() => { ConfirmingReset = false; });
     }
 
     // Call after construction to populate fields from DB
     public async Task LoadAsync(CancellationToken ct = default)
     {
         if (_dbFactory == null) return;
+        _loading = true;
+        try { await LoadCoreAsync(ct); }
+        finally
+        {
+            _loading = false;
+            IsDirty = false;
+        }
+    }
 
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+    private async Task LoadCoreAsync(CancellationToken ct)
+    {
+        await using var db = await _dbFactory!.CreateDbContextAsync(ct);
 
         FdmPath = await GetConfig(db, "FdmPath", @"C:\Program Files\Free Download Manager\fdm.exe", ct);
         DownloadPath = await GetConfig(db, "DownloadPath", "", ct);
@@ -594,7 +673,9 @@ public class SettingsViewModel : ViewModelBase
                 await _folderWatcher.StartAsync();
             }
 
+            IsDirty = false;
             Succeed("Settings saved");
+            Saved?.Invoke();
         }
         catch (Exception ex)
         {
@@ -850,6 +931,9 @@ public class SettingsViewModel : ViewModelBase
     private async Task ResetLibraryAsync(CancellationToken ct)
     {
         if (_dbFactory == null) return;
+        // Irreversible: the first click only arms the button.
+        if (!ConfirmingReset) { ConfirmingReset = true; return; }
+        ConfirmingReset = false;
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);

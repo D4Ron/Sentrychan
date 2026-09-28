@@ -28,7 +28,7 @@ public enum AppView
 {
     Library, Seasonal, Downloads,
     SeriesDetail, DownloadHub, WatchParty, Files, Latest, News,
-    Manga, MangaDetail, MangaReader, Novels, Quiz, Battle, Vault
+    Manga, MangaDetail, MangaReader, Novels, Quiz, Battle, Vault, Settings
 }
 
 public class MainWindowViewModel : ViewModelBase,
@@ -619,6 +619,7 @@ public class MainWindowViewModel : ViewModelBase,
         : IsShowingWatchParty ? "Watch Party"
         : IsShowingUnmatchedResolver ? "Unmatched Files"
         : IsShowingVault ? "Vault"
+        : IsShowingSettings ? "Settings"
         : "Library";
 
     // ── Collections ────────────────────────────────────────────────
@@ -1288,23 +1289,48 @@ public class MainWindowViewModel : ViewModelBase,
         await dialog.ShowDialog(GetMainWindow()!);
     }
 
+    // Settings is a page. Its view model lives for the session, so unsaved edits survive
+    // leaving the page; it's only (re)loaded from the database when there's nothing pending.
+    private SettingsViewModel? _settingsVm;
+    public SettingsViewModel? SettingsVm
+    {
+        get => _settingsVm;
+        set => this.RaiseAndSetIfChanged(ref _settingsVm, value);
+    }
+
+    private bool _isShowingSettings;
+    public bool IsShowingSettings
+    {
+        get => _isShowingSettings;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isShowingSettings, value);
+            this.RaisePropertyChanged(nameof(CurrentPageTitle));
+        }
+    }
+
     private async Task OpenSettingsAsync()
     {
         if (_dbContextFactory == null || _apiService == null || _seriesService == null) return;
-        var vm = new SettingsViewModel(
-            _dbContextFactory, _apiService, _seriesService,
-            _themeService!, GetMainWindow()!,
-            App.Services.GetRequiredService<IDownloadBackendRouter>(),
-            _rssMonitor,
-            App.Services.GetRequiredService<IDownloadFolderWatcher>());
-        await vm.LoadAsync();
-        var vm2 = vm; // for RssFeedsVm init after LoadAsync
-        vm2.RssFeedsVm?.LoadFeedsCommand.Execute().Subscribe();
-        var dialog = new SettingsDialog { DataContext = vm };
-        await dialog.ShowDialog(GetMainWindow()!);
+        if (SettingsVm == null)
+        {
+            var vm = new SettingsViewModel(
+                _dbContextFactory, _apiService, _seriesService,
+                _themeService!, GetMainWindow()!,
+                App.Services.GetRequiredService<IDownloadBackendRouter>(),
+                _rssMonitor,
+                App.Services.GetRequiredService<IDownloadFolderWatcher>())
+            {
+                OpenAccount = OpenAccountDialogAsync,
+            };
+            // Appearance settings that live on the main window follow a save.
+            vm.Saved += () => BackgroundImagePath = vm.BackgroundImagePath;
+            SettingsVm = vm;
+        }
 
-        // Propagate appearance settings that affect the main window
-        BackgroundImagePath = vm.BackgroundImagePath;
+        SetCurrentView(AppView.Settings);
+        if (!SettingsVm.IsDirty) await SettingsVm.LoadAsync();
+        SettingsVm.RssFeedsVm?.LoadFeedsCommand.Execute().Subscribe();
     }
 
     private async Task OpenAccountDialogAsync()
@@ -2084,6 +2110,7 @@ public class MainWindowViewModel : ViewModelBase,
         IsShowingMangaDetail = view == AppView.MangaDetail;
         IsShowingMangaReader = view == AppView.MangaReader;
         IsShowingVault = view == AppView.Vault;
+        IsShowingSettings = view == AppView.Settings;
         // These keep playing audio while merely hidden — stop them when navigating away.
         if (view != AppView.Quiz) AnimeQuizVm?.StopPlayback();
         if (view != AppView.Battle) BattleRoyaleVm?.StopPlayback();
