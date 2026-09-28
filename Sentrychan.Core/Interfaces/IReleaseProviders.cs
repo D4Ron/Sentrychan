@@ -9,6 +9,23 @@ public record ProviderFeed(string Url, FeedType Type, string? PreferredQuality =
 public record SwarmStats(int Seeders, int Leechers, int Downloads);
 
 /// <summary>
+/// One episode to hunt for. <see cref="Title"/> is the season-stripped title; the season
+/// travels separately so a provider can phrase its queries the way releases are named.
+/// </summary>
+public record EpisodeQuery(string Title, int Episode)
+{
+    public int Season { get; init; } = 1;
+
+    /// <summary>Only releases from this group (e.g. "SubsPlease"). Null = any group.</summary>
+    public string? Group { get; init; }
+
+    public string? Quality { get; init; }
+
+    /// <summary>The user's own search text, sent as-is. Results are still filtered to the episode.</summary>
+    public string? CustomQuery { get; init; }
+}
+
+/// <summary>
 /// Plug-in contract for talking to a specific release index.
 ///
 /// THE APP SHIPS NO IMPLEMENTATION OF THIS. Providers come only from source packs loaded by
@@ -34,6 +51,13 @@ public interface IReleaseProvider
     Task<List<ReleaseResult>> FindEpisodeAsync(
         string seriesTitle, int episodeNumber, string? quality, CancellationToken ct)
         => Task.FromResult(new List<ReleaseResult>());
+
+    /// <summary>
+    /// Season-, group- and text-aware episode search. Defaults to the plain search above, so
+    /// a pack built before this existed keeps working unchanged.
+    /// </summary>
+    Task<List<ReleaseResult>> FindEpisodeAsync(EpisodeQuery query, CancellationToken ct)
+        => FindEpisodeAsync(query.CustomQuery ?? query.Title, query.Episode, query.Quality, ct);
 
     // ── Feeds ─────────────────────────────────────────────────────
     /// <summary>Feeds to add on a fresh install (only when the user has none yet).</summary>
@@ -95,6 +119,12 @@ public interface IReleaseProviders
     /// </summary>
     Task<List<ReleaseResult>> FindEpisodeAsync(
         string seriesTitle, int episodeNumber, string? quality = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Targeted search, best match first, already narrowed to the query's season and (if
+    /// given) group — callers can take the first result as-is.
+    /// </summary>
+    Task<List<ReleaseResult>> FindEpisodeAsync(EpisodeQuery query, CancellationToken ct = default);
 
     IReadOnlyList<ProviderFeed> DefaultFeeds { get; }
     string? DefaultPreferredGroups { get; }

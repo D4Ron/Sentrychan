@@ -1636,88 +1636,40 @@ public class MainWindowViewModel : ViewModelBase,
             return;
         }
 
-        int targetEpisode = 0;
-        if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
-        {
-            var dialog = new EpisodePickerDialog();
-            var epInput = dialog.FindControl<Avalonia.Controls.NumericUpDown>("EpisodeInput");
-            if (epInput != null) epInput.Value = series.LastEpisodeNumber + 1;
-            var result = await dialog.ShowDialog<int>(desktop.MainWindow);
-            if (result == -1) return; // Cancelled
-            targetEpisode = result;
-        }
+        var window = GetMainWindow();
+        if (window == null || _downloadQueue == null) return;
 
-        // Targeted search for this exact episode. The old approach (roll back
-        // LastEpisodeNumber and re-run the RSS check) only worked when the episode
-        // happened to still be inside the feed's ~75-item window.
-        UpdateStatus($"● Looking for Ep {targetEpisode}...", "#FFA726");
-        ShowToast("Searching", $"Looking for {series.Title} · Episode {targetEpisode}");
+        // The dialog does the searching: pick the episode, narrow to a group or type your
+        // own query, and choose the release. It searches season-aware per group, so an
+        // older episode isn't buried under newer ones the way one broad query buried it.
+        var groups = (await App.Services.GetRequiredService<IConfigService>()
+                .GetValueAsync("PreferredReleaseGroups", string.Empty, CancellationToken.None))
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var dialog = new Sentrychan.UI.Views.Dialogs.FindEpisodeDialog
+        {
+            DataContext = new FindEpisodeViewModel(series, releases, groups)
+        };
+        var pick = await dialog.ShowDialog<FindEpisodePick?>(window);
+        if (pick == null) return;
+
+        var link = !string.IsNullOrEmpty(pick.Release.MagnetLink) ? pick.Release.MagnetLink : pick.Release.TorrentUrl;
+        if (string.IsNullOrEmpty(link))
+        {
+            ShowToast("Can't download", "That release has no download link.");
+            return;
+        }
 
         try
         {
-            // Try the primary title, then original/alternative titles — release
-            // groups often use a different title than MAL's romaji. Strip the season
-            // out of each query title so every season's releases come back, then keep
-            // only those matching THIS series' season (otherwise Season 2 grabs S1).
-            var titlesToTry = new List<string> { series.Title };
-            if (!string.IsNullOrEmpty(series.OriginalTitle) && series.OriginalTitle != series.Title)
-                titlesToTry.Add(series.OriginalTitle);
-            if (!string.IsNullOrEmpty(series.AlternativeTitlesJson))
-            {
-                try
-                {
-                    var alts = System.Text.Json.JsonSerializer
-                        .Deserialize<List<string>>(series.AlternativeTitlesJson);
-                    if (alts != null)
-                        titlesToTry.AddRange(alts.Where(t =>
-                            !string.IsNullOrWhiteSpace(t) && !titlesToTry.Contains(t)));
-                }
-                catch { /* malformed alt titles — ignore */ }
-            }
-
-            var season = Sentrychan.Core.Services.SeasonSearch.EffectiveSeason(series.Title, series.SeasonNumber);
-            Sentrychan.Core.Models.ReleaseResult? best = null;
-            foreach (var title in titlesToTry)
-            {
-                var searchTitle = Sentrychan.Core.Services.SeasonSearch.StripSeason(title);
-                var results = await releases.FindEpisodeAsync(searchTitle, targetEpisode, null, CancellationToken.None);
-                best = results.FirstOrDefault(r =>
-                    Sentrychan.Core.Services.SeasonSearch.MatchesSeason(r.Title, season));
-                if (best != null) break;
-            }
-
-            if (best == null)
-            {
-                ShowToast("Not found",
-                    $"No release found for {series.Title} · Episode {targetEpisode}");
-                return;
-            }
-
-            var link = !string.IsNullOrEmpty(best.MagnetLink) ? best.MagnetLink : best.TorrentUrl;
-
-            // Route through the New Episodes inbox so the user confirms before download.
-            await Handle(new DownloadConfirmationEvent(
-                SeriesId:      series.Id,
-                MalId:         series.MalId,
-                SeriesTitle:   series.Title,
-                PosterPath:    series.PosterPath ?? string.Empty,
-                EpisodeNumber: targetEpisode,
-                ReleaseGroup:  best.ReleaseGroup,
-                Resolution:    best.Resolution,
-                SizeDisplay:   best.SizeDisplay,
-                Seeders:       best.Seeders,
-                DownloadLink:  link,
-                RssTitle:      best.Title), CancellationToken.None);
-
-            ShowToast("Found", $"{series.Title} · Episode {targetEpisode} — check the inbox");
+            // The user picked this exact release, so no confirmation round-trip via the inbox.
+            await _downloadQueue.EnqueueAsync(link, series.Id, pick.Episode, series.Title,
+                pick.Release.Title, CancellationToken.None);
+            ShowToast("Download started", $"{series.Title} · Episode {pick.Episode} ({pick.Release.ReleaseGroup})");
         }
         catch (Exception ex)
         {
-            ShowToast("Search failed", ex.Message);
-        }
-        finally
-        {
-            UpdateStatus(IsMonitoring ? "● Monitoring" : "● Idle", IsMonitoring ? "#00FF00" : "#808080");
+            ShowToast("Download failed", ex.Message);
         }
     }
 
@@ -1767,13 +1719,29 @@ public class MainWindowViewModel : ViewModelBase,
             var confirmed = await dialog.ShowDialog<List<Sentrychan.Core.Interfaces.FillGapResult>?>(GetMainWindow()!);
             if (confirmed == null) return;
 
-            int queued = 0;
-            foreach (var pick in confirmed.Where(r => r.IsSelected && r.BestMatch != null))
+            int queued = 0, repairing = 0;
+            var repairer = App.Services.GetRequiredService<Sentrychan.Core.Services.EpisodeRepairService>();
+            foreach (var pick in confirmed.Where(r => r.IsSelected && r.CanDownload))
             {
-                var link = !string.IsNullOrEmpty(pick.BestMatch!.MagnetLink)
+                // Damaged copy whose torrent is still cached: fetch only what's missing.
+                if (pick.DamagedPath != null && pick.RepairTorrentPath != null &&
+                    await repairer.RepairAsync(pick.DamagedPath, pick.RepairTorrentPath,
+                                               series.Id, pick.EpisodeNumber, CancellationToken.None))
+                {
+                    repairing++;
+                    continue;
+                }
+
+                if (pick.BestMatch == null) continue;
+                var link = !string.IsNullOrEmpty(pick.BestMatch.MagnetLink)
                     ? pick.BestMatch.MagnetLink
                     : pick.BestMatch.TorrentUrl;
                 if (string.IsNullOrEmpty(link)) continue;
+
+                // Damaged copy with nothing to repair it from: it's replaced, not kept beside
+                // the new download. Recycled, so it can still be recovered.
+                if (pick.DamagedPath != null)
+                    Sentrychan.Core.Services.RecycleBin.Send(pick.DamagedPath);
 
                 await _downloadQueue.EnqueueAsync(
                     link, series.Id, pick.EpisodeNumber, series.Title,
@@ -1781,9 +1749,11 @@ public class MainWindowViewModel : ViewModelBase,
                 queued++;
             }
 
-            if (queued > 0)
+            if (queued + repairing > 0)
                 ShowToast("Batch download started",
-                    $"{series.Title} · {queued} download(s) queued");
+                    repairing == 0
+                        ? $"{series.Title} · {queued} download(s) queued"
+                        : $"{series.Title} · {queued} download(s) queued, {repairing} damaged episode(s) being repaired");
         }
         catch (Exception ex)
         {

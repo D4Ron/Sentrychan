@@ -38,6 +38,9 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
     // Managers that completed seeding — held until the engine removes them
     private readonly ConcurrentBag<TorrentManager> _completedManagers = new();
 
+    // Torrents already sent back for a re-check after claiming completion with holes.
+    private readonly ConcurrentDictionary<string, byte> _rechecked = new(StringComparer.OrdinalIgnoreCase);
+
     // ── Networking ────────────────────────────────────────────────
     // Fixed ports so the UPnP mapping survives restarts and can be opened
     // manually in the firewall if the router has UPnP turned off.
@@ -171,26 +174,8 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
                 return null;
             }
 
-            await manager.StartAsync();
-
-            var handle = manager.InfoHashes.V1?.ToHex()
-                      ?? manager.InfoHashes.V2?.ToHex()
-                      ?? Guid.NewGuid().ToString("N");
-
-            _managers[handle] = manager;
-
-            // Claim the output path(s) so the download-folder watcher leaves them
-            // alone until we raise a completion event — otherwise it fights us for
-            // an exclusive lock on a file we're still writing.
-            RegisterActivePaths(manager);
-
-            EnsurePollingStarted();
-
-            _logger.LogInformation("[MonoTorrent] Added {Handle}: {Name}",
-                handle[..Math.Min(12, handle.Length)],
-                expectedFileName ?? magnetOrUrl[..Math.Min(60, magnetOrUrl.Length)]);
-
-            return handle;
+            return await StartManagerAsync(manager,
+                expectedFileName ?? magnetOrUrl[..Math.Min(60, magnetOrUrl.Length)], forceRecheck: false);
         }
         catch (Exception ex)
         {
@@ -198,6 +183,119 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
                 magnetOrUrl[..Math.Min(80, magnetOrUrl.Length)]);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Adds a torrent from a local .torrent file — the engine's own metadata cache. With
+    /// <paramref name="forceRecheck"/>, whatever is already on disk is hashed first and only
+    /// the pieces that fail are downloaded again, which is how a damaged episode is repaired
+    /// without re-fetching the parts it already has.
+    /// </summary>
+    public async Task<string?> AddTorrentFileAsync(
+        string torrentPath, string savePath, string? expectedFileName, bool forceRecheck,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await EnsureEngineAsync(savePath, ct);
+            Directory.CreateDirectory(savePath);
+
+            var torrent  = await Torrent.LoadAsync(torrentPath);
+            var infoHash = torrent.InfoHashes.V1?.ToHex() ?? torrent.InfoHashes.V2?.ToHex();
+            if (infoHash != null && _managers.ContainsKey(infoHash)) return infoHash;
+
+            var manager = await _engine!.AddAsync(torrent, savePath);
+            return await StartManagerAsync(manager, expectedFileName ?? torrent.Name, forceRecheck);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[MonoTorrent] Adding {Path} failed", torrentPath);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Re-adds every download that was still running when the app last closed.
+    ///
+    /// Torrents used to live only in memory: closing the app mid-batch abandoned them, and the
+    /// half-written files were then filed into the library as if finished. Each one resumes
+    /// from its fast-resume data; a job whose data can no longer be found is marked Failed
+    /// so it stops claiming its file name.
+    /// </summary>
+    public async Task<int> RestoreAsync(CancellationToken ct = default)
+    {
+        List<DownloadJob> jobs;
+        string savePath;
+        await using (var db = await _dbFactory.CreateDbContextAsync(ct))
+        {
+            jobs = await db.DownloadJobs
+                .Where(j => j.Backend == DownloadBackend.MonoTorrent
+                         && j.Status == JobStatus.Downloading
+                         && j.TorrentHash != null)
+                .ToListAsync(ct);
+            savePath = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "DownloadPath", ct))?.Value
+                       ?? string.Empty;
+        }
+        if (jobs.Count == 0) return 0;
+        if (string.IsNullOrWhiteSpace(savePath)) savePath = Path.Combine(Path.GetTempPath(), "Sentrychan");
+
+        await EnsureEngineAsync(savePath, ct);
+        var metadataDir = Path.Combine(_engine!.Settings.CacheDirectory, "metadata");
+
+        var restored = 0;
+        var lost = new List<int>();
+        foreach (var job in jobs)
+        {
+            if (ct.IsCancellationRequested) break;
+            if (_managers.ContainsKey(job.TorrentHash!)) { restored++; continue; }
+
+            var cached = Path.Combine(metadataDir, job.TorrentHash!.ToUpperInvariant() + ".torrent");
+            var handle = File.Exists(cached)
+                ? await AddTorrentFileAsync(cached, savePath, job.ExpectedFileName, forceRecheck: false, ct)
+                : await AddAsync(job.DownloadLink, savePath, job.ExpectedFileName, ct);
+
+            if (handle != null) restored++;
+            else lost.Add(job.Id);
+        }
+
+        if (lost.Count > 0)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            await db.DownloadJobs.Where(j => lost.Contains(j.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(j => j.Status, JobStatus.Failed), ct);
+        }
+
+        _logger.LogInformation("[MonoTorrent] Resumed {Restored} unfinished download(s){Lost}",
+            restored, lost.Count > 0 ? $", {lost.Count} could not be restored" : "");
+        return restored;
+    }
+
+    private async Task<string> StartManagerAsync(TorrentManager manager, string displayName, bool forceRecheck)
+    {
+        // Fast-resume data describes the file where it was. If the file is gone (moved,
+        // deleted) or the caller distrusts it, hash what's really there before downloading.
+        if (forceRecheck || manager.Files.Any(f => !File.Exists(f.FullPath)))
+            await manager.SetNeedsHashCheckAsync();
+
+        await manager.StartAsync();
+
+        var handle = manager.InfoHashes.V1?.ToHex()
+                  ?? manager.InfoHashes.V2?.ToHex()
+                  ?? Guid.NewGuid().ToString("N");
+
+        _managers[handle] = manager;
+
+        // Claim the output path(s) so the download-folder watcher leaves them
+        // alone until we raise a completion event — otherwise it fights us for
+        // an exclusive lock on a file we're still writing.
+        RegisterActivePaths(manager);
+
+        EnsurePollingStarted();
+
+        _logger.LogInformation("[MonoTorrent] Added {Handle}: {Name}",
+            handle[..Math.Min(12, handle.Length)], displayName);
+
+        return handle;
     }
 
     public Task<BackendStatus?> GetStatusAsync(string handle, CancellationToken ct = default)
@@ -531,8 +629,31 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
 
     private async Task OnTorrentSeedingAsync(string handle, TorrentManager manager)
     {
+        // "Seeding" means the engine BELIEVES every piece is on disk. With stale resume data
+        // it can be wrong, so look before announcing: unwritten regions mean re-hash what is
+        // really there and keep downloading. Once per torrent, so a bad release can't loop.
+        if (manager.Files.Count == 1 && _rechecked.TryAdd(handle, 0) &&
+            await Task.Run(() => VideoIntegrity.LooksIncomplete(manager.Files[0].FullPath)))
+        {
+            _logger.LogWarning(
+                "[MonoTorrent] {Handle} claims complete but the file has unwritten regions — re-checking",
+                handle[..Math.Min(12, handle.Length)]);
+            try
+            {
+                await manager.StopAsync();
+                await manager.SetNeedsHashCheckAsync();
+                await manager.StartAsync();
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[MonoTorrent] Re-check of {Handle} failed", handle);
+            }
+        }
+
         // Remove from active tracking first to prevent duplicate events
         if (!_managers.TryRemove(handle, out _)) return;
+        _rechecked.TryRemove(handle, out _);
 
         string? filePath = manager.Files.Count == 1
             ? manager.Files[0].FullPath

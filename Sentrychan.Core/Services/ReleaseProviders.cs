@@ -47,6 +47,21 @@ public sealed class ReleaseProviders : IReleaseProviders
         string seriesTitle, int episodeNumber, string? quality = null, CancellationToken ct = default)
         => GatherAsync(p => p.FindEpisodeAsync(seriesTitle, episodeNumber, quality, ct), rankByScore: true);
 
+    public async Task<List<ReleaseResult>> FindEpisodeAsync(EpisodeQuery query, CancellationToken ct = default)
+    {
+        var results = await GatherAsync(p => p.FindEpisodeAsync(query, ct), rankByScore: true);
+
+        // Enforced here rather than trusted to each provider: a Season 3 request must never
+        // come back holding Season 1's episode, and a group pick means that group only.
+        // The user's own search text is trusted on season — it's usually typed precisely
+        // because a release names its season oddly.
+        return results
+            .Where(r => query.CustomQuery != null || SeasonSearch.MatchesSeason(r.Title, query.Season))
+            .Where(r => string.IsNullOrWhiteSpace(query.Group) ||
+                        string.Equals(r.ReleaseGroup, query.Group.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     private async Task<List<ReleaseResult>> GatherAsync(
         Func<IReleaseProvider, Task<List<ReleaseResult>>> call, bool rankByScore)
     {

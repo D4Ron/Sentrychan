@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        x:Class="Sentrychan.UI.Views.Dialogs.FindEpisodeDialog"
+        x:DataType="vm:FindEpisodeViewModel"
+        Title="Look for Episode"
+        Width="760" Height="580" MinWidth="520" MinHeight="400"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto, Auto, Auto, *, Auto" Margin="20">
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
+            <TextBlock Text="Look for an episode" FontSize="20" FontWeight="Bold"/>
+            <TextBlock Text="{Binding SeriesTitle}" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto, Auto, *, Auto" Margin="0,0,0,8">
+            <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,10,0">
+                <TextBlock Text="Episode" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                <NumericUpDown Value="{Binding Episode}" Minimum="1" Maximum="3000" FormatString="0" Width="120"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="4" Margin="0,0,10,0">
+                <TextBlock Text="Release group" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                <ComboBox ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" Width="180"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="4" Margin="0,0,10,0">
+                <TextBlock Text="Your own search (optional)" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                <TextBox Text="{Binding CustomQuery}" Watermark="e.g. the exact name the group uses, like Title S3 - 10v2"/>
+            </StackPanel>
+            <Button Grid.Column="3" Content="Search" Command="{Binding SearchCommand}" Classes="accent"
+                    IsDefault="True" VerticalAlignment="Bottom"/>
+        </Grid>
+
+        <TextBlock Grid.Row="2" Text="{Binding Status}" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,10"/>
+
+        <ListBox Grid.Row="3" ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}"
+                 Background="Transparent">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ReleaseRowVm">
+                    <StackPanel Spacing="4" Margin="2,4">
+                        <TextBlock Text="{Binding Title}" FontSize="13" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="{Binding Group}" FontSize="11" Foreground="{DynamicResource AccentBrush}"/>
+                            <TextBlock Text="{Binding Resolution}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            <TextBlock Text="{Binding Size}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            <TextBlock Text="{Binding Seeders}" FontSize="11" Foreground="{DynamicResource StatusGreenBrush}"/>
+                            <Border IsVisible="{Binding HasVersion}" Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="4" Padding="5,0">
+                                <TextBlock Text="{Binding VersionLabel}" FontSize="10" FontWeight="Bold"
+                                           Foreground="{DynamicResource AppBackgroundBrush}"/>
+                            </Border>
+                            <Border IsVisible="{Binding IsBatch}" BorderBrush="{DynamicResource TextTertiaryBrush}"
+                                    BorderThickness="1" CornerRadius="4" Padding="5,0">
+                                <TextBlock Text="BATCH" FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Grid Grid.Row="4" ColumnDefinitions="*, Auto, Auto" Margin="0,16,0,0">
+            <Button Grid.Column="1" Content="Cancel" Command="{Binding CancelCommand}" Classes="ghost" Margin="0,0,8,0"/>
+            <Button Grid.Column="2" Content="Download selected" Command="{Binding DownloadCommand}" Classes="accent"/>
+        </Grid>
+    </Grid>
+</Window>

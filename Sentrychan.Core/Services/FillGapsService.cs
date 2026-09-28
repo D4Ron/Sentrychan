@@ -14,17 +14,20 @@ public class FillGapsService : IFillGapsService
     private readonly IVideoFileLocator _fileLocator;
     private readonly IReleaseProviders _releases;
     private readonly ISecretModeService _secretMode;
+    private readonly IConfigService _config;
     private readonly ILogger<FillGapsService> _logger;
 
     public FillGapsService(
         IVideoFileLocator fileLocator,
         IReleaseProviders releases,
         ISecretModeService secretMode,
+        IConfigService config,
         ILogger<FillGapsService> logger)
     {
         _fileLocator = fileLocator;
         _releases = releases;
         _secretMode = secretMode;
+        _config = config;
         _logger = logger;
     }
 
@@ -37,10 +40,16 @@ public class FillGapsService : IFillGapsService
 
         _logger.LogInformation("Scanning for gaps in {Title} up to episode {Max}", series.Title, total);
 
-        // Search without the season baked into the query (so every season's releases
-        // come back), then keep only releases that match THIS series' season.
+        // Query on the season-stripped title with the season passed alongside; the provider
+        // phrases it the way releases are named and results come back season-filtered.
         var searchTitle = SeasonSearch.StripSeason(series.Title);
         var season      = SeasonSearch.EffectiveSeason(series.Title, series.SeasonNumber);
+
+        var quality      = await _config.GetValueAsync("QualityPreference", "1080p", ct);
+        var downloadPath = await _config.GetValueAsync("DownloadPath", string.Empty, ct);
+        var cachedTorrents = string.IsNullOrWhiteSpace(downloadPath)
+            ? new Dictionary<string, string>()
+            : await VideoIntegrity.CachedTorrentsByFileNameAsync(downloadPath, ct);
 
         // Scan sequentially
         for (int i = 1; i <= total; i++)
@@ -48,21 +57,42 @@ public class FillGapsService : IFillGapsService
             if (ct.IsCancellationRequested) break;
 
             var existingPath = await _fileLocator.FindVideoFileAsync(series.Title, i, ct);
-            if (string.IsNullOrEmpty(existingPath))
+
+            // Present but half-written counts as a gap too — it was filed before it finished.
+            string? damaged = null;
+            if (!string.IsNullOrEmpty(existingPath))
+            {
+                var path = existingPath;
+                if (!await Task.Run(() => VideoIntegrity.LooksIncomplete(path, ct), ct)) continue;
+                damaged = path;
+                _logger.LogWarning("Damaged episode: {Title} Ep {Ep} — {File}", series.Title, i, Path.GetFileName(path));
+            }
+            else
             {
                 _logger.LogInformation("Gap found: {Title} Ep {Ep}", series.Title, i);
-
-                var results = await _releases.FindEpisodeAsync(searchTitle, i, null, ct);
-                var best = results.FirstOrDefault(r =>
-                    SeasonSearch.MatchesSeason(r.Title, season));
-
-                missing.Add(new FillGapResult
-                {
-                    EpisodeNumber = i,
-                    BestMatch = best,
-                    IsSelected = best != null
-                });
             }
+
+            var repairTorrent = damaged != null && cachedTorrents.TryGetValue(Path.GetFileName(damaged), out var t) ? t : null;
+
+            // In-place repair needs no search: it re-fetches the very torrent the file came from.
+            ReleaseResult? best = null;
+            if (repairTorrent == null)
+            {
+                var results = await _releases.FindEpisodeAsync(new EpisodeQuery(searchTitle, i) { Season = season }, ct);
+                // A group's 720p can outrank its 1080p on seeders alone; honour the setting first.
+                best = results.FirstOrDefault(r => string.Equals(r.Resolution, quality, StringComparison.OrdinalIgnoreCase))
+                    ?? results.FirstOrDefault();
+            }
+
+            var row = new FillGapResult
+            {
+                EpisodeNumber     = i,
+                BestMatch         = best,
+                DamagedPath       = damaged,
+                RepairTorrentPath = repairTorrent,
+            };
+            row.IsSelected = row.CanDownload;
+            missing.Add(row);
         }
 
         return missing;

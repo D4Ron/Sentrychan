@@ -92,6 +92,11 @@ public class MangaDetailViewModel : ViewModelBase
             if (vm.IsDownloaded) vm.Chapter.DownloadedPath = path;
             else StatusMessage = "That chapter can't be downloaded (licensed / external).";
         }
+        catch (Sentrychan.Core.Services.MangaDownloadException ex)
+        {
+            // A real failure — not the same thing as "nothing to download", so don't say it is.
+            StatusMessage = $"Chapter {vm.Chapter.ChapterNumber}: {ex.Message}";
+        }
         finally { vm.IsDownloading = false; }
     }
 

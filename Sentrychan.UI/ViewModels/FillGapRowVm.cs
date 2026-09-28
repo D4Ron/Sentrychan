@@ -18,13 +18,24 @@ public class FillGapRowVm : ViewModelBase
     public string EpisodeLabel => EpisodeNumber == 0 ? "BATCH" : $"EP {EpisodeNumber}";
 
     public bool HasMatch => _result.BestMatch != null;
-    
-    public string Title => _result.BestMatch?.Title ?? "No release found matching criteria.";
-    
+
+    public bool CanDownload => _result.CanDownload;
+
+    public bool IsDamaged => _result.DamagedPath != null;
+
+    public string Title => _result.BestMatch?.Title
+        ?? (_result.DamagedPath != null ? System.IO.Path.GetFileName(_result.DamagedPath) : null)
+        ?? "No release found matching criteria.";
+
+    /// <summary>What happens to a damaged copy if this row is downloaded.</summary>
+    public string DamageNote => _result.RepairTorrentPath != null
+        ? "Incomplete file in your library — repaired in place, only the missing parts are downloaded."
+        : "Incomplete file in your library — it goes to the Recycle Bin and this release replaces it.";
+
     public string Size => _result.BestMatch?.SizeDisplay ?? "";
-    
+
     public string Group => _result.BestMatch?.ReleaseGroup ?? "";
-    
+
     public int Seeders => _result.BestMatch?.Seeders ?? 0;
 
     public bool IsSelected

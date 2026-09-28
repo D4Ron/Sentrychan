@@ -28,6 +28,9 @@ public class FileMovementPipeline : IFileMovementPipeline
     private readonly Dictionary<string, int> _retryCount = new();
     private const int MaxRetries = 10;
 
+    // Partial files get re-seen on every watcher event and startup scan; warn once each.
+    private readonly HashSet<string> _warnedIncomplete = new(StringComparer.OrdinalIgnoreCase);
+
     public FileMovementPipeline(
         IDbContextFactory<AppDbContext> dbFactory,
         IEpisodeNormalizer normalizer,
@@ -80,6 +83,21 @@ public class FileMovementPipeline : IFileMovementPipeline
         }
 
         filePath = videoFiles[0];
+
+        // The engine only reports what it believes. Stale resume data for a file that had
+        // been moved away once let a torrent "complete" with a quarter of it never written
+        // (Mushoku Tensei S3 13, Sep 2026) — so check before filing, even here.
+        var damaged = videoFiles.Where(f => VideoIntegrity.LooksIncomplete(f, ct)).ToList();
+        if (damaged.Count > 0)
+        {
+            _logger.LogError(
+                "[Pipeline] Torrent {Hash} reported complete but {Count} file(s) have unwritten regions — " +
+                "left in the download folder: {Files}",
+                torrentHash, damaged.Count, string.Join(", ", damaged.Select(Path.GetFileName)));
+            videoFiles = videoFiles.Except(damaged).ToList();
+            if (videoFiles.Count == 0) return;
+            filePath = videoFiles[0];
+        }
 
         // Look up the DownloadJob by torrent hash — exact match, no parsing needed
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -255,7 +273,8 @@ public class FileMovementPipeline : IFileMovementPipeline
             Directory.CreateDirectory(destDir);
             var destPath = Path.Combine(destDir, Path.GetFileName(file));
 
-            if (File.Exists(destPath) && destPath != file)
+            if (File.Exists(destPath) && destPath != file &&
+                ResolveCollision(file, destPath) != Collision.ReplaceDamaged)
             {
                 _logger.LogInformation(
                     "[Pipeline] Batch: '{File}' already in library, skipping", fileName);
@@ -349,13 +368,33 @@ public class FileMovementPipeline : IFileMovementPipeline
         }
 
         _retryCount.Remove(filePath);
-        _logger.LogInformation("[Pipeline] Filesystem event, file complete: {Path}", filePath);
 
         var fileName = Path.GetFileNameWithoutExtension(filePath);
+        var exactName = Path.GetFileName(filePath);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
+        // An unlocked file is not a finished file. A torrent engine pre-allocates the
+        // whole file and lets go of it when the app closes, so after a restart a half-done
+        // download looks exactly like a finished one to the lock check above. The torrent's
+        // own completion event is the only trustworthy signal for files it owns.
+        if (await IsOwnedByUnfinishedTorrentAsync(db, exactName, ct))
+        {
+            _logger.LogDebug("[Pipeline] '{File}' belongs to an unfinished torrent — waiting for it.", exactName);
+            return;
+        }
+
+        // Safety net for everything else (external downloaders, torrents we lost track of):
+        // a zero-filled region means data that never arrived.
+        if (VideoIntegrity.LooksIncomplete(filePath, ct))
+        {
+            if (_warnedIncomplete.Add(filePath))
+                _logger.LogWarning("[Pipeline] '{File}' has unwritten regions — not moving an unfinished download.", exactName);
+            return;
+        }
+
+        _logger.LogInformation("[Pipeline] Filesystem event, file complete: {Path}", filePath);
+
         // ── Match strategy 1: exact ExpectedFileName lookup ───────
-        var exactName = Path.GetFileName(filePath);
         var jobByName = await db.DownloadJobs
             .Include(j => j.Series)
             .FirstOrDefaultAsync(j =>
@@ -459,6 +498,15 @@ public class FileMovementPipeline : IFileMovementPipeline
                 j.EpisodeNumber == episodeNum.Value &&
                 j.Status != JobStatus.Completed, ct);
 
+        // Same rule as above for releases whose file name differs from the feed title.
+        if (jobByEpisode != null && IsTorrentInFlight(jobByEpisode))
+        {
+            _logger.LogDebug(
+                "[Pipeline] '{File}' matches {Title} Ep {Ep}, which a torrent is still downloading — waiting.",
+                fileName, matchedSeries.Title, episodeNum.Value);
+            return;
+        }
+
         if (jobByEpisode == null)
         {
             // File was downloaded externally (e.g. FDM without going through the hub)
@@ -531,17 +579,28 @@ public class FileMovementPipeline : IFileMovementPipeline
 
         var destPath = Path.Combine(destDir, Path.GetFileName(sourcePath));
 
-        // Avoid overwriting an existing file
+        var alreadyFiled = false;
         if (File.Exists(destPath) && destPath != sourcePath)
         {
-            var name     = Path.GetFileNameWithoutExtension(sourcePath);
-            var ext2     = Path.GetExtension(sourcePath);
-            destPath     = Path.Combine(destDir, $"{name}_dup{DateTime.Now.Ticks}{ext2}");
+            switch (ResolveCollision(sourcePath, destPath))
+            {
+                case Collision.ReplaceDamaged:
+                    break;   // the damaged copy is gone; move the good one into its place
+                case Collision.SameRelease:
+                    alreadyFiled = true;
+                    break;
+                default:
+                    var name = Path.GetFileNameWithoutExtension(sourcePath);
+                    var ext2 = Path.GetExtension(sourcePath);
+                    destPath = Path.Combine(destDir, $"{name}_dup{DateTime.Now.Ticks}{ext2}");
+                    break;
+            }
         }
 
         try
         {
-            if (sourcePath != destPath)
+            if (alreadyFiled) { /* nothing to move — the library copy stands */ }
+            else if (sourcePath != destPath)
             {
                 File.Move(sourcePath, destPath);
                 _logger.LogInformation(
@@ -705,6 +764,49 @@ public class FileMovementPipeline : IFileMovementPipeline
     }
 
     // ── Helpers ───────────────────────────────────────────────────
+
+    private static bool IsTorrentInFlight(DownloadJob job) =>
+        job.Backend is DownloadBackend.MonoTorrent or DownloadBackend.QBittorrent &&
+        job.Status is JobStatus.Downloading or JobStatus.Pending;
+
+    private static Task<bool> IsOwnedByUnfinishedTorrentAsync(AppDbContext db, string fileName, CancellationToken ct) =>
+        db.DownloadJobs.AnyAsync(j =>
+            j.ExpectedFileName == fileName &&
+            (j.Backend == DownloadBackend.MonoTorrent || j.Backend == DownloadBackend.QBittorrent) &&
+            (j.Status == JobStatus.Downloading || j.Status == JobStatus.Pending), ct);
+
+    private enum Collision { KeepBoth, ReplaceDamaged, SameRelease }
+
+    /// <summary>
+    /// A file with this name is already in the library. If that copy is damaged (an earlier
+    /// half-finished download), it goes to the Recycle Bin and the new one takes its place.
+    /// If it is intact and the same size, it is the same release: the new copy is recycled
+    /// instead of being filed as "_dup". Anything else keeps both.
+    /// </summary>
+    private Collision ResolveCollision(string incoming, string existing)
+    {
+        try
+        {
+            if (VideoIntegrity.LooksIncomplete(existing))
+            {
+                if (!RecycleBin.Send(existing)) return Collision.KeepBoth;
+                _logger.LogInformation("[Pipeline] Replaced damaged library copy '{File}'", Path.GetFileName(existing));
+                return Collision.ReplaceDamaged;
+            }
+
+            if (new FileInfo(existing).Length == new FileInfo(incoming).Length && RecycleBin.Send(incoming))
+            {
+                _logger.LogInformation("[Pipeline] '{File}' is already in the library — dropped the duplicate",
+                    Path.GetFileName(incoming));
+                return Collision.SameRelease;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Pipeline] Couldn't compare '{File}' with the library copy", Path.GetFileName(incoming));
+        }
+        return Collision.KeepBoth;
+    }
 
     private static bool IsFileComplete(string path)
     {

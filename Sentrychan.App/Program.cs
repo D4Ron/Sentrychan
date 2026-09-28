@@ -183,7 +183,8 @@ public static class Program
                 // Holds no provider of its own: release-index providers come only from source packs.
                 services.AddSingleton<IReleaseProviders, ReleaseProviders>();
                 services.AddSingleton<IFillGapsService, FillGapsService>();
-                services.AddSingleton<IDownloadPickerService, Sentrychan.UI.Services.DownloadPickerService>();
+                services.AddSingleton<EpisodeRepairService>();
+                services.AddSingleton<IDownloadPickerService,Sentrychan.UI.Services.DownloadPickerService>();
 
                 // ── MediatR ───────────────────────────────────────────────
                 services.AddMediatR(cfg =>
@@ -375,10 +376,17 @@ public static class Program
                     $"{evt.OriginalTitle} stuck at {evt.ProgressPercent:F0}% ({reason})");
             };
 
-            // Jobs held under the MaxConcurrentDownloads cap survive a restart as
-            // Pending rows — give them a chance to start now that slots are empty.
-            _ = host.Services.GetRequiredService<Sentrychan.Core.Services.DownloadQueueManager>()
-                    .PromotePendingAsync(CancellationToken.None);
+            // Downloads that were still running when the app closed pick up where they
+            // left off — only now that completion is wired, so none can finish unheard.
+            // Then jobs held under the MaxConcurrentDownloads cap (Pending rows) get the
+            // slots that are left.
+            _ = Task.Run(async () =>
+            {
+                try { await monoTorrent.RestoreAsync(CancellationToken.None); }
+                catch (Exception ex) { Console.WriteLine($"Torrent restore failed: {ex.Message}"); }
+                await host.Services.GetRequiredService<Sentrychan.Core.Services.DownloadQueueManager>()
+                          .PromotePendingAsync(CancellationToken.None);
+            });
 
             // Load notification preferences (level + Windows-vs-in-app).
             try
