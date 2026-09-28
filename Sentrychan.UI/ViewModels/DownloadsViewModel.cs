@@ -250,11 +250,18 @@ public class DownloadsViewModel : ViewModelBase
             long totalSpeedBps = 0;
             bool anyDisappeared = false;
 
+            // A torrent re-added later (a repair, a retry) carries the same hash as its earlier
+            // job rows. Only the newest open row is that transfer; the rest are history, and
+            // giving them live progress too shows one download as two.
+            var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var row in Jobs)
             {
                 if (string.IsNullOrEmpty(row.Handle)) continue;
 
-                if (byHandle.TryGetValue(row.Handle, out var st))
+                if (row.Status is JobStatus.Downloading or JobStatus.Pending &&
+                    claimed.Add(row.Handle) &&
+                    byHandle.TryGetValue(row.Handle, out var st))
                 {
                     row.HasLiveStatus = true;
                     row.ProgressPercent = st.ProgressPercent;

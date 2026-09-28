@@ -101,11 +101,14 @@ public class FileMovementPipeline : IFileMovementPipeline
 
         // Look up the DownloadJob by torrent hash — exact match, no parsing needed
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        // A hash can have several rows (a repair or retry re-adds the same torrent); the one
+        // being completed is the newest still in flight, not whichever row sorts first.
         var job = await db.DownloadJobs
             .Include(j => j.Series)
-            .FirstOrDefaultAsync(j =>
-                j.TorrentHash == torrentHash &&
-                j.Status != JobStatus.Completed, ct);
+            .Where(j => j.TorrentHash == torrentHash && j.Status != JobStatus.Completed)
+            .OrderByDescending(j => j.Status == JobStatus.Downloading)
+            .ThenByDescending(j => j.Id)
+            .FirstOrDefaultAsync(ct);
 
         if (job == null)
         {

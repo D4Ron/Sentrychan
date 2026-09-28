@@ -73,6 +73,12 @@ public class EpisodeRepairService
         db.DownloadJobs.Add(job);
         await db.SaveChangesAsync(ct);
 
+        // The earlier rows for this torrent say "Completed", but that download never finished —
+        // it's what is being repaired. Correct the history so it doesn't read as a second copy.
+        await db.DownloadJobs
+            .Where(j => j.TorrentHash == hash && j.Id != job.Id && j.Status == JobStatus.Completed)
+            .ExecuteUpdateAsync(s => s.SetProperty(j => j.Status, JobStatus.Failed), ct);
+
         try
         {
             // Usually a cross-drive copy of a gigabyte or more — keep it off the caller's thread.
