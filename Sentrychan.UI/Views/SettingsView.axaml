@@ -33,39 +33,6 @@
             </Setter>
         </Style>
 
-        <!-- ── Pill tabs ── -->
-        <Style Selector="TabControl.pills">
-            <Setter Property="Padding" Value="0"/>
-        </Style>
-        <Style Selector="TabControl.pills TabItem">
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="MinHeight" Value="0"/>
-            <Setter Property="Padding" Value="20,9"/>
-            <Setter Property="Margin" Value="0,0,8,8"/>
-            <Setter Property="CornerRadius" Value="20"/>
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-        </Style>
-        <Style Selector="TabControl.pills TabItem /template/ Border#PART_LayoutRoot">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
-            <Setter Property="CornerRadius" Value="20"/>
-        </Style>
-        <Style Selector="TabControl.pills TabItem:pointerover /template/ Border#PART_LayoutRoot">
-            <Setter Property="Background" Value="{DynamicResource CardHoverBackgroundBrush}"/>
-        </Style>
-        <Style Selector="TabControl.pills TabItem:selected /template/ Border#PART_LayoutRoot">
-            <Setter Property="Background" Value="{DynamicResource TextPrimaryBrush}"/>
-        </Style>
-        <Style Selector="TabControl.pills TabItem /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-        </Style>
-        <Style Selector="TabControl.pills TabItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}"/>
-        </Style>
-        <Style Selector="TabControl.pills TabItem /template/ Border#PART_SelectedPipe">
-            <Setter Property="IsVisible" Value="False"/>
-        </Style>
-
         <!-- ── Fields ── -->
         <Style Selector="TextBlock.label">
             <Setter Property="FontSize" Value="13"/>

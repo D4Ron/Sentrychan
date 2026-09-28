@@ -893,9 +893,55 @@ public class MainWindowViewModel : ViewModelBase,
     private void ShowVault()
     {
         if (!IsSecretMode) return;
-        VaultVm ??= new VaultViewModel(ShowToast);
+        VaultVm ??= new VaultViewModel(ShowToast)
+        {
+            OpenAlbums = OpenVaultAlbumsAsync,
+            OpenLibraryChapter = OpenVaultChapterAsync,
+        };
         SetCurrentView(AppView.Vault);
         _ = VaultVm.LoadAsync();
+    }
+
+    /// <summary>A vault chapter of a title still in the library: the normal reader, returning to the vault.</summary>
+    private async Task<bool> OpenVaultChapterAsync(int mangaId, int chapterId)
+    {
+        if (App.Services?.GetService(typeof(IMangaService)) is not IMangaService mangaService) return false;
+        var manga = await mangaService.GetByIdAsync(mangaId);
+        if (manga == null) return false;
+        await OpenReaderAsync(manga, chapterId, onClose: ShowVault);
+        return true;
+    }
+
+    /// <summary>
+    /// Imported albums (and chapters whose title left the library) aren't library chapters:
+    /// they read as one "manga" whose chapters are the albums of their group, with the
+    /// position kept in the vault's encrypted index.
+    /// </summary>
+    private async Task OpenVaultAlbumsAsync(System.Collections.Generic.IReadOnlyList<VaultAlbumVm> albums, int start)
+    {
+        if (App.Services == null || albums.Count == 0) return;
+        if (App.Services.GetService(typeof(IMangaService)) is not IMangaService mangaService) return;
+        if (App.Services.GetService(typeof(IMangaSourceRegistry)) is not IMangaSourceRegistry registry) return;
+        if (App.Services.GetService(typeof(Sentrychan.Core.Vault.VaultService)) is not Sentrychan.Core.Vault.VaultService vault) return;
+
+        var prefix = Sentrychan.Core.Services.MangaDownloadService.VaultPathPrefix;
+        var manga = new Manga { Title = albums[0].Group, Source = "Local", IsCensored = true };
+        var chapters = albums.Select(a => new MangaChapter
+        {
+            Title = a.Title,
+            DownloadedPath = prefix + a.Key,
+            LastReadPage = a.LastPage,
+            Pages = a.PageCount,
+        }).ToList();
+
+        var config = App.Services.GetService(typeof(IConfigService)) as IConfigService;
+        var webtoon = config != null && await config.GetValueAsync(MangaReaderViewModel.ReaderModeKey, false);
+
+        MangaReaderVm = new MangaReaderViewModel(manga, chapters, start, mangaService, registry.Get("Local"),
+            onClose: ShowVault, startLongStrip: webtoon, config: config,
+            savePosition: (c, page) => vault.SaveCollectionPageAsync(c.DownloadedPath![prefix.Length..], page));
+        SetCurrentView(AppView.MangaReader);
+        await MangaReaderVm.InitializeAsync();
     }
     public ReactiveCommand<Unit, Unit> GoBackToMangaCommand { get; }
     public ReactiveCommand<Unit, Unit> RescanLibraryCommand { get; }
@@ -2121,7 +2167,7 @@ public class MainWindowViewModel : ViewModelBase,
     /// Opens the reader for a manga at the given chapter (by DB id). Called from the
     /// detail view's chapter rows and the Continue button.
     /// </summary>
-    public async Task OpenReaderAsync(Manga manga, int chapterId)
+    public async Task OpenReaderAsync(Manga manga, int chapterId, Action? onClose = null)
     {
         if (App.Services == null) return;
         var mangaService = App.Services.GetService(typeof(IMangaService)) as IMangaService;
@@ -2141,7 +2187,7 @@ public class MainWindowViewModel : ViewModelBase,
         var novelFont = config != null ? await config.GetValueAsync(MangaReaderViewModel.NovelFontKey, 17.0) : 17.0;
 
         MangaReaderVm = new MangaReaderViewModel(full, ordered, startIndex, mangaService, source,
-            onClose: () => _ = ReturnFromReaderAsync(full),
+            onClose: onClose ?? (() => _ = ReturnFromReaderAsync(full)),
             startLongStrip: webtoon, config: config, novelFontSize: novelFont);
         SetCurrentView(AppView.MangaReader);
         await MangaReaderVm.InitializeAsync();
@@ -2286,6 +2332,7 @@ public class MainWindowViewModel : ViewModelBase,
 
         // Back returns to whichever section this title lives in (Manga vs Novels).
         Action back = manga.IsNovel ? ShowNovels : ShowManga;
+        MangaDetailVm?.Detach();
         MangaDetailVm = new MangaDetailViewModel(manga, mangaService, source, downloader, back,
             chapterId => _ = OpenReaderAsync(manga, chapterId));
         SetCurrentView(AppView.MangaDetail);

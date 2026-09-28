@@ -33,6 +33,9 @@ public class MangaReaderViewModel : ViewModelBase
 
     private readonly IConfigService? _config;
 
+    // Vault albums aren't library chapters: their position is kept in the vault, not the database.
+    private readonly Func<MangaChapter, int, Task>? _savePosition;
+
     /// <summary>AppConfig key for the remembered reader mode (true = webtoon/long-strip).</summary>
     public const string ReaderModeKey = "MangaReaderWebtoon";
 
@@ -163,8 +166,10 @@ public class MangaReaderViewModel : ViewModelBase
         Manga manga, List<MangaChapter> chaptersAscending, int startChapterIndex,
         IMangaService mangaService, IMangaSourceService source, Action onClose,
         bool isPreview = false, IReadOnlyList<MangaChapterInfo>? previewInfos = null, Action? onAdded = null,
-        bool startLongStrip = false, IConfigService? config = null, double novelFontSize = 17)
+        bool startLongStrip = false, IConfigService? config = null, double novelFontSize = 17,
+        Func<MangaChapter, int, Task>? savePosition = null)
     {
+        _savePosition = savePosition;
         Manga = manga;
         _chapters = chaptersAscending;
         _chapterIndex = Math.Clamp(startChapterIndex, 0, Math.Max(0, chaptersAscending.Count - 1));
@@ -285,7 +290,9 @@ public class MangaReaderViewModel : ViewModelBase
     {
         // Novels usually carry a real chapter title ("1. Good Morning Brother"); fall back to number.
         if (novel && !string.IsNullOrWhiteSpace(c.Title)) return c.Title!;
-        return string.IsNullOrEmpty(c.ChapterNumber) ? "Oneshot" : $"Chapter {c.ChapterNumber}";
+        if (string.IsNullOrEmpty(c.ChapterNumber))
+            return string.IsNullOrWhiteSpace(c.Title) ? "Oneshot" : c.Title!; // vault albums carry their folder name
+        return $"Chapter {c.ChapterNumber}";
     }
 
     /// <summary>Downloaded chapters read from disk — returns sorted local image paths, or null.</summary>
@@ -301,6 +308,16 @@ public class MangaReaderViewModel : ViewModelBase
             return pages.Count > 0
                 ? pages.Select(p => Controls.AsyncImage.VaultScheme + p.Id + p.Extension).ToList()
                 : null;
+        }
+
+        // A vault download that stopped part-way: the pages it did save read instantly and
+        // offline, rather than waiting on the source for all of them again.
+        if (string.IsNullOrEmpty(chapter.DownloadedPath) && chapter.Id > 0
+            && App.Services?.GetService(typeof(Sentrychan.Core.Vault.VaultService)) is Sentrychan.Core.Vault.VaultService { IsReady: true } v)
+        {
+            var partial = v.Collection($"manga-chapter-{chapter.Id}");
+            if (partial.Count > 0)
+                return partial.Select(p => Controls.AsyncImage.VaultScheme + p.Id + p.Extension).ToList();
         }
 
         if (string.IsNullOrEmpty(chapter.DownloadedPath) || !System.IO.Directory.Exists(chapter.DownloadedPath))
@@ -370,6 +387,12 @@ public class MangaReaderViewModel : ViewModelBase
 
     private async Task PersistAsync(bool markRead)
     {
+        if (_savePosition != null)
+        {
+            Current.LastReadPage = _pageIndex;
+            try { await _savePosition(Current, _pageIndex); } catch { /* best-effort */ }
+            return;
+        }
         // Transient preview chapters have id 0 — nothing to persist until it's added.
         if (Current.Id == 0) return;
         try { await _mangaService.SaveReadingPositionAsync(Current.Id, _pageIndex, markRead); }

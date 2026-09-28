@@ -376,4 +376,56 @@
         <Setter Property="Foreground" Value="{DynamicResource AccentLightBrush}"/>
     </Style>
 
+    <!-- ── Pill tabs (Settings, Vault): <TabControl Classes="pills"> ── -->
+    <Style Selector="TabControl.pills">
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="TabControl.pills TabItem">
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Padding" Value="20,9"/>
+        <Setter Property="Margin" Value="0,0,8,8"/>
+        <Setter Property="CornerRadius" Value="20"/>
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="TabControl.pills TabItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="CornerRadius" Value="20"/>
+    </Style>
+    <Style Selector="TabControl.pills TabItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource CardHoverBackgroundBrush}"/>
+    </Style>
+    <Style Selector="TabControl.pills TabItem:selected /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource TextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="TabControl.pills TabItem /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="TabControl.pills TabItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource AppBackgroundBrush}"/>
+    </Style>
+    <Style Selector="TabControl.pills TabItem /template/ Border#PART_SelectedPipe">
+        <Setter Property="IsVisible" Value="False"/>
+    </Style>
+
+    <!-- ── Status chips (chapter download states and the like) ── -->
+    <Style Selector="Border.chip">
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="8,3"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceBackgroundBrush}"/>
+    </Style>
+    <Style Selector="Border.chip > TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+    <Style Selector="Border.chip.good > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource StatusGreenBrush}"/>
+    </Style>
+    <Style Selector="Border.chip.bad > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource StatusRedBrush}"/>
+    </Style>
+
 </Styles>

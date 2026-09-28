@@ -48,8 +48,35 @@ public class MangaDownloadService : IMangaDownloadService
     // running one. Two writers on one folder is what failed the 500-page chapter on
     // 2026-09-26 ("496.webp is being used by another process").
     private readonly Dictionary<int, Task<string?>> _inFlight = new();
+    private readonly Dictionary<int, CancellationTokenSource> _cancels = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, ChapterDownloadStatus> _status = new();
+
+    // Two chapters at a time across the whole app: "Download all" on a long series queues
+    // every chapter at once, and each chapter is already dozens of image requests.
+    private readonly SemaphoreSlim _slots = new(2, 2);
 
     private const int PageAttempts = 3;
+
+    public event Action<ChapterDownloadStatus>? StatusChanged;
+
+    public ChapterDownloadStatus? GetStatus(int chapterId) => _status.GetValueOrDefault(chapterId);
+
+    private void Report(ChapterDownloadStatus s)
+    {
+        _status[s.ChapterId] = s;
+        try { StatusChanged?.Invoke(s); } catch (Exception ex) { _logger.LogDebug(ex, "[MangaDL] status listener failed"); }
+    }
+
+    public void Cancel(int chapterId)
+    {
+        lock (_inFlight) if (_cancels.TryGetValue(chapterId, out var cts)) cts.Cancel();
+    }
+
+    public void CancelAll(int mangaId)
+    {
+        foreach (var s in _status.Values.Where(s => s.MangaId == mangaId && s.IsActive).ToList())
+            Cancel(s.ChapterId);
+    }
 
     public Task<string?> DownloadChapterAsync(
         Manga manga, MangaChapter chapter, IProgress<double>? progress = null, CancellationToken ct = default)
@@ -57,23 +84,65 @@ public class MangaDownloadService : IMangaDownloadService
         lock (_inFlight)
         {
             if (_inFlight.TryGetValue(chapter.Id, out var running)) return running;
-            var task = DownloadChapterCoreAsync(manga, chapter, progress, ct);
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _cancels[chapter.Id] = cts;
+            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Queued));
+            var task = QueuedDownloadAsync(manga, chapter, progress, cts.Token);
             _inFlight[chapter.Id] = task;
-            _ = task.ContinueWith(_ => { lock (_inFlight) _inFlight.Remove(chapter.Id); }, TaskScheduler.Default);
+            _ = task.ContinueWith(_ =>
+            {
+                lock (_inFlight) { _inFlight.Remove(chapter.Id); _cancels.Remove(chapter.Id); }
+                cts.Dispose();
+            }, TaskScheduler.Default);
             return task;
         }
+    }
+
+    private async Task<string?> QueuedDownloadAsync(Manga manga, MangaChapter chapter, IProgress<double>? progress, CancellationToken ct)
+    {
+        await Task.Yield(); // the caller's lock is released before any real work starts
+        try { await _slots.WaitAsync(ct); }
+        catch (OperationCanceledException)
+        {
+            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Cancelled));
+            return null;
+        }
+
+        try
+        {
+            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Starting));
+            var path = await DownloadChapterCoreAsync(manga, chapter, progress, ct);
+            var prev = GetStatus(chapter.Id);
+            Report(path != null
+                ? new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Done, prev?.PagesTotal ?? 0, prev?.PagesTotal ?? 0)
+                : ct.IsCancellationRequested
+                    ? (prev ?? new(chapter.Id, manga.Id, ChapterDownloadState.Cancelled)) with { State = ChapterDownloadState.Cancelled }
+                    : new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Failed,
+                        Error: "This chapter has no pages the app can download — it's licensed or hosted elsewhere."));
+            return path;
+        }
+        catch (MangaDownloadException ex)
+        {
+            var prev = GetStatus(chapter.Id);
+            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Failed,
+                prev?.PagesDone ?? 0, prev?.PagesTotal ?? 0, ex.Message));
+            throw;
+        }
+        finally { _slots.Release(); }
     }
 
     private async Task<string?> DownloadChapterCoreAsync(
         Manga manga, MangaChapter chapter, IProgress<double>? progress, CancellationToken ct)
     {
-        await Task.Yield(); // the caller's lock above is released before any real work starts
-
         var source = _sources.Get(manga.Source);
-        var urls = await source.GetPageUrlsAsync(chapter.SourceId, dataSaver: false, ct);
+        IReadOnlyList<string> urls;
+        try { urls = await source.GetPageUrlsAsync(chapter.SourceId, dataSaver: false, ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { return null; }
+        catch (Exception ex) { throw new MangaDownloadException($"Couldn't get the page list: {ex.Message}", ex); }
         if (urls.Count == 0)
         {
-            _logger.LogInformation("[MangaDL] {Title} ch {Ch} has no in-app pages (external)", manga.Title, chapter.ChapterNumber);
+            _logger.LogInformation("[MangaDL] {Title} ch {Ch} has no in-app pages (external)",
+                manga.IsCensored ? Vault.Privacy.Placeholder : manga.Title, chapter.ChapterNumber);
             return null;
         }
 
@@ -81,7 +150,7 @@ public class MangaDownloadService : IMangaDownloadService
         if (!urls[0].StartsWith("http", StringComparison.OrdinalIgnoreCase))
             return null;
 
-        var chapterLbl = string.IsNullOrEmpty(chapter.ChapterNumber) ? "Oneshot" : $"Chapter {chapter.ChapterNumber}";
+        var chapterLbl = ChapterLabel(chapter);
 
         // Adult titles go to the vault: encrypted, one entry per page, grouped under a key
         // that names nothing. No folder with the title in it is ever created.
@@ -93,7 +162,11 @@ public class MangaDownloadService : IMangaDownloadService
         {
             await _vault!.EnsureReadyAsync(ct);
             target = VaultCollection(chapter.Id);
+            if (_vault.Collection(target).Count == 0) await AdoptOrphanedPagesAsync(manga, chapter, target, ct);
             have = _vault.Collection(target).Select(e => e.Order).ToHashSet();
+            // The index is encrypted, so it can say what this is — the vault page lists it by name.
+            await _vault.DescribeCollectionAsync(target, chapterLbl, manga.Title, chapter.ChapterSort, save: false, ct: ct,
+                expectedPages: urls.Count);
         }
         else
         {
@@ -104,6 +177,9 @@ public class MangaDownloadService : IMangaDownloadService
         }
 
         var failed = new List<int>();
+        void Progress(int done) =>
+            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Downloading, done, urls.Count));
+        Progress(toVault ? have.Count(i => i < urls.Count) : 0);
         try
         {
             for (int i = 0; i < urls.Count; i++)
@@ -118,7 +194,12 @@ public class MangaDownloadService : IMangaDownloadService
                     {
                         var bytes = await FetchPageAsync(urls[i], source.ImageReferer, ct);
                         if (bytes == null) failed.Add(i + 1);
-                        else await _vault!.AddBytesAsync(bytes, $"Page {i + 1}", Vault.VaultKind.Page, target, i, ext, ct);
+                        else
+                        {
+                            await _vault!.AddBytesAsync(bytes, $"Page {i + 1}", Vault.VaultKind.Page, target, i, ext, ct, save: false);
+                            // Flush now and then so a crash keeps most pages for the resume.
+                            if (i % 20 == 19) await _vault.FlushAsync(ct);
+                        }
                     }
                 }
                 else
@@ -140,8 +221,10 @@ public class MangaDownloadService : IMangaDownloadService
                     }
                 }
                 progress?.Report((i + 1) / (double)urls.Count);
+                Progress(i + 1);
             }
 
+            if (toVault) await _vault!.FlushAsync(ct);
             if (failed.Count > 0)
             {
                 _logger.LogWarning("[MangaDL] {Title} {Chapter}: {Failed} of {Pages} pages failed ({List})",
@@ -159,12 +242,14 @@ public class MangaDownloadService : IMangaDownloadService
         }
         catch (OperationCanceledException)
         {
+            if (toVault) await _vault!.FlushAsync(CancellationToken.None); // keep the pages that did arrive
             _logger.LogInformation("[MangaDL] Cancelled {Title} {Chapter}", logTitle, chapterLbl);
             return null;
         }
         catch (MangaDownloadException) { throw; }
         catch (Exception ex)
         {
+            if (toVault) try { await _vault!.FlushAsync(CancellationToken.None); } catch { }
             _logger.LogWarning("[MangaDL] Failed {Title} {Chapter}: {Error}", logTitle, chapterLbl, ex.Message);
             throw new MangaDownloadException($"Download failed: {ex.Message}", ex);
         }
@@ -174,6 +259,38 @@ public class MangaDownloadService : IMangaDownloadService
     public const string VaultPathPrefix = "vault:";
 
     private static string VaultCollection(int chapterId) => $"manga-chapter-{chapterId}";
+
+    /// <summary>
+    /// Chapter ids used to change whenever the chapter list refreshed, stranding a partial
+    /// download under a key naming an id that no longer exists. Take those pages over when
+    /// exactly one stranded collection has this title and chapter label.
+    /// </summary>
+    private async Task AdoptOrphanedPagesAsync(Manga manga, MangaChapter chapter, string target, CancellationToken ct)
+    {
+        var candidates = _vault!.FindCollections(manga.Title, ChapterLabel(chapter))
+            .Where(k => k != target && ChapterIdFromCollection(k) != null).ToList();
+        if (candidates.Count == 0) return;
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var ids = candidates.Select(k => ChapterIdFromCollection(k)!.Value).ToList();
+        var paths = candidates.Select(k => VaultPathPrefix + k).ToList();
+        var owned = await db.MangaChapters
+            .Where(c => ids.Contains(c.Id) || (c.DownloadedPath != null && paths.Contains(c.DownloadedPath)))
+            .Select(c => new { c.Id, c.DownloadedPath }).ToListAsync(ct);
+        var stranded = candidates.Where(k => !owned.Any(o => o.Id == ChapterIdFromCollection(k) || o.DownloadedPath == VaultPathPrefix + k)).ToList();
+        if (stranded.Count != 1) return;
+
+        await _vault.RekeyCollectionAsync(stranded[0], target, ct);
+        _logger.LogInformation("[MangaDL] Resuming a stranded partial download ({Pages} pages kept)", _vault.Collection(target).Count);
+    }
+
+    /// <summary>The chapter id behind a vault collection key, for chapters the downloader put there.</summary>
+    public static int? ChapterIdFromCollection(string? collection) =>
+        collection != null && collection.StartsWith("manga-chapter-") && int.TryParse(collection["manga-chapter-".Length..], out var id)
+            ? id : null;
+
+    public static string ChapterLabel(MangaChapter chapter) =>
+        string.IsNullOrEmpty(chapter.ChapterNumber) ? "Oneshot" : $"Chapter {chapter.ChapterNumber}";
 
     /// <summary>
     /// Fetches one page, retrying, and returns it only if the bytes are an image — so an
@@ -217,23 +334,26 @@ public class MangaDownloadService : IMangaDownloadService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var chapters = await db.MangaChapters
             .Where(c => c.DownloadedPath != null && !c.DownloadedPath.StartsWith(VaultPathPrefix))
-            .Join(db.Manga.Where(m => m.IsCensored), c => c.MangaId, m => m.Id, (c, m) => c)
+            .Join(db.Manga.Where(m => m.IsCensored), c => c.MangaId, m => m.Id, (c, m) => new { c, m.Title })
             .ToListAsync(ct);
 
         var moved = 0;
         var emptied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var chapter in chapters)
+        foreach (var row in chapters)
         {
             ct.ThrowIfCancellationRequested();
+            var chapter = row.c;
             var dir = chapter.DownloadedPath!;
             if (!Directory.Exists(dir)) { chapter.DownloadedPath = null; continue; }
 
             var key = VaultCollection(chapter.Id);
             await _vault.RemoveCollectionAsync(key, ct); // a half-finished earlier move starts over
+            await _vault.DescribeCollectionAsync(key, ChapterLabel(chapter), row.Title, chapter.ChapterSort, save: false, ct: ct);
             var pages = Directory.EnumerateFiles(dir).Where(f => !f.EndsWith(".part"))
                 .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
             for (int i = 0; i < pages.Count; i++)
-                await _vault.AddFileAsync(pages[i], $"Page {i + 1}", Vault.VaultKind.Page, key, i, deleteSource: true, ct: ct);
+                await _vault.AddFileAsync(pages[i], $"Page {i + 1}", Vault.VaultKind.Page, key, i, deleteSource: true, ct: ct, save: false);
+            await _vault.FlushAsync(ct);
 
             try { Directory.Delete(dir, recursive: true); } catch { /* leftovers are non-page files */ }
             var parent = Path.GetDirectoryName(dir);
@@ -286,6 +406,7 @@ public class MangaDownloadService : IMangaDownloadService
         catch (Exception ex) { _logger.LogWarning(ex, "[MangaDL] Delete failed"); }
 
         await SetDownloadedPathAsync(chapter.Id, null, ct);
+        _status.TryRemove(chapter.Id, out _);
     }
 
     private async Task SetDownloadedPathAsync(int chapterId, string? path, CancellationToken ct)

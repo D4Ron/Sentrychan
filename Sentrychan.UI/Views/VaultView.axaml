@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:controls="using:Sentrychan.UI.Controls"
              x:Class="Sentrychan.UI.Views.VaultView"
              x:DataType="vm:VaultViewModel">
 
@@ -20,108 +21,256 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
         </Style>
+        <!-- Album card: cover on top, title and actions below -->
+        <Style Selector="Border.album">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Width" Value="168"/>
+            <Setter Property="Margin" Value="0,0,12,12"/>
+            <Setter Property="ClipToBounds" Value="True"/>
+        </Style>
+        <Style Selector="Border.album:pointerover">
+            <Setter Property="Background" Value="{DynamicResource CardHoverBackgroundBrush}"/>
+        </Style>
     </UserControl.Styles>
 
     <ScrollViewer>
-        <StackPanel Margin="24" Spacing="16" MaxWidth="980" HorizontalAlignment="Stretch">
+        <StackPanel Margin="24" Spacing="16" MaxWidth="1180" HorizontalAlignment="Stretch">
             <!-- Header -->
-            <Grid ColumnDefinitions="*,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                 <StackPanel Grid.Column="0" Spacing="2">
                     <TextBlock Text="Vault" FontSize="22" FontWeight="Bold"/>
                     <TextBlock Text="{Binding Summary}" Classes="note"/>
                 </StackPanel>
-                <Button Grid.Column="1" Content="Add videos…" Command="{Binding AddFilesCommand}"
-                        IsEnabled="{Binding !IsBusy}" Classes="accent" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <Button Grid.Column="2" Content="Move manga downloads in" Command="{Binding MoveMangaCommand}"
-                        IsEnabled="{Binding !IsBusy}" Classes="ghost" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Content="Add a folder…" Command="{Binding AddFolderCommand}"
+                        ToolTip.Tip="Moves a folder's videos, images and .cbz/.zip comics into the vault. Every folder of images becomes an album."
+                        IsEnabled="{Binding !IsImporting}" Classes="accent" VerticalAlignment="Center"/>
+                <Button Grid.Column="2" Content="Add files…" Command="{Binding AddFilesCommand}"
+                        IsEnabled="{Binding !IsImporting}" Classes="ghost" VerticalAlignment="Center"/>
             </Grid>
+
+            <!-- Import preview: nothing is touched until Import is pressed -->
+            <Border Classes="vcard" IsVisible="{Binding HasPlan}"
+                    BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="{Binding PlanSummary}" Classes="h" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding PlanPreview}" Classes="note" FontFamily="Consolas,monospace"/>
+                    <TextBlock Text="{Binding PlanWarning}" Classes="note" FontWeight="SemiBold"
+                               Foreground="{DynamicResource StatusAmberBrush}"
+                               IsVisible="{Binding PlanWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    <CheckBox IsChecked="{Binding DeleteOriginals}" IsEnabled="{Binding !IsImporting}"
+                              Content="Remove the originals once each one is safely encrypted (recommended — otherwise they stay viewable in Explorer)"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsImporting}">
+                        <Button Content="Import" Classes="accent" Command="{Binding ConfirmImportCommand}"/>
+                        <Button Content="Cancel" Classes="ghost" Command="{Binding DiscardPlanCommand}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsImporting}">
+                        <ProgressBar IsIndeterminate="True" Width="120" Height="4" MinWidth="0" VerticalAlignment="Center"
+                                     Foreground="{DynamicResource AccentBrush}"/>
+                        <TextBlock Text="{Binding ImportProgress}" Classes="note" VerticalAlignment="Center"/>
+                        <Button Content="Stop" Classes="ghost" Command="{Binding CancelImportCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
 
             <!-- Not the accent colour: in secret mode the accent is red, and success read as an error. -->
             <TextBlock Text="{Binding Status}" Classes="note" Foreground="{DynamicResource TextPrimaryBrush}"
                        IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
-            <!-- Videos -->
-            <Border Classes="vcard" IsVisible="{Binding IsEmpty}">
-                <TextBlock Classes="note" Text="Nothing here yet. Downloads started in this mode land here automatically, encrypted — or add videos you already have."/>
-            </Border>
-
-            <ItemsControl ItemsSource="{Binding Videos}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:VaultItemVm">
-                        <Border Classes="vcard" Margin="0,0,0,8" Padding="14,10">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Title}" FontSize="13" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding Details}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                    <Button Content="▶ Play" Classes="accent"
-                                            Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).PlayCommand}"
-                                            CommandParameter="{Binding}"/>
-                                    <Button Content="Delete" Classes="ghost" IsVisible="{Binding !ConfirmingDelete}"
-                                            Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).DeleteCommand}"
-                                            CommandParameter="{Binding}"/>
-                                    <Button Content="Delete for good" IsVisible="{Binding ConfirmingDelete}"
-                                            Background="{DynamicResource StatusRedBrush}" Foreground="White"
-                                            Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).DeleteCommand}"
-                                            CommandParameter="{Binding}"/>
-                                    <Button Content="Keep" Classes="ghost" IsVisible="{Binding ConfirmingDelete}"
-                                            Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).CancelDeleteCommand}"
-                                            CommandParameter="{Binding}"/>
-                                </StackPanel>
-                            </Grid>
+            <TabControl Classes="pills" SelectedIndex="{Binding SelectedTab}">
+                <!-- ── Videos ── -->
+                <TabItem Name="VideosTab" Header="{Binding VideosHeader}">
+                    <StackPanel Spacing="8" Margin="0,8,0,0">
+                        <TextBox Text="{Binding Filter}" Watermark="Search the vault" MaxWidth="360" HorizontalAlignment="Left"
+                                 IsVisible="{Binding !NoVideos}"/>
+                        <Border Classes="vcard" IsVisible="{Binding NoVideos}">
+                            <TextBlock Classes="note" Text="No videos yet. Episodes downloaded in this mode land here automatically, encrypted — or use Add a folder… for videos you already have."/>
                         </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-
-            <!-- Privacy controls -->
-            <TextBlock Text="Keeping this mode private" FontSize="17" FontWeight="Bold" Margin="0,12,0,0"/>
-
-            <Border Classes="vcard">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Unlock code" Classes="h"/>
-                    <TextBlock Classes="note" IsVisible="{Binding UsingBuiltInCode}" Foreground="{DynamicResource StatusAmberBrush}"
-                               Text="You're using the built-in code, which is in the app's public source code — anyone can look it up. Set your own below; the built-in one then stops working."/>
-                    <TextBlock Classes="note" IsVisible="{Binding !UsingBuiltInCode}"
-                               Text="Your own code is set. Setting a new one replaces it."/>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox Text="{Binding NewPin}" PasswordChar="●" Watermark="New code" Width="160"/>
-                        <TextBox Text="{Binding ConfirmPin}" PasswordChar="●" Watermark="Repeat it" Width="160"/>
-                        <Button Content="Set code" Command="{Binding SetPinCommand}" Classes="ghost"/>
+                        <ItemsControl ItemsSource="{Binding Videos}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:VaultItemVm">
+                                    <Border Classes="vcard" Margin="0,0,0,8" Padding="14,10">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Details}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                <Button Content="▶ Play" Classes="accent"
+                                                        Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).PlayCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button Content="Delete" Classes="ghost" IsVisible="{Binding !ConfirmingDelete}"
+                                                        Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).DeleteCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button Content="Delete for good" IsVisible="{Binding ConfirmingDelete}"
+                                                        Background="{DynamicResource StatusRedBrush}" Foreground="White"
+                                                        Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).DeleteCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button Content="Keep" Classes="ghost" IsVisible="{Binding ConfirmingDelete}"
+                                                        Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).CancelDeleteCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
-                </StackPanel>
-            </Border>
+                </TabItem>
 
-            <Border Classes="vcard">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Panic key" Classes="h"/>
-                    <TextBlock Classes="note" Text="Ctrl + Shift + H, anywhere in the app: leaves this mode, locks it again, closes any player and returns to the Library."/>
-                </StackPanel>
-            </Border>
+                <!-- ── Manga & images ── -->
+                <TabItem Name="MangaTab" Header="{Binding MangaHeader}">
+                    <StackPanel Spacing="8" Margin="0,8,0,0">
+                        <TextBox Text="{Binding Filter}" Watermark="Search the vault" MaxWidth="360" HorizontalAlignment="Left"
+                                 IsVisible="{Binding !NoAlbums}"/>
+                        <Border Classes="vcard" IsVisible="{Binding NoAlbums}">
+                            <TextBlock Classes="note" Text="No manga or images yet. Chapters of adult titles you download land here automatically. To bring in images you already have, use Add a folder… — each folder of images becomes an album, and .cbz/.zip comics work too."/>
+                        </Border>
+                        <TextBlock Classes="note" Text="Nothing matches that search." IsVisible="{Binding NoFilterMatch}"/>
 
-            <Border Classes="vcard">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Key backup" Classes="h"/>
-                    <TextBlock Classes="note" Text="The vault opens only for this Windows account on this PC. To keep it through a Windows reinstall or a new PC, save a key backup protected by a passphrase — you need both the file and the passphrase to restore."/>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox Text="{Binding Passphrase}" PasswordChar="●" Watermark="Backup passphrase" Width="220"/>
-                        <Button Content="Save backup…" Command="{Binding ExportKeyCommand}" Classes="ghost"/>
-                        <Button Content="Restore from backup…" Command="{Binding ImportKeyCommand}" Classes="ghost"/>
+                        <ItemsControl ItemsSource="{Binding Groups}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:VaultGroupVm">
+                                    <StackPanel Spacing="10" Margin="0,8,0,8">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Spacing="1">
+                                                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Details}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                <Button Content="Delete all" Classes="ghost" FontSize="11" IsVisible="{Binding !ConfirmingDelete}"
+                                                        Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).DeleteGroupCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button Content="Delete all for good" FontSize="11" IsVisible="{Binding ConfirmingDelete}"
+                                                        Background="{DynamicResource StatusRedBrush}" Foreground="White"
+                                                        Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).DeleteGroupCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button Content="Keep" Classes="ghost" FontSize="11" IsVisible="{Binding ConfirmingDelete}"
+                                                        Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).CancelDeleteGroupCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <ItemsControl ItemsSource="{Binding Albums}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:VaultAlbumVm">
+                                                    <Border Classes="album">
+                                                        <StackPanel>
+                                                            <!-- The cover opens the reader -->
+                                                            <Button Padding="0" Background="Transparent" BorderThickness="0"
+                                                                    HorizontalAlignment="Stretch" Cursor="Hand"
+                                                                    ToolTip.Tip="Read"
+                                                                    Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).ReadAlbumCommand}"
+                                                                    CommandParameter="{Binding}">
+                                                                <Border Height="220" Background="{DynamicResource SurfaceBackgroundBrush}" ClipToBounds="True">
+                                                                    <controls:AsyncImage DecodeWidth="336" Url="{Binding ThumbUrl}"
+                                                                                         Stretch="UniformToFill" VerticalAlignment="Top"/>
+                                                                </Border>
+                                                            </Button>
+                                                            <StackPanel Margin="10,8,10,10" Spacing="3">
+                                                                <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold"
+                                                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}"/>
+                                                                <TextBlock Text="{Binding Details}" FontSize="10.5" TextWrapping="Wrap"
+                                                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                                                <Border Classes="chip" HorizontalAlignment="Left" IsVisible="{Binding IsIncomplete}"
+                                                                        ToolTip.Tip="{Binding IncompleteText}">
+                                                                    <TextBlock Text="Incomplete" Foreground="{DynamicResource StatusAmberBrush}"/>
+                                                                </Border>
+                                                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                                                                    <Button Content="Read" Classes="accent" FontSize="11" Padding="12,4"
+                                                                            IsVisible="{Binding !ConfirmingDelete}"
+                                                                            Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).ReadAlbumCommand}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Content="Delete" Classes="ghost" FontSize="11" Padding="10,4"
+                                                                            IsVisible="{Binding !ConfirmingDelete}"
+                                                                            Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).DeleteAlbumCommand}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Content="Delete" FontSize="11" Padding="10,4"
+                                                                            IsVisible="{Binding ConfirmingDelete}"
+                                                                            Background="{DynamicResource StatusRedBrush}" Foreground="White"
+                                                                            Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).DeleteAlbumCommand}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Content="Keep" Classes="ghost" FontSize="11" Padding="10,4"
+                                                                            IsVisible="{Binding ConfirmingDelete}"
+                                                                            Command="{Binding $parent[UserControl].((vm:VaultViewModel)DataContext).CancelDeleteAlbumCommand}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
-                </StackPanel>
-            </Border>
+                </TabItem>
 
-            <Border Classes="vcard">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Image cache" Classes="h"/>
-                    <TextBlock Classes="note" Text="Nothing viewed in this mode is saved to the image cache any more. Covers and pages cached before this update may still be there — clearing removes every cached image; normal covers simply download again."/>
-                    <Button Content="Clear image cache" Command="{Binding ClearImageCacheCommand}" Classes="ghost" HorizontalAlignment="Left"/>
-                </StackPanel>
-            </Border>
+                <!-- ── Privacy ── -->
+                <TabItem Name="PrivacyTab" Header="Privacy">
+                    <StackPanel Spacing="16" Margin="0,8,0,0">
+                        <Border Classes="vcard">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Unlock code" Classes="h"/>
+                                <TextBlock Classes="note" IsVisible="{Binding UsingBuiltInCode}" Foreground="{DynamicResource StatusAmberBrush}"
+                                           Text="You're using the built-in code, which is in the app's public source code — anyone can look it up. Set your own below; the built-in one then stops working."/>
+                                <TextBlock Classes="note" IsVisible="{Binding !UsingBuiltInCode}"
+                                           Text="Your own code is set. Setting a new one replaces it."/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBox Text="{Binding NewPin}" PasswordChar="●" Watermark="New code" Width="160"/>
+                                    <TextBox Text="{Binding ConfirmPin}" PasswordChar="●" Watermark="Repeat it" Width="160"/>
+                                    <Button Content="Set code" Command="{Binding SetPinCommand}" Classes="ghost"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
-            <TextBlock Classes="note" Margin="0,4,0,0"
-                       Text="This keeps things private from someone using or browsing this PC. It is not protection against forensic tools."/>
+                        <Border Classes="vcard">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Panic key" Classes="h"/>
+                                <TextBlock Classes="note" Text="Ctrl + Shift + H, anywhere in the app: leaves this mode, locks it again, closes any player and returns to the Library."/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="vcard">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Key backup" Classes="h"/>
+                                <TextBlock Classes="note" Text="The vault opens only for this Windows account on this PC. To keep it through a Windows reinstall or a new PC, save a key backup protected by a passphrase — you need both the file and the passphrase to restore."/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBox Text="{Binding Passphrase}" PasswordChar="●" Watermark="Backup passphrase" Width="220"/>
+                                    <Button Content="Save backup…" Command="{Binding ExportKeyCommand}" Classes="ghost"/>
+                                    <Button Content="Restore from backup…" Command="{Binding ImportKeyCommand}" Classes="ghost"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="vcard">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Older adult manga downloads" Classes="h"/>
+                                <TextBlock Classes="note" Text="Chapters of adult titles downloaded before the vault existed were saved as plain image folders. This moves them in and removes the folders. New downloads go straight into the vault, so you only need this once."/>
+                                <Button Content="Move them into the vault" Command="{Binding MoveMangaCommand}"
+                                        IsEnabled="{Binding !IsBusy}" Classes="ghost" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="vcard">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Image cache" Classes="h"/>
+                                <TextBlock Classes="note" Text="Nothing viewed in this mode is saved to the image cache any more. Covers and pages cached before that change may still be there — clearing removes every cached image; normal covers simply download again."/>
+                                <Button Content="Clear image cache" Command="{Binding ClearImageCacheCommand}" Classes="ghost" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Classes="note" Margin="0,4,0,0"
+                                   Text="This keeps things private from someone using or browsing this PC. It is not protection against forensic tools."/>
+                    </StackPanel>
+                </TabItem>
+            </TabControl>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

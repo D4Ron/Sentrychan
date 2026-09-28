@@ -12,8 +12,17 @@ public partial class MangaReaderView : UserControl
     public MangaReaderView()
     {
         InitializeComponent();
-        // Focus so arrow keys / space drive paging.
+        // Focus so arrow keys / space drive paging. The view stays in the tree between reads,
+        // so attaching happens once — take focus again whenever a new chapter set opens,
+        // or the button that opened the reader keeps it and the arrows move focus around.
         AttachedToVisualTree += (_, _) => Focus();
+        DataContextChanged += (_, _) =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Focus(), Avalonia.Threading.DispatcherPriority.Input);
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsVisibleProperty && IsVisible)
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => Focus(), Avalonia.Threading.DispatcherPriority.Input);
+        };
     }
 
     private MangaReaderViewModel? Vm => DataContext as MangaReaderViewModel;

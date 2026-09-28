@@ -205,6 +205,19 @@ public class AsyncImage : Image
         set => SetValue(UrlProperty, value);
     }
 
+    /// <summary>
+    /// When set, decodes the image scaled down to this pixel width — for thumbnails of full
+    /// pages, which would otherwise hold ~9 MB each in memory to draw a 160px card.
+    /// </summary>
+    public static readonly StyledProperty<int> DecodeWidthProperty =
+        AvaloniaProperty.Register<AsyncImage, int>(nameof(DecodeWidth));
+
+    public int DecodeWidth
+    {
+        get => GetValue(DecodeWidthProperty);
+        set => SetValue(DecodeWidthProperty, value);
+    }
+
     /// <summary>Source name of a manga image, used to look up a required Referer header.</summary>
     public static readonly StyledProperty<string?> SourceNameProperty =
         AvaloniaProperty.Register<AsyncImage, string?>(nameof(SourceName));
@@ -241,6 +254,10 @@ public class AsyncImage : Image
     {
         UrlProperty.Changed.AddClassHandler<AsyncImage>((img, e) =>
             img.LoadImageAsync(e.NewValue as string));
+        DecodeWidthProperty.Changed.AddClassHandler<AsyncImage>((img, _) =>
+        {
+            if (!string.IsNullOrEmpty(img.Url)) img.LoadImageAsync(img.Url);
+        });
     }
 
     private static string Normalize(string url) =>
@@ -260,10 +277,13 @@ public class AsyncImage : Image
         }
 
         var normalizedUrl = Normalize(url);
-        var isGif = LooksLikeGif(normalizedUrl);
+        var decodeWidth = DecodeWidth;
+        // A thumbnail never animates, and is cached apart from the full-size image.
+        var isGif = decodeWidth <= 0 && LooksLikeGif(normalizedUrl);
+        var cacheKey = decodeWidth > 0 ? $"{normalizedUrl}#w{decodeWidth}" : normalizedUrl;
 
         // Cache hit → show instantly. GIFs skip the still-frame cache so they can animate.
-        if (!isGif && TryGetCached(normalizedUrl, out var cached))
+        if (!isGif && TryGetCached(cacheKey, out var cached))
         {
             Source = cached;
             IsLoading = false;
@@ -288,7 +308,7 @@ public class AsyncImage : Image
                 return;
             }
 
-            var bitmap = await LoadBitmapAsync(normalizedUrl, SourceName);
+            var bitmap = await LoadBitmapAsync(normalizedUrl, SourceName, decodeWidth);
 
             // Stale-load guard: if the Url changed while we were loading (fast page
             // flipping), a newer request owns the control now — drop this result.
@@ -296,7 +316,7 @@ public class AsyncImage : Image
 
             if (bitmap != null)
             {
-                AddCached(normalizedUrl, bitmap);
+                AddCached(cacheKey, bitmap);
                 Source = bitmap;
             }
             IsLoading = false;
@@ -320,12 +340,12 @@ public class AsyncImage : Image
     /// <summary>Bytes plus where they came from, so only what actually decoded gets cached.</summary>
     private readonly record struct ImageBytes(byte[] Bytes, bool FromDisk, bool FromNetwork);
 
-    private static async Task<Bitmap?> LoadBitmapAsync(string normalizedUrl, string? sourceName)
+    private static async Task<Bitmap?> LoadBitmapAsync(string normalizedUrl, string? sourceName, int decodeWidth = 0)
     {
         var loaded = await LoadBytesAsync(normalizedUrl, sourceName);
         if (loaded is not { } img) return null;
 
-        var bmp = await TryDecodeAsync(img.Bytes);
+        var bmp = await TryDecodeAsync(img.Bytes, decodeWidth);
 
         // A disk entry that won't decode is poisoned — typically an error page an older build
         // saved as if it were the image, which then rendered black on every load forever.
@@ -336,7 +356,7 @@ public class AsyncImage : Image
             loaded = await LoadBytesAsync(normalizedUrl, sourceName, bypassDisk: true);
             if (loaded is not { } fresh) return null;
             img = fresh;
-            bmp = await TryDecodeAsync(img.Bytes);
+            bmp = await TryDecodeAsync(img.Bytes, decodeWidth);
         }
 
         if (bmp == null)
@@ -351,9 +371,13 @@ public class AsyncImage : Image
     }
 
     /// <summary>Decodes off the UI thread (full pages inline cause visible jank). Null if undecodable.</summary>
-    private static Task<Bitmap?> TryDecodeAsync(byte[] bytes) => Task.Run<Bitmap?>(() =>
+    private static Task<Bitmap?> TryDecodeAsync(byte[] bytes, int decodeWidth = 0) => Task.Run<Bitmap?>(() =>
     {
-        try { using var ms = new MemoryStream(bytes); return new Bitmap(ms); }
+        try
+        {
+            using var ms = new MemoryStream(bytes);
+            return decodeWidth > 0 ? Bitmap.DecodeToWidth(ms, decodeWidth) : new Bitmap(ms);
+        }
         catch { return null; }
     });
 

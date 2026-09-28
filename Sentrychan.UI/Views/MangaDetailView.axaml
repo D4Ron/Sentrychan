@@ -47,15 +47,40 @@
         <!-- Chapter list -->
         <Border Grid.Row="1" Background="{DynamicResource CardBackgroundBrush}" CornerRadius="8">
             <Grid RowDefinitions="Auto,*">
-                <Border Grid.Row="0" Padding="14,10"
+                <!-- Fixed height whatever the download state: the summary appearing used to push
+                     the list down under the pointer, so quick clicks landed on the wrong chapter. -->
+                <Border Grid.Row="0" Padding="14,8,14,0"
                         BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="Chapters" FontSize="13" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="11"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
-                    </Grid>
+                    <StackPanel Spacing="5">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Height="28">
+                            <TextBlock Text="Chapters" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <!-- Download summary: the whole batch at a glance, with one Cancel for all of it -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="16,0,12,0"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding DownloadSummary}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Text="{Binding StatusMessage}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <Button Classes="ghost" FontSize="11" Padding="10,3" Content="Retry failed"
+                                        IsVisible="{Binding HasFailed}"
+                                        Command="{Binding RetryFailedCommand}"/>
+                                <Button Classes="ghost" FontSize="11" Padding="10,3" Content="Cancel downloads"
+                                        IsVisible="{Binding IsDownloadActive}"
+                                        Command="{Binding CancelAllDownloadsCommand}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Border Height="3" Margin="0,0,0,6">
+                            <ProgressBar Minimum="0" Maximum="100" Height="3" MinHeight="0" MinWidth="0" CornerRadius="2"
+                                         Value="{Binding DownloadProgress}"
+                                         IsIndeterminate="{Binding !IsDownloadProgressKnown}"
+                                         IsVisible="{Binding IsDownloadActive}"
+                                         Foreground="{DynamicResource AccentBrush}"
+                                         Background="{DynamicResource SurfaceBackgroundBrush}"/>
+                        </Border>
+                    </StackPanel>
                 </Border>
 
                 <ScrollViewer Grid.Row="1">
@@ -78,27 +103,82 @@
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
                                                     VerticalAlignment="Center">
+                                            <!-- Download state (manga only; novels have no offline path yet).
+                                                 Exactly one of these shows: Download · Queued · progress · Downloaded · Failed. -->
+                                            <!-- Fixed width, so Read and Mark read stay put as the state changes. -->
+                                            <Panel Width="236" IsVisible="{Binding CanDownload}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                                                        HorizontalAlignment="Right">
+                                                <Button Classes="ghost" FontSize="11" Padding="10,4"
+                                                        Content="{Binding DownloadLabel}"
+                                                        ToolTip.Tip="{Binding DownloadTip}"
+                                                        IsVisible="{Binding ShowDownloadButton}"
+                                                        Command="{Binding DownloadCommand}"/>
+
+                                                <!-- Queued: waiting for a free slot -->
+                                                <Border Classes="chip" IsVisible="{Binding IsQueued}"
+                                                        ToolTip.Tip="Waiting — two chapters download at a time">
+                                                    <TextBlock Text="Queued"/>
+                                                </Border>
+
+                                                <!-- Downloading: a real bar with the page count -->
+                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                                            IsVisible="{Binding IsDownloading}">
+                                                    <Panel Width="90" VerticalAlignment="Center">
+                                                        <ProgressBar Minimum="0" Maximum="100" Height="6" MinWidth="0" CornerRadius="3"
+                                                                     Value="{Binding Progress}"
+                                                                     IsIndeterminate="{Binding !IsProgressKnown}"
+                                                                     Foreground="{DynamicResource AccentBrush}"
+                                                                     Background="{DynamicResource SurfaceBackgroundBrush}"/>
+                                                    </Panel>
+                                                    <TextBlock Text="{Binding ProgressText}" FontSize="11" MinWidth="86"
+                                                               VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                </StackPanel>
+
+                                                <Button Classes="ghost" FontSize="11" Padding="8,4" Content="✕"
+                                                        ToolTip.Tip="Cancel — pages already saved are kept"
+                                                        IsVisible="{Binding IsBusy}"
+                                                        Command="{Binding CancelDownloadCommand}"/>
+
+                                                <!-- Downloaded: click to remove (asks first). Keep comes first, so the
+                                                     confirming button stays under the pointer for the second click. -->
+                                                <Button Classes="ghost" FontSize="11" Padding="8,4" Content="Keep"
+                                                        IsVisible="{Binding ConfirmingRemove}"
+                                                        Command="{Binding KeepDownloadCommand}"/>
+                                                <Button Classes="ghost" FontSize="11" Padding="8,3"
+                                                        ToolTip.Tip="Saved for offline reading. Click to remove the download."
+                                                        IsVisible="{Binding IsDownloaded}"
+                                                        Command="{Binding RemoveDownloadCommand}">
+                                                    <Panel>
+                                                        <TextBlock Text="{Binding DoneLabel}" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource StatusGreenBrush}"
+                                                                   IsVisible="{Binding !ConfirmingRemove}"/>
+                                                        <TextBlock Text="Remove download?" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource StatusRedBrush}"
+                                                                   IsVisible="{Binding ConfirmingRemove}"/>
+                                                    </Panel>
+                                                </Button>
+
+                                                <!-- Failed: say so, explain on hover, offer a retry -->
+                                                <Border Classes="chip bad" IsVisible="{Binding IsFailed}"
+                                                        ToolTip.Tip="{Binding ErrorText}">
+                                                    <TextBlock Text="Failed"/>
+                                                </Border>
+                                                <Button Classes="ghost" FontSize="11" Padding="10,4" Content="Retry"
+                                                        ToolTip.Tip="{Binding ErrorText}"
+                                                        IsVisible="{Binding IsFailed}"
+                                                        Command="{Binding DownloadCommand}"/>
+                                            </StackPanel>
+                                            </Panel>
                                             <Button Classes="accent" FontSize="11" Padding="12,4"
                                                     Content="Read" Command="{Binding ReadCommand}"/>
-                                            <!-- Download / downloading / downloaded (manga only; novels have no offline path yet) -->
-                                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                                                        IsVisible="{Binding CanDownload}">
+                                            <Panel Width="74">
                                                 <Button Classes="ghost" FontSize="11" Padding="10,4"
-                                                        Content="Download"
-                                                        IsVisible="{Binding !IsDownloaded}"
-                                                        IsEnabled="{Binding !IsDownloading}"
-                                                        Command="{Binding DownloadCommand}"/>
-                                                <ProgressBar IsIndeterminate="True" Width="18" Height="18"
-                                                             VerticalAlignment="Center"
-                                                             IsVisible="{Binding IsDownloading}"/>
-                                                <TextBlock Text="Offline" FontSize="10.5" VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource StatusGreenBrush}"
-                                                           IsVisible="{Binding IsDownloaded}"/>
-                                            </StackPanel>
-                                            <Button Classes="ghost" FontSize="11" Padding="10,4"
-                                                    Content="Mark read"
-                                                    IsVisible="{Binding !IsRead}"
-                                                    Command="{Binding MarkReadCommand}"/>
+                                                        Content="Mark read" HorizontalAlignment="Right"
+                                                        IsVisible="{Binding !IsRead}"
+                                                        Command="{Binding MarkReadCommand}"/>
+                                            </Panel>
                                         </StackPanel>
                                     </Grid>
                                 </Border>

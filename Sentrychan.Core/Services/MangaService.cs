@@ -122,29 +122,34 @@ public class MangaService : IMangaService
         var manga = await db.Manga.Include(m => m.Chapters).FirstOrDefaultAsync(m => m.Id == mangaId, ct);
         if (manga == null) return [];
 
-        // Preserve per-chapter state (read flag, downloaded path) across a re-sync by
-        // keying on the source chapter id.
-        var prior = manga.Chapters.ToDictionary(c => c.SourceId, c => c);
-        manga.Chapters.Clear();
+        // Update rows in place, matched on the source's chapter id. This used to clear the
+        // list and insert fresh rows, so every refresh (and opening a title refreshes) gave
+        // every chapter a new database id — dropping each chapter's saved page, and orphaning
+        // anything keyed on the id, like a vault download's resume.
+        var prior = manga.Chapters.GroupBy(c => c.SourceId).ToDictionary(g => g.Key, g => g.First());
+        var listed = new HashSet<string>();
 
         foreach (var info in chapters)
         {
-            prior.TryGetValue(info.SourceId, out var old);
-            manga.Chapters.Add(new MangaChapter
+            if (!listed.Add(info.SourceId)) continue; // a source listing the same chapter twice
+            if (!prior.TryGetValue(info.SourceId, out var row))
             {
-                SourceId        = info.SourceId,
-                ChapterNumber   = info.ChapterNumber,
-                ChapterSort     = info.ChapterSort,
-                Volume          = info.Volume,
-                Title           = info.Title,
-                Language        = info.Language,
-                ScanlationGroup = info.ScanlationGroup,
-                Pages           = info.Pages,
-                PublishedAt     = info.PublishedAt,
-                IsRead          = old?.IsRead ?? false,
-                DownloadedPath  = old?.DownloadedPath
-            });
+                row = new MangaChapter { SourceId = info.SourceId };
+                manga.Chapters.Add(row);
+            }
+            row.ChapterNumber   = info.ChapterNumber;
+            row.ChapterSort     = info.ChapterSort;
+            row.Volume          = info.Volume;
+            row.Title           = info.Title;
+            row.Language        = info.Language;
+            row.ScanlationGroup = info.ScanlationGroup;
+            row.Pages           = info.Pages;
+            row.PublishedAt     = info.PublishedAt;
         }
+
+        // Chapters the source no longer lists go — unless downloaded, which stay readable.
+        foreach (var gone in manga.Chapters.Where(c => !listed.Contains(c.SourceId) && string.IsNullOrEmpty(c.DownloadedPath)).ToList())
+            manga.Chapters.Remove(gone);
 
         // Track the highest chapter the source lists, for the library "X / Y" readout.
         var maxCh = chapters.Select(c => c.ChapterSort).Where(n => n.HasValue).DefaultIfEmpty(null).Max();

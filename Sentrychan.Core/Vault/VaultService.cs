@@ -27,6 +27,27 @@ public sealed class VaultEntry
 }
 
 /// <summary>
+/// What a collection of pages is — a downloaded chapter or an imported album. Kept in the
+/// encrypted index, so it may name the title freely.
+/// </summary>
+public sealed class VaultCollectionInfo
+{
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>What the collection belongs to — the manga title, or the imported folder.</summary>
+    public string? Group { get; set; }
+
+    /// <summary>Chapter number when known; imported albums sort by title instead.</summary>
+    public double? Sort { get; set; }
+
+    public int LastPage { get; set; }
+    public DateTime AddedAt { get; set; }
+
+    /// <summary>How many pages a downloaded chapter should have; more than are stored means it's incomplete.</summary>
+    public int? ExpectedPages { get; set; }
+}
+
+/// <summary>
 /// Encrypted storage for Sentrykun content.
 ///
 /// Files live under a hidden folder as random, extensionless names: Explorer shows no
@@ -72,6 +93,7 @@ public sealed class VaultService
     {
         public List<VaultEntry> Entries { get; set; } = [];
         public List<string> PrivateDownloads { get; set; } = [];
+        public Dictionary<string, VaultCollectionInfo> Collections { get; set; } = new();
     }
 
     private static System.Collections.Concurrent.ConcurrentDictionary<string, byte> NewPrivateSet(IEnumerable<string> keys) =>
@@ -95,6 +117,43 @@ public sealed class VaultService
     {
         lock (_indexLock) return _index.Entries.FirstOrDefault(e => e.Id == id);
     }
+
+    public VaultCollectionInfo? GetCollectionInfo(string collection)
+    {
+        lock (_indexLock) return _index.Collections.GetValueOrDefault(collection);
+    }
+
+    /// <summary>Names a collection (a chapter or an album). Creates or replaces its description.</summary>
+    public async Task DescribeCollectionAsync(
+        string collection, string title, string? group, double? sort, bool save = true, CancellationToken ct = default,
+        int? expectedPages = null)
+    {
+        await EnsureReadyAsync(ct);
+        lock (_indexLock)
+        {
+            var info = _index.Collections.GetValueOrDefault(collection);
+            if (info == null) _index.Collections[collection] = info = new VaultCollectionInfo { AddedAt = DateTime.UtcNow };
+            info.Title = title;
+            info.Group = group;
+            info.Sort = sort;
+            if (expectedPages != null) info.ExpectedPages = expectedPages;
+        }
+        if (save) await SaveIndexAsync(ct);
+    }
+
+    /// <summary>Remembers the page a reader stopped on.</summary>
+    public async Task SaveCollectionPageAsync(string collection, int page)
+    {
+        lock (_indexLock)
+        {
+            if (!_index.Collections.TryGetValue(collection, out var info) || info.LastPage == page) return;
+            info.LastPage = page;
+        }
+        try { await SaveIndexAsync(); } catch (Exception ex) { _logger.LogDebug(ex, "[Vault] page save failed"); }
+    }
+
+    /// <summary>Writes the index now — after a run of additions made with <c>save: false</c>.</summary>
+    public Task FlushAsync(CancellationToken ct = default) => IsReady ? SaveIndexAsync(ct) : Task.CompletedTask;
 
     // ── Loading ───────────────────────────────────────────────────────
 
@@ -193,7 +252,8 @@ public sealed class VaultService
     /// </summary>
     public async Task<VaultEntry> AddFileAsync(
         string path, string title, VaultKind kind, string? collection = null, int order = 0,
-        bool deleteSource = true, IProgress<double>? progress = null, CancellationToken ct = default)
+        bool deleteSource = true, IProgress<double>? progress = null, CancellationToken ct = default,
+        bool save = true)
     {
         await EnsureReadyAsync(ct);
         var entry = NewEntry(title, kind, collection, order, Path.GetExtension(path));
@@ -204,7 +264,7 @@ public sealed class VaultService
             await WriteBlobAsync(entry.Id, output => VaultFormat.EncryptAsync(input, input.Length, output, Key, progress, ct));
         }
 
-        await CommitAsync(entry, ct);
+        await CommitAsync(entry, save, ct);
         if (deleteSource)
         {
             try { File.Delete(path); }
@@ -215,13 +275,13 @@ public sealed class VaultService
 
     public async Task<VaultEntry> AddBytesAsync(
         byte[] data, string title, VaultKind kind, string? collection, int order, string extension,
-        CancellationToken ct = default)
+        CancellationToken ct = default, bool save = true)
     {
         await EnsureReadyAsync(ct);
         var entry = NewEntry(title, kind, collection, order, extension);
         entry.Size = data.Length;
         await WriteBlobAsync(entry.Id, output => output.WriteAsync(VaultFormat.Encrypt(data, Key), ct).AsTask());
-        await CommitAsync(entry, ct);
+        await CommitAsync(entry, save, ct);
         return entry;
     }
 
@@ -246,10 +306,12 @@ public sealed class VaultService
         File.Move(tmp, path, overwrite: true);
     }
 
-    private async Task CommitAsync(VaultEntry entry, CancellationToken ct)
+    // Rewriting the whole encrypted index per page made a 500-page chapter write it 500
+    // times; bulk callers pass save: false and flush once per chapter or album.
+    private async Task CommitAsync(VaultEntry entry, bool save, CancellationToken ct)
     {
         lock (_indexLock) _index.Entries.Add(entry);
-        await SaveIndexAsync(ct);
+        if (save) await SaveIndexAsync(ct);
     }
 
     // ── Reading ───────────────────────────────────────────────────────
@@ -284,9 +346,29 @@ public sealed class VaultService
         {
             gone = _index.Entries.Where(e => e.Collection == collection).ToList();
             _index.Entries.RemoveAll(e => e.Collection == collection);
+            _index.Collections.Remove(collection);
         }
         foreach (var e in gone)
             try { File.Delete(BlobPath(e.Id)); } catch { }
+        await SaveIndexAsync(ct);
+    }
+
+    /// <summary>Keys of collections described with this group and title.</summary>
+    public IReadOnlyList<string> FindCollections(string group, string title)
+    {
+        lock (_indexLock)
+            return _index.Collections.Where(kv => kv.Value.Group == group && kv.Value.Title == title).Select(kv => kv.Key).ToList();
+    }
+
+    /// <summary>Moves a collection's pages and description to a new key. The blobs don't move.</summary>
+    public async Task RekeyCollectionAsync(string from, string to, CancellationToken ct = default)
+    {
+        await EnsureReadyAsync(ct);
+        lock (_indexLock)
+        {
+            foreach (var e in _index.Entries.Where(e => e.Collection == from)) e.Collection = to;
+            if (_index.Collections.Remove(from, out var info)) _index.Collections[to] = info;
+        }
         await SaveIndexAsync(ct);
     }
 
