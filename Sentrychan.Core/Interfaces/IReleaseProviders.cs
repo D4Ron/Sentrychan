@@ -16,7 +16,7 @@ public record EpisodeQuery(string Title, int Episode)
 {
     public int Season { get; init; } = 1;
 
-    /// <summary>Only releases from this group (e.g. "SubsPlease"). Null = any group.</summary>
+    /// <summary>Only releases from this group (e.g. a fansub group). Null = any group.</summary>
     public string? Group { get; init; }
 
     public string? Quality { get; init; }

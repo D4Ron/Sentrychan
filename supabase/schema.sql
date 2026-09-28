@@ -329,7 +329,7 @@ create table if not exists public.series_airings (
     series_title text not null,
     episode      integer,
     resolution   text,
-    source       text,                             -- SubsPlease, nyaa, …
+    source       text,                             -- release group or index name
     magnet       text,
     created_at   timestamptz not null default now()
 );

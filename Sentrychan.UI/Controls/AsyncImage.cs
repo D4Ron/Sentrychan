@@ -463,7 +463,7 @@ public class AsyncImage : Image
 
     // ── Animated GIF support ─────────────────────────────────────────
     // Avalonia's Bitmap only decodes a GIF's first frame, so animated pages (common on
-    // e-hentai) sat frozen. Decode all frames with Skia (the same engine Avalonia renders
+    // some sources) sat frozen. Decode all frames with Skia (the same engine Avalonia renders
     // with) and cycle them on a per-frame timer. GIFs are detected by URL extension.
     private readonly record struct GifFrame(Bitmap Bitmap, int DelayMs);
     private const int MaxGifFrames = 600;

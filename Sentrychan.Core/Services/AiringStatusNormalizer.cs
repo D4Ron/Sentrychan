@@ -8,7 +8,7 @@ namespace Sentrychan.Core.Services;
 /// Statuses reach us from several sources that don't agree: Jikan ("Currently Airing",
 /// "Finished Airing", "Not yet aired"), the offline resolver ("ONGOING"/"FINISHED"),
 /// and — accidentally — the Latest page, which reuses AnimeResult.Status to carry a
-/// card sub-label like "EP 1 · SubsPlease". That junk was being written straight into
+/// card sub-label like "EP 1 · SomeGroup". That junk was being written straight into
 /// the database, where it matched no known status and made the series invisible in the
 /// library. Normalising on write keeps only values the library can actually classify.
 /// </summary>

@@ -286,7 +286,7 @@ public class FileMovementPipeline : IFileMovementPipeline
 
     /// <summary>
     /// Derives a human-readable folder name from a release title:
-    /// "[SubsPlease] Mushoku Tensei - 05 (1080p) [ABC].mkv" → "Mushoku Tensei".
+    /// "[Group] Mushoku Tensei - 05 (1080p) [ABC].mkv" → "Mushoku Tensei".
     /// </summary>
     private static string CleanReleaseTitle(string raw)
     {
@@ -906,7 +906,7 @@ public class FileMovementPipeline : IFileMovementPipeline
 
     private static bool LooksLikeAnimeRelease(string fileName)
     {
-        if (GroupBracketAtStart.IsMatch(fileName)) return true;            // [SubsPlease] ...
+        if (GroupBracketAtStart.IsMatch(fileName)) return true;            // [Group] ...
         if (CrcHashTag.IsMatch(fileName)) return true;                      // ...[A1B2C3D4]
         // A resolution tag alone is weak; pair it with a bracketed token to be safe.
         return ResolutionTag.IsMatch(fileName) && fileName.Contains('[');
