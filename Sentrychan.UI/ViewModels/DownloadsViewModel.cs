@@ -216,6 +216,16 @@ public class DownloadsViewModel : ViewModelBase
             .OrderByDescending(j => j.CreatedAt)
             .ToListAsync(ct);
 
+        // Private (secret-mode) downloads are listed only while secret mode is on.
+        var secret = (App.Services?.GetService(typeof(Sentrychan.Core.Interfaces.ISecretModeService))
+                        as Sentrychan.Core.Interfaces.ISecretModeService)?.IsSecretModeActive == true;
+        if (!secret)
+        {
+            var vault = App.Services?.GetService(typeof(Sentrychan.Core.Vault.VaultService)) as Sentrychan.Core.Vault.VaultService;
+            jobs = jobs.Where(j => j.RssTitle != Sentrychan.Core.Vault.Privacy.Placeholder
+                                && vault?.IsPrivateDownload(j.TorrentHash) != true).ToList();
+        }
+
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             Jobs.Clear();
@@ -420,13 +430,21 @@ public class DownloadsViewModel : ViewModelBase
         catch { /* nothing useful to show the user if Explorer refuses */ }
     }
 
-    /// <summary>Opens the finished file with the OS default application for its type.</summary>
+    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".mkv", ".mp4", ".avi", ".webm", ".m4v", ".mov", ".wmv" };
+
+    /// <summary>Plays a finished video in the chosen player; anything else opens with its default app.</summary>
     private void OpenFile(DownloadJobRowVm row)
     {
         try
         {
             var path = row.FilePath;
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return;
+            if (VideoExtensions.Contains(System.IO.Path.GetExtension(path)))
+            {
+                _ = Services.PlayerLauncher.PlayFileAsync(path);
+                return;
+            }
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
         }
         catch { /* nothing useful to show if the OS refuses to open it */ }

@@ -1,0 +1,94 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
+        x:Class="Sentrychan.UI.Views.VideoPlayerWindow"
+        x:DataType="vm:VideoPlayerViewModel"
+        Title="{Binding Title}"
+        Width="1120" Height="680" MinWidth="480" MinHeight="300"
+        WindowStartupLocation="CenterScreen"
+        Background="Black">
+
+    <Window.Styles>
+        <Style Selector="Button.pl">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinWidth" Value="36"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.pl:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#33FFFFFF"/>
+        </Style>
+        <Style Selector="Button.pl:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Opacity" Value="0.35"/>
+        </Style>
+        <Style Selector="TextBlock.pl">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ComboBox.pl">
+            <Setter Property="MinWidth" Value="130"/>
+            <Setter Property="MaxWidth" Value="220"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </Window.Styles>
+
+    <vlc:VideoView x:Name="Video" MediaPlayer="{Binding Player}">
+        <!-- VideoView.Content floats in its own window above the native video surface;
+             anything drawn as a sibling of the VideoView would be hidden underneath it. -->
+        <Grid x:Name="Overlay" x:DataType="vm:VideoPlayerViewModel" Background="Transparent" Focusable="True">
+            <Border x:Name="TopBar" VerticalAlignment="Top" Background="#99000000" Padding="18,10">
+                <TextBlock Text="{Binding Title}" Classes="pl" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+            </Border>
+
+            <Border IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#CC000000" CornerRadius="8" Padding="18,12">
+                <TextBlock Text="{Binding Status}" Classes="pl" FontSize="14"/>
+            </Border>
+
+            <Border x:Name="BottomBar" VerticalAlignment="Bottom" Background="#CC000000" Padding="14,6,14,10">
+                <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding TimeText}" Classes="pl" Margin="0,0,10,0"/>
+                        <Slider x:Name="Seek" Grid.Column="1" Minimum="0" Maximum="1000"/>
+                        <TextBlock Grid.Column="2" Text="{Binding LengthText}" Classes="pl" Margin="10,0,0,0"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
+                        <Button Grid.Column="0" Classes="pl" Content="⏮" Command="{Binding PreviousCommand}"
+                                IsEnabled="{Binding HasPrevious}" IsVisible="{Binding HasPlaylist}" ToolTip.Tip="Previous (P)"/>
+                        <Button Grid.Column="1" Classes="pl" Content="↺" Command="{Binding BackCommand}" ToolTip.Tip="Back 10s (←)"/>
+                        <Button Grid.Column="2" Classes="pl" Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play / pause (Space)">
+                            <Panel>
+                                <TextBlock Text="⏸" IsVisible="{Binding IsPlaying}"/>
+                                <TextBlock Text="▶" IsVisible="{Binding !IsPlaying}"/>
+                            </Panel>
+                        </Button>
+                        <Button Grid.Column="3" Classes="pl" Content="↻" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward 10s (→)"/>
+                        <Button Grid.Column="4" Classes="pl" Content="⏭" Command="{Binding NextCommand}"
+                                IsEnabled="{Binding HasNext}" IsVisible="{Binding HasPlaylist}" ToolTip.Tip="Next episode (N)"/>
+
+                        <ComboBox Grid.Column="6" Classes="pl" Margin="0,0,6,0" PlaceholderText="Audio"
+                                  ItemsSource="{Binding AudioTracks}" SelectedItem="{Binding AudioTrack}" ToolTip.Tip="Audio track (A)"/>
+                        <ComboBox Grid.Column="7" Classes="pl" Margin="0,0,6,0" PlaceholderText="Subtitles"
+                                  ItemsSource="{Binding SubtitleTracks}" SelectedItem="{Binding SubtitleTrack}" ToolTip.Tip="Subtitles (S)"/>
+                        <Button Grid.Column="8" Classes="pl" Command="{Binding ToggleMuteCommand}" ToolTip.Tip="Mute (M)">
+                            <Panel>
+                                <TextBlock Text="🔇" IsVisible="{Binding IsMuted}"/>
+                                <TextBlock Text="🔊" IsVisible="{Binding !IsMuted}"/>
+                            </Panel>
+                        </Button>
+                        <Slider Grid.Column="9" Minimum="0" Maximum="150" Width="90" VerticalAlignment="Center"
+                                Value="{Binding Volume}" ToolTip.Tip="Volume (↑/↓)"/>
+                        <Button x:Name="FullscreenButton" Grid.Column="10" Classes="pl" Content="⛶" ToolTip.Tip="Fullscreen (F / double-click)"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </vlc:VideoView>
+</Window>

@@ -16,6 +16,11 @@ public class WindowsNotificationService : INotificationService
     {
         try
         {
+            // Windows keeps toasts in the notification history long after the app has left
+            // secret mode, so nothing specific is sent while it's on.
+            if (Sentrychan.Core.Vault.Privacy.SecretModeActive())
+                (title, message) = ("Sentrychan", "You have a new notification.");
+
             string t = Escape(title);
             string m = Escape(message);
 

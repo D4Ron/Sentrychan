@@ -134,6 +134,10 @@
                                     </Button.Template>
                                     <Button.ContextMenu>
                                         <ContextMenu>
+                                            <MenuItem Header="▶ Play"
+                                                      Command="{Binding $parent[UserControl].DataContext.PlayEpisodeCommand}"
+                                                      CommandParameter="{Binding EpisodeNumber}" />
+                                            <Separator />
                                             <MenuItem Header="Mark as Downloaded"
                                                       Command="{Binding $parent[UserControl].DataContext.MarkEpisodeDownloadedCommand}"
                                                       CommandParameter="{Binding EpisodeNumber}" />

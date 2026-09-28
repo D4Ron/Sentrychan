@@ -27,6 +27,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Closing += MainWindow_Closing;
+
+        // Panic key: tunnel so no focused control can swallow it first.
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (!PanicKey.Matches(e)) return;
+            e.Handled = true;
+            PanicKey.Trigger();
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         
         _themeService = App.Services?.GetService<IThemeService>();
         if (_themeService != null)

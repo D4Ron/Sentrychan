@@ -1,4 +1,4 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using ReactiveUI;
@@ -28,7 +28,7 @@ public enum AppView
 {
     Library, Seasonal, Downloads,
     SeriesDetail, DownloadHub, WatchParty, Files, Latest, News,
-    Manga, MangaDetail, MangaReader, Novels, Quiz, Battle
+    Manga, MangaDetail, MangaReader, Novels, Quiz, Battle, Vault
 }
 
 public class MainWindowViewModel : ViewModelBase,
@@ -618,6 +618,7 @@ public class MainWindowViewModel : ViewModelBase,
         : IsShowingSeriesDetail ? "Series Details"
         : IsShowingWatchParty ? "Watch Party"
         : IsShowingUnmatchedResolver ? "Unmatched Files"
+        : IsShowingVault ? "Vault"
         : "Library";
 
     // ── Collections ────────────────────────────────────────────────
@@ -863,6 +864,38 @@ public class MainWindowViewModel : ViewModelBase,
     public ReactiveCommand<Unit, Unit> ShowMangaCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowNovelsCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowQuizCommand { get; }
+
+    // ── Vault (secret mode only) ───────────────────────────────────
+    public ReactiveCommand<Unit, Unit> ShowVaultCommand { get; } = ReactiveCommand.Create(() => { });
+
+    /// <summary>Drives the nav entries that exist only in secret mode.</summary>
+    public bool IsSecretMode => _themeService?.IsSecretMode ?? false;
+
+    private VaultViewModel? _vaultVm;
+    public VaultViewModel? VaultVm
+    {
+        get => _vaultVm;
+        set => this.RaiseAndSetIfChanged(ref _vaultVm, value);
+    }
+
+    private bool _isShowingVault;
+    public bool IsShowingVault
+    {
+        get => _isShowingVault;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isShowingVault, value);
+            this.RaisePropertyChanged(nameof(CurrentPageTitle));
+        }
+    }
+
+    private void ShowVault()
+    {
+        if (!IsSecretMode) return;
+        VaultVm ??= new VaultViewModel(ShowToast);
+        SetCurrentView(AppView.Vault);
+        _ = VaultVm.LoadAsync();
+    }
     public ReactiveCommand<Unit, Unit> GoBackToMangaCommand { get; }
     public ReactiveCommand<Unit, Unit> RescanLibraryCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowDownloadsCommand { get; }
@@ -985,6 +1018,25 @@ public class MainWindowViewModel : ViewModelBase,
         _titleAliasService = titleAliasService;
         _accountService = App.Services?.GetService<Sentrychan.Core.Interfaces.IAccountService>();
         _aniDbCoverService = App.Services?.GetService<Sentrychan.Core.Services.AniDbCoverService>();
+
+        // Panic key: out of secret mode, locked, back to the library, private images dropped
+        // from memory. Any open player closes itself on the same signal.
+        PanicKey.Triggered += () => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _themeService?.DeactivateSecretMode();
+            _themeService?.Lock();
+            SetCurrentView(AppView.Library);
+            MangaReaderVm = null;
+            VaultVm = null;
+            Sentrychan.UI.Controls.AsyncImage.ClearMemoryCache();
+        });
+        themeService.ThemeChanged += secret =>
+        {
+            this.RaisePropertyChanged(nameof(IsSecretMode));
+            if (!secret && IsShowingVault) SetCurrentView(AppView.Library);
+            DownloadsVm?.LoadJobsCommand.Execute().Subscribe(); // private rows show only in secret mode
+        };
+        ShowVaultCommand = ReactiveCommand.Create(ShowVault);
 
         ToggleMonitoringCommand = ReactiveCommand.CreateFromTask(ToggleMonitoringAsync);
         ManualCheckCommand = ReactiveCommand.CreateFromTask(ManualCheckAsync);
@@ -2031,6 +2083,7 @@ public class MainWindowViewModel : ViewModelBase,
         IsShowingBattle = view == AppView.Battle;
         IsShowingMangaDetail = view == AppView.MangaDetail;
         IsShowingMangaReader = view == AppView.MangaReader;
+        IsShowingVault = view == AppView.Vault;
         // These keep playing audio while merely hidden — stop them when navigating away.
         if (view != AppView.Quiz) AnimeQuizVm?.StopPlayback();
         if (view != AppView.Battle) BattleRoyaleVm?.StopPlayback();

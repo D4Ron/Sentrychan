@@ -16,6 +16,12 @@ public interface IMangaDownloadService
     Task<string?> DownloadChapterAsync(Manga manga, MangaChapter chapter,
         IProgress<double>? progress = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// Moves adult chapters downloaded as plain folders into the vault. Returns the count moved.
+    /// </summary>
+    Task<int> MoveAdultDownloadsIntoVaultAsync(IProgress<string>? progress = null, CancellationToken ct = default)
+        => Task.FromResult(0);
+
     /// <summary>Deletes a chapter's downloaded pages and clears its DownloadedPath.</summary>
     Task DeleteChapterDownloadAsync(MangaChapter chapter, CancellationToken ct = default);
 }

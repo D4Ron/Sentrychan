@@ -291,6 +291,18 @@ public class MangaReaderViewModel : ViewModelBase
     /// <summary>Downloaded chapters read from disk — returns sorted local image paths, or null.</summary>
     private static List<string>? LocalPagesOrNull(MangaChapter chapter)
     {
+        // Vault chapter: pages are encrypted entries, served to the image control as
+        // "vault:<id><ext>" and decrypted in memory only.
+        if (chapter.DownloadedPath?.StartsWith(Sentrychan.Core.Services.MangaDownloadService.VaultPathPrefix) == true)
+        {
+            var vault = App.Services?.GetService(typeof(Sentrychan.Core.Vault.VaultService)) as Sentrychan.Core.Vault.VaultService;
+            var key = chapter.DownloadedPath[Sentrychan.Core.Services.MangaDownloadService.VaultPathPrefix.Length..];
+            var pages = vault?.IsReady == true ? vault.Collection(key) : [];
+            return pages.Count > 0
+                ? pages.Select(p => Controls.AsyncImage.VaultScheme + p.Id + p.Extension).ToList()
+                : null;
+        }
+
         if (string.IsNullOrEmpty(chapter.DownloadedPath) || !System.IO.Directory.Exists(chapter.DownloadedPath))
             return null;
 

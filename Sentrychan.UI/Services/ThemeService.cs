@@ -105,18 +105,20 @@ public class ThemeService : IThemeService, ISecretModeService
 
     public bool TryUnlock(string password)
     {
-        if (password == PASSWORD)
-        {
-            _hasUnlockedThisSession = true;
-            return true;
-        }
-        return false;
+        // A PIN the user set replaces the built-in code, which anyone can read in the source.
+        var ok = SecretPin.IsSet ? SecretPin.Verify(password) : password == PASSWORD;
+        if (ok) _hasUnlockedThisSession = true;
+        return ok;
     }
+
+    /// <summary>Requires the code again before secret mode can be re-entered.</summary>
+    public void Lock() => _hasUnlockedThisSession = false;
 
     public void ActivateSecretMode()
     {
         if (_isSecretMode) return;
         _isSecretMode = true;
+        Controls.AsyncImage.PrivateMode = true;
         Rebuild();
         ThemeChanged?.Invoke(true);
     }
@@ -125,6 +127,7 @@ public class ThemeService : IThemeService, ISecretModeService
     {
         if (!_isSecretMode) return;
         _isSecretMode = false;
+        Controls.AsyncImage.PrivateMode = false;
         Rebuild();
         ThemeChanged?.Invoke(false);
     }

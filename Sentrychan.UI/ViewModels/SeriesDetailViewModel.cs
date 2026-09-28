@@ -5,7 +5,9 @@ using Sentrychan.Core.Models.Api;
 using Sentrychan.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using Sentrychan.UI.Services;
 using System.Linq;
 using System.Reactive;
 using System.Threading;
@@ -116,6 +118,7 @@ public class SeriesDetailViewModel : ViewModelBase
         MarkEpisodeDownloadedCommand = ReactiveCommand.CreateFromTask<int>(MarkEpisodeDownloadedAsync);
         MarkEpisodeMissingCommand = ReactiveCommand.CreateFromTask<int>(MarkEpisodeMissingAsync);
         SetCurrentEpisodeCommand = ReactiveCommand.CreateFromTask<int>(SetCurrentEpisodeAsync);
+        PlayEpisodeCommand = ReactiveCommand.CreateFromTask<int>(PlayEpisodeAsync);
 
         _ = InitializeAsync(CancellationToken.None);
     }
@@ -190,6 +193,36 @@ public class SeriesDetailViewModel : ViewModelBase
     public ReactiveCommand<int, System.Reactive.Unit> MarkEpisodeDownloadedCommand { get; }
     public ReactiveCommand<int, System.Reactive.Unit> MarkEpisodeMissingCommand { get; }
     public ReactiveCommand<int, System.Reactive.Unit> SetCurrentEpisodeCommand { get; }
+    public ReactiveCommand<int, System.Reactive.Unit> PlayEpisodeCommand { get; }
+
+    private string? _playStatus;
+    public string? PlayStatus { get => _playStatus; set => this.RaiseAndSetIfChanged(ref _playStatus, value); }
+
+    /// <summary>
+    /// Plays an episode, queueing every later episode that's on disk behind it so "next"
+    /// carries on through the season.
+    /// </summary>
+    private async Task PlayEpisodeAsync(int episode, CancellationToken ct)
+    {
+        var total = Math.Min(Series.TotalEpisodes ?? Math.Max(Series.LastEpisodeNumber, episode), 200);
+        var playlist = new List<PlaybackItem>();
+        var start = -1;
+        for (int ep = 1; ep <= Math.Max(total, episode); ep++)
+        {
+            var path = await _fileLocator.FindVideoFileAsync(Series.Title, ep, ct);
+            if (path == null) continue;
+            if (ep == episode) start = playlist.Count;
+            playlist.Add(new PlaybackItem($"{Series.Title} · Episode {ep}", FilePath: path));
+        }
+
+        if (start < 0)
+        {
+            PlayStatus = $"Episode {episode} isn't on disk.";
+            return;
+        }
+        PlayStatus = null;
+        await PlayerLauncher.PlayAsync(playlist, start);
+    }
 
     private async Task BuildEpisodeGridAsync(Series series, List<DownloadJob> jobs, CancellationToken ct)
     {

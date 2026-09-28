@@ -83,6 +83,8 @@
                                           Command="{Binding ShowSeasonalCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
                         <controls:NavItem Icon="NewsRegular" Label="News"
                                           Command="{Binding ShowNewsCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
+                        <controls:NavItem Icon="LockRegular" Label="Vault" IsVisible="{Binding IsSecretMode}"
+                                          Command="{Binding ShowVaultCommand}" IsExpanded="{Binding IsSidebarExpanded}"/>
                         <!-- Watch Party temporarily hidden (feature kept, nav removed) —
                              re-enable by restoring this NavItem:
                         <controls:NavItem Icon="PeopleRegular" Label="Watch Party"
@@ -223,6 +225,9 @@
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingNews}">
                         <views:NewsView DataContext="{Binding NewsVm}"/>
+                    </Panel>
+                    <Panel IsVisible="{Binding IsShowingVault}">
+                        <views:VaultView DataContext="{Binding VaultVm}"/>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingManga}">
                         <views:MangaLibraryView DataContext="{Binding MangaLibraryVm}"/>

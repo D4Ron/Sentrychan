@@ -184,6 +184,7 @@ public static class Program
                 services.AddSingleton<IReleaseProviders, ReleaseProviders>();
                 services.AddSingleton<IFillGapsService, FillGapsService>();
                 services.AddSingleton<EpisodeRepairService>();
+                services.AddSingleton<Sentrychan.Core.Vault.VaultService>();
                 services.AddSingleton<IDownloadPickerService,Sentrychan.UI.Services.DownloadPickerService>();
 
                 // ── MediatR ───────────────────────────────────────────────
@@ -315,6 +316,10 @@ public static class Program
         // Hand service provider to Avalonia
         Sentrychan.UI.App.SetServiceProvider(host.Services);
 
+        // Logs and Windows notifications ask this before naming anything.
+        var secretModeService = host.Services.GetRequiredService<ISecretModeService>();
+        Sentrychan.Core.Vault.Privacy.SecretModeActive = () => secretModeService.IsSecretModeActive;
+
         // Register a post-init callback so host.StartAsync runs AFTER Avalonia's
         // Win32 dispatcher is installed (see note further down).
         Sentrychan.UI.App.PostInitAction = () =>
@@ -332,10 +337,19 @@ public static class Program
             }
             catch (Exception ex) { Console.WriteLine($"Source plugin load failed: {ex.Message}"); }
 
-            // Teach AsyncImage which manga sources need a Referer for their image CDN.
+            // Teach AsyncImage which manga sources need a Referer for their image CDN, and
+            // which are adult sources whose images must never reach the disk cache.
             foreach (var src in mangaRegistry.Sources)
+            {
                 if (!string.IsNullOrEmpty(src.ImageReferer))
                     Sentrychan.UI.Controls.AsyncImage.RegisterReferer(src.SourceName, src.ImageReferer!);
+                if (src.IsAdultSource)
+                    Sentrychan.UI.Controls.AsyncImage.RegisterPrivateSource(src.SourceName);
+            }
+
+            // Vault images (downloaded adult chapters) are decrypted in memory on display.
+            var vaultService = host.Services.GetRequiredService<Sentrychan.Core.Vault.VaultService>();
+            Sentrychan.UI.Controls.AsyncImage.VaultReader = id => vaultService.ReadAllAsync(id);
 
             host.StartAsync().GetAwaiter().GetResult();
 
@@ -373,7 +387,7 @@ public static class Program
                     : $"{evt.PeersAvailable} peers, no progress";
                 notifier.Notify(
                     "Sentrychan · download stalled",
-                    $"{evt.OriginalTitle} stuck at {evt.ProgressPercent:F0}% ({reason})");
+                    $"{Sentrychan.Core.Vault.Privacy.Name(evt.OriginalTitle, evt.Handle)} stuck at {evt.ProgressPercent:F0}% ({reason})");
             };
 
             // Downloads that were still running when the app closed pick up where they
@@ -382,11 +396,25 @@ public static class Program
             // slots that are left.
             _ = Task.Run(async () =>
             {
+                // The vault holds the list of private downloads; it must be open before any
+                // resumed torrent can finish, or a private one would be filed in the library.
+                try { await host.Services.GetRequiredService<Sentrychan.Core.Vault.VaultService>().EnsureReadyAsync(); }
+                catch (Exception ex) { Console.WriteLine($"Vault open failed: {ex.Message}"); }
                 try { await monoTorrent.RestoreAsync(CancellationToken.None); }
                 catch (Exception ex) { Console.WriteLine($"Torrent restore failed: {ex.Message}"); }
                 await host.Services.GetRequiredService<Sentrychan.Core.Services.DownloadQueueManager>()
                           .PromotePendingAsync(CancellationToken.None);
             });
+
+            // "Sentrychan.App.exe --play <file>": open a video straight in the built-in player
+            // (what an "Open with" entry would pass).
+            var playIndex = Array.IndexOf(args, "--play");
+            if (playIndex >= 0 && playIndex + 1 < args.Length && File.Exists(args[playIndex + 1]))
+            {
+                var toPlay = args[playIndex + 1];
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _ = Sentrychan.UI.Services.PlayerLauncher.PlayFileAsync(toPlay));
+            }
 
             // Load notification preferences (level + Windows-vs-in-app).
             try

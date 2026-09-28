@@ -118,7 +118,7 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
             {
                 // ── .torrent URL path — download bytes and load ───────
                 _logger.LogInformation("[MonoTorrent] Downloading .torrent from {Url}",
-                    magnetOrUrl[..Math.Min(120, magnetOrUrl.Length)]);
+                    Vault.Privacy.Name(magnetOrUrl[..Math.Min(120, magnetOrUrl.Length)], magnetOrUrl, expectedFileName));
 
                 HttpResponseMessage response;
                 try
@@ -293,7 +293,7 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
         EnsurePollingStarted();
 
         _logger.LogInformation("[MonoTorrent] Added {Handle}: {Name}",
-            handle[..Math.Min(12, handle.Length)], displayName);
+            handle[..Math.Min(12, handle.Length)], Vault.Privacy.Name(displayName, handle));
 
         return handle;
     }
@@ -610,7 +610,7 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
             "[MonoTorrent] STALLED {Handle} at {Progress:F1}% for {Mins:F0} min " +
             "({Peers} peers available): {Name}",
             handle[..Math.Min(12, handle.Length)], progress,
-            (now - mark.At).TotalMinutes, peers, manager.Torrent?.Name);
+            (now - mark.At).TotalMinutes, peers, Vault.Privacy.Name(manager.Torrent?.Name, handle));
 
         DownloadStalled?.Invoke(new BackendStallEvent
         {
@@ -679,7 +679,7 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
 
         _logger.LogInformation(
             "[MonoTorrent] Download complete: {Handle} → {Path}",
-            handle[..Math.Min(12, handle.Length)], filePath);
+            handle[..Math.Min(12, handle.Length)], Vault.Privacy.Name(filePath, handle));
 
         DownloadCompleted?.Invoke(new BackendCompletionEvent
         {

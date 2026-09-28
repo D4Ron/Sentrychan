@@ -100,8 +100,56 @@ public class AsyncImage : Image
         catch { return null; }
     }
 
-    private static async Task WriteDiskCacheAsync(string url, byte[] bytes)
+    // ── Privacy ──────────────────────────────────────────────────────
+    // The disk cache is plain image files anyone can browse. Nothing seen in secret mode,
+    // and nothing from an adult source, is ever written to it — the in-memory cache still
+    // makes those instant for the session, and they're gone when the app closes.
+
+    /// <summary>True while secret mode is on. Set by the theme service.</summary>
+    public static volatile bool PrivateMode;
+
+    private static readonly HashSet<string> _privateSources = new(StringComparer.OrdinalIgnoreCase);
+
+    public static void RegisterPrivateSource(string sourceName) { lock (_privateSources) _privateSources.Add(sourceName); }
+
+    private static bool IsPrivateSource(string? sourceName)
     {
+        if (string.IsNullOrEmpty(sourceName)) return false;
+        lock (_privateSources) return _privateSources.Contains(sourceName);
+    }
+
+    /// <summary>
+    /// Reads a vault entry for a "vault:&lt;id&gt;&lt;ext&gt;" url (the extension only lets GIFs
+    /// animate). Set at startup; vault images are decrypted in memory and never cached to disk.
+    /// </summary>
+    public static Func<string, Task<byte[]?>>? VaultReader { get; set; }
+
+    public const string VaultScheme = "vault:";
+
+    /// <summary>Deletes every cached image on disk. Returns how many files were removed.</summary>
+    public static int ClearDiskCache()
+    {
+        var removed = 0;
+        try
+        {
+            if (!Directory.Exists(_diskCacheDir)) return 0;
+            foreach (var f in Directory.EnumerateFiles(_diskCacheDir))
+                try { File.Delete(f); removed++; } catch { /* in use */ }
+        }
+        catch { }
+        return removed;
+    }
+
+    /// <summary>Drops every decoded image held in memory (the panic key uses this).</summary>
+    public static void ClearMemoryCache()
+    {
+        _cache.Clear();
+        Interlocked.Exchange(ref _cacheBytes, 0);
+    }
+
+    private static async Task WriteDiskCacheAsync(string url, byte[] bytes, string? sourceName)
+    {
+        if (PrivateMode || IsPrivateSource(sourceName)) return;
         try
         {
             var path = DiskPathFor(url);
@@ -257,7 +305,7 @@ public class AsyncImage : Image
         {
             if (Log != null)
                 Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(Log,
-                    "[AsyncImage] failed to load {Url}: {Error}", url, ex.Message);
+                    "[AsyncImage] failed to load {Url}: {Error}", LogUrl(url, SourceName), ex.Message);
             if (Url == url) { Source = null; IsLoading = false; }
         }
     }
@@ -298,7 +346,7 @@ public class AsyncImage : Image
         }
 
         // Only now, once it has decoded, is it safe to keep.
-        if (img.FromNetwork) _ = WriteDiskCacheAsync(normalizedUrl, img.Bytes);
+        if (img.FromNetwork) _ = WriteDiskCacheAsync(normalizedUrl, img.Bytes, sourceName);
         return bmp;
     }
 
@@ -338,8 +386,13 @@ public class AsyncImage : Image
         head = new string(head.Select(c => c is >= ' ' and <= '~' ? c : '.').ToArray());
         Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(log,
             "[AsyncImage] {Url} is not a decodable image ({Bytes} bytes, starts '{Head}')",
-            url, bytes.Length, head);
+            LogUrl(url, null), bytes.Length, head);
     }
+
+    private static string LogUrl(string url, string? sourceName) =>
+        PrivateMode || IsPrivateSource(sourceName) || url.StartsWith(VaultScheme, StringComparison.Ordinal)
+            ? Sentrychan.Core.Vault.Privacy.Placeholder
+            : url;
 
     /// <summary>
     /// Raw image bytes from a local file, the persistent disk cache, or the network
@@ -347,6 +400,13 @@ public class AsyncImage : Image
     /// </summary>
     private static async Task<ImageBytes?> LoadBytesAsync(string normalizedUrl, string? sourceName, bool bypassDisk = false)
     {
+        if (normalizedUrl.StartsWith(VaultScheme, StringComparison.Ordinal))
+        {
+            var id = Path.GetFileNameWithoutExtension(normalizedUrl[VaultScheme.Length..]);
+            var vaultBytes = VaultReader == null ? null : await VaultReader(id);
+            return vaultBytes == null ? null : new ImageBytes(vaultBytes, FromDisk: false, FromNetwork: false);
+        }
+
         if (File.Exists(normalizedUrl))
             return new ImageBytes(await File.ReadAllBytesAsync(normalizedUrl), FromDisk: false, FromNetwork: false);
 
@@ -432,7 +492,7 @@ public class AsyncImage : Image
         }
 
         if (frames == null) LogUndecodable(url, img.Bytes);
-        else if (img.FromNetwork) _ = WriteDiskCacheAsync(url, img.Bytes);
+        else if (img.FromNetwork) _ = WriteDiskCacheAsync(url, img.Bytes, sourceName);
         return frames;
     }
 
@@ -443,7 +503,7 @@ public class AsyncImage : Image
         {
             var loaded = await LoadBytesAsync(url, sourceName);
             if (loaded is { FromNetwork: true } img && LooksLikeImage(img.Bytes))
-                await WriteDiskCacheAsync(url, img.Bytes);
+                await WriteDiskCacheAsync(url, img.Bytes, sourceName);
         }
         catch { /* prefetch is best-effort */ }
     }

@@ -31,18 +31,22 @@ public class FileMovementPipeline : IFileMovementPipeline
     // Partial files get re-seen on every watcher event and startup scan; warn once each.
     private readonly HashSet<string> _warnedIncomplete = new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly Vault.VaultService? _vault;
+
     public FileMovementPipeline(
         IDbContextFactory<AppDbContext> dbFactory,
         IEpisodeNormalizer normalizer,
         ITitleResolverService titleResolver,
         IMediator mediator,
-        ILogger<FileMovementPipeline> logger)
+        ILogger<FileMovementPipeline> logger,
+        Vault.VaultService? vault = null)
     {
         _dbFactory     = dbFactory;
         _normalizer    = normalizer;
         _titleResolver = titleResolver;
         _mediator      = mediator;
         _logger        = logger;
+        _vault         = vault;
     }
 
     // ── Entry point 1: Backend completion (qBit / MonoTorrent) ───
@@ -53,6 +57,15 @@ public class FileMovementPipeline : IFileMovementPipeline
         string originalTitle,
         CancellationToken ct = default)
     {
+        // Private (Sentrykun) downloads never reach the library: encrypted into the vault,
+        // plaintext removed, and nothing naming them written to the log or the database.
+        if (_vault != null) await EnsureVaultAsync(ct);
+        if (_vault != null && _vault.IsPrivateDownload(torrentHash))
+        {
+            await FileIntoVaultAsync(torrentHash, filePath, ct);
+            return;
+        }
+
         _logger.LogInformation(
             "[Pipeline] Backend completion: hash={Hash} path={Path}", torrentHash, filePath);
 
@@ -147,6 +160,62 @@ public class FileMovementPipeline : IFileMovementPipeline
             // Batch torrent: organize every episode inside it.
             await FinalizeBatchAsync(job, series, videoFiles, db, ct);
         }
+    }
+
+    private async Task EnsureVaultAsync(CancellationToken ct)
+    {
+        try { await _vault!.EnsureReadyAsync(ct); }
+        catch (Exception ex) { _logger.LogWarning("[Pipeline] Vault unavailable: {Error}", ex.Message); }
+    }
+
+    private async Task FileIntoVaultAsync(string torrentHash, string reportedPath, CancellationToken ct)
+    {
+        var files = File.Exists(reportedPath) ? [reportedPath]
+            : Directory.Exists(reportedPath)
+                ? Directory.GetFiles(reportedPath, "*", SearchOption.AllDirectories)
+                           .Where(f => VideoExtensions.Contains(Path.GetExtension(f)))
+                           .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList()
+                : new List<string>();
+
+        var stored = 0;
+        foreach (var file in files)
+        {
+            try
+            {
+                await _vault!.AddFileAsync(file, CleanReleaseTitle(Path.GetFileName(file)),
+                    Vault.VaultKind.Video, deleteSource: true, ct: ct);
+                stored++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("[Pipeline] A private download couldn't be encrypted into the vault: {Error}", ex.Message);
+            }
+        }
+
+        // A batch leaves a folder of extras (.nfo, fonts, covers) — plaintext too.
+        if (Directory.Exists(reportedPath) && stored == files.Count)
+        {
+            try { Directory.Delete(reportedPath, recursive: true); } catch { /* best effort */ }
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var jobs = await db.DownloadJobs.Where(j => j.TorrentHash == torrentHash).ToListAsync(ct);
+        foreach (var job in jobs)
+        {
+            await _vault!.ForgetPrivateAsync([job.DownloadLink, job.ExpectedFileName, torrentHash], ct);
+            job.Status           = stored > 0 ? JobStatus.Completed : JobStatus.Failed;
+            job.CompletedAt      = DateTime.UtcNow;
+            job.RssTitle         = Vault.Privacy.Placeholder;
+            job.ExpectedFileName = null;
+            job.DownloadLink     = string.Empty;
+            job.FinalFilePath    = "vault";
+        }
+        await db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("[Pipeline] Private download stored in the vault ({Count} file(s))", stored);
+        await _mediator.Publish(new NewFileArrivedEvent(
+            SeriesId: 0, MalId: 0, SeriesTitle: Vault.Privacy.Placeholder, EpisodeNumber: 0,
+            FinalFilePath: "vault", WasLastEpisodeUpdated: false), ct);
     }
 
     /// <summary>

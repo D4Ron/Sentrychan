@@ -301,7 +301,21 @@ public class DownloadHubViewModel : ViewModelBase
                 ? envPath
                 : System.IO.Path.Combine(envPath, safeName);
 
+            // Same rule as the download queue: secret-mode or adult-index downloads are private —
+            // registered with the vault before the backend sees them, encrypted on arrival, and
+            // never given a folder named after them.
+            var vault = App.Services?.GetService(typeof(Sentrychan.Core.Vault.VaultService)) as Sentrychan.Core.Vault.VaultService;
+            var secret = (App.Services?.GetService(typeof(ISecretModeService)) as ISecretModeService)?.IsSecretModeActive == true;
+            var releases = App.Services?.GetService(typeof(IReleaseProviders)) as IReleaseProviders;
+            var isPrivate = vault != null && (secret || releases?.IsAdultFeed(downloadUrl) == true);
+            if (isPrivate)
+            {
+                await vault!.MarkPrivateAsync([downloadUrl, rawResult.Title], ct);
+                savePath = envPath;
+            }
+
             var handle = await backend.AddAsync(downloadUrl, savePath, rawResult.Title, ct);
+            if (isPrivate && handle != null) await vault!.MarkPrivateAsync([handle], ct);
             if (handle != null && await db.DownloadJobs.AnyAsync(j => j.TorrentHash == handle &&
                     (j.Status == JobStatus.Downloading || j.Status == JobStatus.Pending), ct))
             {
@@ -312,7 +326,7 @@ public class DownloadHubViewModel : ViewModelBase
                 db.DownloadJobs.Add(new DownloadJob
                 {
                     DownloadLink     = downloadUrl,
-                    RssTitle         = rawResult.Title,
+                    RssTitle         = isPrivate ? Sentrychan.Core.Vault.Privacy.Placeholder : rawResult.Title,
                     ExpectedFileName = rawResult.Title,
                     Backend          = Enum.TryParse<DownloadBackend>(backend.BackendType, true, out var b)
                                         ? b : DownloadBackend.FDM,

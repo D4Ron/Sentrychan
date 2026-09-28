@@ -39,19 +39,43 @@ public class DownloadQueueManager
     public const string MaxConcurrentKey = "MaxConcurrentDownloads";
 
     private readonly IVideoFileLocator? _locator;
+    private readonly Vault.VaultService? _vault;
+    private readonly IReleaseProviders? _releases;
+    private readonly ISecretModeService? _secretMode;
 
     public DownloadQueueManager(
         IDownloadBackendRouter router,
         IDbContextFactory<AppDbContext> dbFactory,
         IMediator mediator,
         ILogger<DownloadQueueManager> logger,
-        IVideoFileLocator? locator = null)
+        IVideoFileLocator? locator = null,
+        Vault.VaultService? vault = null,
+        IReleaseProviders? releases = null,
+        ISecretModeService? secretMode = null)
     {
         _router = router;
         _dbFactory = dbFactory;
         _mediator = mediator;
         _logger = logger;
         _locator = locator;
+        _vault = vault;
+        _releases = releases;
+        _secretMode = secretMode;
+    }
+
+    /// <summary>
+    /// Whether a download belongs in the vault rather than the library: it comes from an adult
+    /// feed (as the source pack classifies it), belongs to a series marked adult, or is a
+    /// standalone download started in secret mode. Decided per download, not by the current
+    /// mode alone — the RSS monitor keeps downloading ordinary episodes in secret mode too.
+    /// </summary>
+    private async Task<bool> IsPrivateAsync(AppDbContext db, string url, int seriesId, CancellationToken ct)
+    {
+        if (_vault == null) return false;
+        if (_releases?.IsAdultFeed(url) == true) return true;
+        if (seriesId > 0)
+            return await db.Series.AnyAsync(s => s.Id == seriesId && s.IsCensored, ct);
+        return _secretMode?.IsSecretModeActive == true;
     }
 
     private async Task<int> ReadLimitAsync(AppDbContext db, CancellationToken ct)
@@ -156,6 +180,13 @@ public class DownloadQueueManager
         var active = _router.Active;
         var expectedName = string.IsNullOrWhiteSpace(rssTitle) ? null : rssTitle;
 
+        // Private downloads are registered (in the vault's encrypted index) BEFORE the backend
+        // sees them, so even the engine's first log line already knows to hide the name.
+        var isPrivate = await IsPrivateAsync(db, url, seriesId, ct);
+        if (isPrivate) await _vault!.MarkPrivateAsync([url, expectedName], ct);
+        var storedTitle = isPrivate ? Vault.Privacy.Placeholder : rssTitle ?? string.Empty;
+        var logTitle = Vault.Privacy.Name(seriesTitle, url, expectedName);
+
         var backendEnum = Enum.TryParse<DownloadBackend>(active.BackendType, ignoreCase: true, out var be)
             ? be
             : DownloadBackend.SystemDefault;
@@ -170,7 +201,7 @@ public class DownloadQueueManager
                 SeriesId         = seriesId > 0 ? seriesId : null,
                 EpisodeNumber    = episodeNumber,
                 DownloadLink     = url,
-                RssTitle         = rssTitle ?? string.Empty,
+                RssTitle         = storedTitle,
                 ExpectedFileName = expectedName,
                 Backend          = backendEnum,
                 Status           = JobStatus.Pending,
@@ -179,7 +210,7 @@ public class DownloadQueueManager
             await db.SaveChangesAsync(ct);
             _logger.LogInformation(
                 "Queued {Title} Ep {Ep} — at the {Limit}-download limit, will start when a slot frees",
-                seriesTitle, episodeNumber, limit);
+                logTitle, episodeNumber, limit);
             return EnqueueOutcome.Queued;
         }
 
@@ -198,9 +229,11 @@ public class DownloadQueueManager
         if (handle != null && await db.DownloadJobs.AnyAsync(j => j.TorrentHash == handle &&
                 (j.Status == JobStatus.Downloading || j.Status == JobStatus.Pending), ct))
         {
-            _logger.LogInformation("Not downloading {Title} Ep {Ep} again — same torrent already running", seriesTitle, episodeNumber);
+            _logger.LogInformation("Not downloading {Title} Ep {Ep} again — same torrent already running", logTitle, episodeNumber);
             return EnqueueOutcome.Duplicate("that release is already downloading");
         }
+
+        if (isPrivate && handle != null) await _vault!.MarkPrivateAsync([handle], ct);
 
         db.DownloadJobs.Add(new DownloadJob
         {
@@ -209,7 +242,7 @@ public class DownloadQueueManager
             SeriesId        = seriesId > 0 ? seriesId : null,
             EpisodeNumber   = episodeNumber,
             DownloadLink    = url,
-            RssTitle        = rssTitle ?? string.Empty,
+            RssTitle        = storedTitle,
             ExpectedFileName = expectedName,
             Backend         = backendEnum,
             TorrentHash     = handle,
@@ -220,7 +253,7 @@ public class DownloadQueueManager
 
         _logger.LogInformation(
             "Enqueued {Title} Ep {Ep} via {Backend} (handle: {Handle})",
-            seriesTitle, episodeNumber, active.Name, handle ?? "none");
+            logTitle, episodeNumber, active.Name, handle ?? "none");
 
         // Surface start failures — the user shouldn't have to discover a dead
         // job by checking the Downloads tab.
@@ -228,7 +261,7 @@ public class DownloadQueueManager
         {
             await _mediator.Publish(new MonitorStatusEvent(
                 MonitorStatus.Error,
-                ErrorMessage: $"Download failed to start: {seriesTitle} Ep {episodeNumber} via {active.Name}"), ct);
+                ErrorMessage: $"Download failed to start: {logTitle} Ep {episodeNumber} via {active.Name}"), ct);
             return EnqueueOutcome.Failed($"{active.Name} couldn't start it");
         }
         return EnqueueOutcome.Started;
@@ -276,6 +309,8 @@ public class DownloadQueueManager
 
                 job.TorrentHash = handle;
                 job.Status      = handle != null ? JobStatus.Downloading : JobStatus.Failed;
+                if (handle != null && _vault?.IsPrivateDownload(job.DownloadLink) == true)
+                    await _vault.MarkPrivateAsync([handle], ct);
                 if (handle != null)
                 {
                     running++;
