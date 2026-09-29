@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Sentrychan.Core;
 using Sentrychan.UI.Interfaces;
 using Velopack;
 using Velopack.Sources;
@@ -28,8 +29,22 @@ public class VelopackUpdateService : IUpdateService
     public VelopackUpdateService(ILogger<VelopackUpdateService> logger)
     {
         _logger = logger;
-        _manager = new UpdateManager(new GithubSource(RepoUrl, null, prerelease: false));
+        _manager = CreateManager(BuildInfo.IsPreview);
     }
+
+    /// <summary>
+    /// Stable reads only full releases on the default channel — unchanged from before the
+    /// preview existed. The preview reads prereleases too, pinned to the "preview" channel so it
+    /// only ever installs preview packages (which carry their own app id and data folder), never
+    /// a stable package that would replace it.
+    /// </summary>
+    private static UpdateManager CreateManager(bool isPreview) => isPreview
+        ? new UpdateManager(new GithubSource(RepoUrl, null, prerelease: true),
+                            new UpdateOptions { ExplicitChannel = PreviewChannel })
+        : new UpdateManager(new GithubSource(RepoUrl, null, prerelease: false));
+
+    /// <summary>The Velopack channel preview packages are built with (<c>vpk pack --channel preview</c>).</summary>
+    public const string PreviewChannel = "preview";
 
     public bool IsSupported => _manager.IsInstalled;
 
