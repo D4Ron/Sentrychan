@@ -643,6 +643,34 @@ public class SettingsViewModel : ViewModelBase
             await dialog.ShowDialog(owner);
         });
 
+    public ReactiveCommand<Unit, Unit> ImportMihonBackupCommand { get; } =
+        ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                    is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime { MainWindow: { } owner }
+                || App.Services?.GetService(typeof(Sentrychan.Core.MihonBackup.MihonBackupImporter))
+                    is not Sentrychan.Core.MihonBackup.MihonBackupImporter importer)
+                return;
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Import Mihon backup",
+                AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("Mihon backup") { Patterns = ["*.tachibk", "*.proto.gz"] }, FilePickerFileTypes.All],
+            });
+            if (files.Count == 0) return;
+            byte[] bytes;
+            await using (var stream = await files[0].OpenReadAsync())
+            using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                bytes = ms.ToArray();
+            }
+            var vm = new MihonImportViewModel(importer, bytes, files[0].Name);
+            var dialog = new Views.Dialogs.MihonImportDialog { DataContext = vm };
+            _ = vm.PlanAsync();
+            await dialog.ShowDialog(owner);
+        });
+
     // Folder the "Local" manga source reads (manga you already have on disk).
     private string _localMangaPath = string.Empty;
     public string LocalMangaPath

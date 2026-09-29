@@ -373,6 +373,8 @@
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <Button Content="Export library…" Classes="ghost pill" Command="{Binding ExportLibraryCommand}"/>
                                     <Button Content="Import library…" Classes="ghost pill" Command="{Binding ImportLibraryCommand}"/>
+                                    <Button Content="Import Mihon backup…" Classes="ghost pill" Command="{Binding ImportMihonBackupCommand}"
+                                            ToolTip.Tip="Library, categories, read chapters and history from a Mihon .tachibk backup"/>
                                 </StackPanel>
                             </ctrls:SettingsSection>
 

@@ -161,6 +161,7 @@ public static class Program
                 // turns it on; stopped with the host.
                 services.AddSingleton<Sentrychan.Core.MihonBridge.MihonBridgeService>();
                 services.AddHostedService(sp => sp.GetRequiredService<Sentrychan.Core.MihonBridge.MihonBridgeService>());
+                services.AddTransient<Sentrychan.Core.MihonBackup.MihonBackupImporter>();
                 services.AddSingleton<MangaUpdateService>();
                 services.AddSingleton<Sentrychan.UI.Interfaces.IUpdateService, VelopackUpdateService>();
                 services.AddSingleton<ITitleAliasService, TitleAliasService>();
