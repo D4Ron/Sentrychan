@@ -209,6 +209,55 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — **Phase 4 done** (Mihon extension bridge, opt-in). 168 tests pass (+1 opt-in integration test).
+  - **Server:** Suwayomi-Server **v2.3.2243** pinned in `Core/MihonBridge/BridgeRelease.cs` with SHA-256 per
+    bundle (win-x64 zip, linux-x64 / osx-x64 / osx-arm64 tar.gz — hashed from the published files here).
+    No bundle → the section says "not available on this system" (e.g. Windows on ARM). Installed to
+    `AppPaths.MihonBridge/server/<version>` (the `electron/` launcher shell is dropped); the server's own
+    data (its DB, extensions, source settings) lives in `mihon-bridge/data` and survives upgrades.
+    Upgrading = re-read the new tag's GraphQL schema, re-record fixtures, pin new hashes.
+  - **API:** GraphQL `/api/graphql` only (REST v1 is deprecated upstream; only image URLs point there).
+    Read from the tag's source: `fetchSourceManga` (POPULAR/LATEST/SEARCH + `FilterChangeInput`),
+    `fetchManga`, `fetchChapters`, `fetchChapterPages`, `source{filters,preferences}`,
+    `updateSourcePreference`, `extensions`, `fetchExtensions`, `updateExtension`, and repositories as
+    `addExtensionStore`/`removeExtensionStore`/`extensionStores` (the `extensionRepos` setting is
+    deprecated at this tag). Ids are `LongString` (text). Union fields are aliased (`selectDefault:` …).
+  - **Process:** `IBridgeProcessLauncher` → `JavaBridgeProcessLauncher` (bundled `jre/bin/java -jar
+    bin/Suwayomi-Server.jar`, `LD_PRELOAD` of the bundle's `catch_abort.so` on Linux like its own script).
+    `-Dsuwayomi.tachidesk.config.server.*` overrides: `rootDir`, `ip=127.0.0.1`, `port`, `webUIEnabled=false`,
+    `initialOpenInBrowserEnabled=false`, `systemTrayEnabled=false`, `backupInterval=0`, `kcefEnabled`
+    (= "Allow web checks", off by default: it downloads a browser runtime). Port: last one if free, else
+    any free one. Health check = `aboutServer`, 2 min budget. `MihonBridgeService` is a hosted service
+    (stopped with the host) and starts the server on first use (a bridged source, a cover, Settings'
+    Start). A pid file lets the next start kill a server a crash orphaned (only if it's a `java` process).
+    Windows: kill-on-close **job object** (`WindowsJob`) — **needs checking on Windows**.
+  - **Sources:** `BridgedMangaSource : IMangaSourceService` per installed source (Mihon's local source
+    id 0 is left out). Manga/chapter `SourceId` = the server's ids. Covers are stored as
+    `mihon-bridge:/api/v1/manga/<id>/thumbnail` and resolved by `AsyncImage.UrlResolver` (the port may
+    change; the disk cache keys on the stable URL). Pages are absolute URLs on the running server.
+    Names in the app are picked once and cached (`MihonBridge.Sources`), with " (Mihon)" on a clash, so
+    library entries keep resolving; the registry gets them at startup without starting the server.
+    Contract: `GetFilterListAsync` (default → `GetFilterList`); registry `Remove` (default no-op), copy-on-write.
+  - **Errors:** `BridgeException` (`NotRunning` / `WebCheck` / `LoginRequired` / `Source`) — the server's
+    message without its Java stack; classified on the message only (every stack passes the server's
+    Cloudflare interceptor).
+  - **UI:** Settings → **Sources** tab (Local manga + Source packs moved there) → Mihon extensions:
+    explain-then-download, progress/cancel, retry, Start/Stop/Turn off, Allow web checks, repositories
+    (user-typed only — none shipped, suggested or pre-filled), extensions (language, 18+, installed,
+    update, obsolete; install/update/uninstall; adult ones only in secret mode), per-source Settings dialog
+    (`SourcePreferencesDialog`: switch, checkbox, text, list, multi-select). Acts at once (not Save).
+  - **Tests:** client/filters/source/installer/service against `Sentrychan.Tests/Fixtures/Suwayomi` (see its
+    README: recorded vs hand-written). `SuwayomiIntegrationTests` runs the whole thing against a real
+    server when `SENTRYCHAN_SUWAYOMI_DIR` points at an unpacked bundle — passed here on Linux.
+  - **Needs checking on Windows:** install from the real release (zip, hash), first start (Windows
+    Defender/firewall prompt for java.exe on loopback?), job object kills java when Sentrychan is killed
+    from Task Manager, the Sources tab and settings dialog visually, reading/downloading a bridged
+    chapter end to end, and whether the system proxy (if any) bypasses 127.0.0.1 for page downloads.
+  - **Known limits:** no auth on the loopback server (another local user could reach it while it runs);
+    extension install/uninstall only refreshes sources afterwards (a title from an uninstalled source
+    stays in the library, unreadable, until reinstalled); "Allow web checks" applies on the next start.
+  - **Next:** Phase 5 (Mihon backup import).
+
 - 2026-09-29 — **Phase 3 done** (Mihon-style manga UI, opt-in). 127 tests pass.
   - **Setting:** `MangaUiStyle` (`Classic` default | `Mihon`), Settings → Appearance → Manga screens; the
     main window swaps the Manga, Novels and title-page views (`IsMihonMangaUi`).
