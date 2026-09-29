@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sentrychan — self-driving anime &amp; manga library</title>
-<meta name="description" content="Sentrychan tracks the anime, manga and novels you follow, then finds, downloads, names and files every new episode and chapter for you. Free and open source, for Windows, macOS and Linux.">
+<meta name="description" content="Sentrychan tracks the anime, manga and novels you follow, then finds, downloads, names and files every new episode and chapter for you. Free and open source, for Windows.">
 <link rel="icon" href="favicon.ico">
 <link rel="canonical" href="https://d4ron.github.io/Sentrychan/">
 <!-- Social cards need ABSOLUTE urls; a relative og:image silently shows nothing. -->
 <meta property="og:title" content="Sentrychan — self-driving anime &amp; manga library">
-<meta property="og:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows, macOS and Linux.">
+<meta property="og:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows.">
 <meta property="og:image" content="https://d4ron.github.io/Sentrychan/logo.png">
 <meta property="og:url" content="https://d4ron.github.io/Sentrychan/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Sentrychan">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Sentrychan — self-driving anime &amp; manga library">
-<meta name="twitter:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows, macOS and Linux.">
+<meta name="twitter:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows.">
 <meta name="twitter:image" content="https://d4ron.github.io/Sentrychan/logo.png">
 <meta name="theme-color" content="#0d0d1a">
 
@@ -204,7 +204,7 @@
   .release-card[hidden],.notice[hidden]{display:none}
   .other-os{margin:14px 0 0;font-size:14px;color:var(--c-text-3);display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
   @media(min-width:960px){.other-os{justify-content:flex-start}}
-  .other-os a[hidden]{display:none}
+  .other-os[hidden],.other-os a[hidden]{display:none}
   .other-os a{color:var(--c-text-2);text-decoration:underline;text-underline-offset:3px}
   .other-os a:hover{color:var(--c-brand-1)}
 
@@ -480,7 +480,7 @@
       <p class="tagline rise-in d3">
         Tell it what you follow. It watches the feeds you choose, then names, sorts and
         files what turns up — so your library stays tidy on its own. Anime, manga and
-        novels, on Windows, macOS and Linux.
+        novels, on <span class="js-os-list">Windows</span>.
       </p>
       <div class="hero-actions rise-in d4">
         <!-- Points at the visitor's system once the script has looked; Windows without it. -->
@@ -490,7 +490,8 @@
         </a>
         <a class="btn btn-alt btn-lg" href="#how">How it works</a>
       </div>
-      <p class="other-os rise-in d4">
+      <!-- macOS and Linux appear only once a published release carries their builds (script). -->
+      <p class="other-os rise-in d4" id="otherOs" hidden>
         <span>Also for</span>
         <a id="dlWindows" href="https://github.com/D4Ron/Sentrychan/releases/latest/download/Sentrychan-win-Setup.exe">Windows</a>
         <a id="dlMac" href="#install-mac">macOS</a>
@@ -686,7 +687,7 @@
     <div class="section-head reveal">
       <h2>Installing</h2>
       <p>One download, no account, no .NET to install — everything's bundled, and it updates
-         itself from then on. Windows, macOS and Linux.</p>
+         itself from then on. <span class="js-os-list">Windows</span>.</p>
     </div>
 
     <div class="notice reveal">
@@ -698,7 +699,7 @@
          fades as more people install it.</p>
     </div>
 
-    <div class="notice reveal" id="install-mac">
+    <div class="notice reveal" id="install-mac" hidden>
       <h3>On a Mac: allow it once</h3>
       <p>The Mac version works, but it isn't signed or notarised by Apple, so the first time you
          open it macOS says it can't check it for malicious software and won't open it. To
@@ -714,7 +715,7 @@
          <a href="#" class="js-fund">funding the project</a> is what makes it go away.</p>
     </div>
 
-    <div class="notice reveal" id="install-linux">
+    <div class="notice reveal" id="install-linux" hidden>
       <h3>On Linux: an AppImage</h3>
       <p>Linux gets a single <code>.AppImage</code> file (64-bit), which runs on most
          distributions without installing anything. Make it executable once — right-click →
@@ -987,9 +988,13 @@
 
   // ── Live release info ───────────────────────────────────────────
   // Progressive enhancement only: if this fails (offline, rate-limited, no release
-  // published yet) the static copy already in the page stands unchanged — Windows download,
-  // links to the macOS and Linux notes — and the preview card stays hidden. One request
-  // covers both channels.
+  // published yet) the static copy already in the page stands unchanged — Windows only —
+  // and the preview card stays hidden. One request covers both channels.
+  //
+  // macOS and Linux are mentioned only once a published release (stable, or the current
+  // preview) actually carries their builds: the page says "Windows", and the Mac and Linux
+  // notes and links stay hidden, until there's something to download. The meta
+  // descriptions in <head> are static — update them by hand when a release first ships them.
   (function () {
     var title = document.getElementById('relTitle');
     var meta = document.getElementById('relMeta');
@@ -1030,9 +1035,6 @@
     }
 
     var visitor = detect();
-    // "Also for" lists the other two systems.
-    var own = document.getElementById({ windows: 'dlWindows', mac: 'dlMac', linux: 'dlLinux' }[visitor]);
-    if (own) own.hidden = true;
     var primary = document.getElementById('dlPrimary');
     var primaryText = document.getElementById('dlPrimaryText');
     function setPrimary(href, text) {
@@ -1040,8 +1042,33 @@
       primary.href = href;
       primaryText.textContent = text;
     }
-    // Before anything is known: a Mac or Linux visitor is sent to their notes, not to a .exe.
-    if (visitor !== 'windows') setPrimary('#install-' + visitor, 'Sentrychan for ' + SYSTEMS[visitor].name);
+
+    // Reveals what's downloadable: the system list in the copy, the "Also for" links (minus
+    // the visitor's own system) and each system's install notes.
+    function showSystems(available) {
+      var names = ['windows', 'mac', 'linux'].filter(function (os) { return available[os]; })
+        .map(function (os) { return SYSTEMS[os].name; });
+      var text = names.length > 1
+        ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]
+        : 'Windows';
+      document.querySelectorAll('.js-os-list').forEach(function (el) { el.textContent = text; });
+
+      var links = { windows: 'dlWindows', mac: 'dlMac', linux: 'dlLinux' };
+      var shown = 0;
+      Object.keys(links).forEach(function (os) {
+        var link = document.getElementById(links[os]);
+        if (!link) return;
+        link.hidden = !available[os] || os === visitor;
+        if (!link.hidden) shown++;
+      });
+      var row = document.getElementById('otherOs');
+      if (row) row.hidden = shown === 0 || names.length < 2;
+
+      ['mac', 'linux'].forEach(function (os) {
+        var notes = document.getElementById('install-' + os);
+        if (notes) notes.hidden = !available[os];
+      });
+    }
 
     if (!window.fetch) return;
     fetch('https://api.github.com/repos/D4Ron/Sentrychan/releases?per_page=20', {
@@ -1066,16 +1093,23 @@
             (when ? ' · released ' + when : '');
         }
 
-        // The "Also for" links: stable's installer where it has one, otherwise the notes.
+        // A system counts once stable or the current preview has its installer.
+        var available = { windows: true };
         ['mac', 'linux'].forEach(function (os) {
-          var a = assetFor(stable, os);
+          available[os] = !!(assetFor(stable, os) || assetFor(preview, os));
+        });
+        showSystems(available);
+
+        // The "Also for" links: stable's installer where it has one, else the preview's.
+        ['mac', 'linux'].forEach(function (os) {
+          var a = assetFor(stable, os) || assetFor(preview, os);
           var link = document.getElementById(os === 'mac' ? 'dlMac' : 'dlLinux');
-          if (a && link) link.href = a.browser_download_url;
+          if (link) link.href = a ? a.browser_download_url : '#install-' + os;
         });
 
-        // The big button: stable for the visitor's system. Stable only has Windows until a
-        // stable release carries the others; until then a Mac or Linux visitor is pointed at
-        // the preview when it has their build, and at the notes when it doesn't.
+        // The big button: stable for the visitor's system, else the preview's build for it.
+        // With neither, a Mac or Linux visitor keeps the Windows button — there's nothing
+        // for their system to point at yet.
         if (visitor !== 'windows') {
           var mine = assetFor(stable, visitor);
           var early = assetFor(preview, visitor);
