@@ -125,6 +125,45 @@ public sealed class StableLibraryCopyTests : IDisposable
     }
 
     [Fact]
+    public void Switching_for_good_brings_the_vault_key_and_keeps_the_vault_where_it_is()
+    {
+        SeedStable();
+        Write(Preview, "vault.key", "the preview's own new key");
+        var before = Snapshot(Stable);
+
+        StableLibraryCopy.Stage(Stable, Preview, switchingForGood: true);
+        Assert.True(StableLibraryCopy.ApplyStaged(Preview));
+
+        Assert.Equal("secret key", File.ReadAllText(Path.Combine(Preview, "vault.key")));
+        using (var db = Open(Preview))
+            Assert.Equal(Path.Combine(_root, "Library", ".cache"), db.AppConfigs.Single(c => c.Key == "VaultRoot").Value);
+
+        // The preview's own key isn't lost, just set aside with the rest of what the copy replaced.
+        var backup = Directory.GetDirectories(Preview, StableLibraryCopy.BackupPrefix + "*").Single();
+        Assert.Equal("the preview's own new key", File.ReadAllText(Path.Combine(backup, "vault.key")));
+
+        Assert.False(Directory.Exists(Path.Combine(Preview, "Auth")));
+        Assert.Equal(before, Snapshot(Stable));
+
+        // Nothing else will finish stable's unfinished downloads now, so they carry over.
+        using (var db = Open(Preview))
+            Assert.Equal(2, db.DownloadJobs.Count(j => j.Status == JobStatus.Pending || j.Status == JobStatus.Downloading));
+    }
+
+    [Fact]
+    public void Switching_for_good_without_a_stable_vault_still_resets_the_root()
+    {
+        SeedStable();
+        File.Delete(Path.Combine(Stable, "vault.key"));
+
+        StableLibraryCopy.Stage(Stable, Preview, switchingForGood: true);
+        StableLibraryCopy.ApplyStaged(Preview);
+
+        using var db = Open(Preview);
+        Assert.False(db.AppConfigs.Any(c => c.Key == "VaultRoot"));
+    }
+
+    [Fact]
     public void Poster_and_cover_paths_follow_the_copied_files()
     {
         SeedStable();

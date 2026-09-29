@@ -159,6 +159,9 @@ public sealed class LocalMangaSourceTests : IDisposable
             Directory.CreateDirectory(chapter);
             File.WriteAllText(Path.Combine(chapter, "001.jpg"), "x");
             Directory.SetLastWriteTimeUtc(chapter, new DateTime(2026, 1, 1).AddDays(i));
+            // The title folder counts too (the newest of it and its chapters). Left at "now", the
+            // order came down to creation timing — which on Windows can tie within a tick.
+            Directory.SetLastWriteTimeUtc(Path.GetDirectoryName(chapter)!, new DateTime(2026, 1, 1).AddDays(i));
         }
         var factory = new Factory(Path.Combine(_root, "t.db"));
         using (var db = factory.CreateDbContext())

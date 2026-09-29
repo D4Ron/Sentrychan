@@ -37,6 +37,9 @@ public static class StableLibraryCopy
     private static readonly string[] Folders = ["sources", "Covers", "ImageCache"];
     private static readonly string[] Files   = ["playback.json"];
 
+    // Only when switching for good (see Stage): the key that opens stable's vault.
+    private const string VaultKeyName = "vault.key";
+
     /// <summary>Whether there's a stable library to offer.</summary>
     public static bool StableDataExists(string stableDir) => File.Exists(Path.Combine(stableDir, DatabaseName));
 
@@ -49,7 +52,13 @@ public static class StableLibraryCopy
     /// consistent only when nothing is writing to it. The folder appears under its final name only
     /// once complete, so an interrupted copy is never applied.
     /// </summary>
-    public static void Stage(string stableDir, string dataDir)
+    /// <param name="switchingForGood">
+    /// For someone replacing stable rather than trying the preview beside it: the vault key comes
+    /// too and the vault stays where it is, so private items carry over, and unfinished downloads
+    /// stay in the list for the preview to resume. Both apps then share one vault — fine as long
+    /// as stable isn't used again, which the dialog says.
+    /// </param>
+    public static void Stage(string stableDir, string dataDir, bool switchingForGood = false)
     {
         if (!StableDataExists(stableDir))
             throw new FileNotFoundException("There's no Sentrychan library to copy.", Path.Combine(stableDir, DatabaseName));
@@ -66,8 +75,10 @@ public static class StableLibraryCopy
         CopyFile(Path.Combine(stableDir, DatabaseName + "-wal"), Path.Combine(tmp, DatabaseName + "-wal"));
         foreach (var f in Files) CopyFile(Path.Combine(stableDir, f), Path.Combine(tmp, f));
         foreach (var d in Folders) CopyDirectory(Path.Combine(stableDir, d), Path.Combine(tmp, d));
+        if (switchingForGood) CopyFile(Path.Combine(stableDir, VaultKeyName), Path.Combine(tmp, VaultKeyName));
 
-        FixUpDatabase(Path.Combine(tmp, DatabaseName), stableDir, dataDir);
+        FixUpDatabase(Path.Combine(tmp, DatabaseName), stableDir, dataDir, switchingForGood,
+            keepVault: switchingForGood && File.Exists(Path.Combine(tmp, VaultKeyName)));
 
         Directory.Move(tmp, final);
     }
@@ -93,7 +104,7 @@ public static class StableLibraryCopy
         foreach (var suffix in new[] { "", "-wal", "-shm" })
             MoveAside(Path.Combine(dataDir, DatabaseName + suffix), backup);
 
-        foreach (var name in Files.Concat(Folders).Append(DatabaseName))
+        foreach (var name in Files.Concat(Folders).Append(DatabaseName).Append(VaultKeyName))
         {
             var from = Path.Combine(staged, name);
             if (!File.Exists(from) && !Directory.Exists(from)) continue;
@@ -111,7 +122,7 @@ public static class StableLibraryCopy
     /// Adjusts the copied database for the preview. Plain SQL rather than EF: the copy may be at an
     /// older schema version, and the preview's normal startup migration brings it up to date.
     /// </summary>
-    private static void FixUpDatabase(string dbPath, string stableDir, string dataDir)
+    private static void FixUpDatabase(string dbPath, string stableDir, string dataDir, bool switchingForGood, bool keepVault)
     {
         // Pooling off so the connection really closes, which checkpoints the WAL into the file.
         using var conn = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -133,8 +144,9 @@ public static class StableLibraryCopy
         }
 
         // A pinned vault root would be stable's vault, which the preview has no key for. Cleared,
-        // the preview creates its own (.cache-preview) the first time it needs one.
-        Exec("DELETE FROM AppConfigs WHERE Key = 'VaultRoot'");
+        // the preview creates its own (.cache-preview) the first time it needs one. When the key
+        // came along (switching for good), the pin stays and the preview opens stable's vault.
+        if (!keepVault) Exec("DELETE FROM AppConfigs WHERE Key = 'VaultRoot'");
 
         // Posters and covers pointed into stable's data folder; the copies now live in ours.
         // Compared with substr, not LIKE, so '_' and '%' in a path are literal.
@@ -147,7 +159,9 @@ public static class StableLibraryCopy
 
         // Downloads still queued or running belong to stable, which will finish and file them.
         // Kept here, the preview would start its own copy of each the first time it ran alone.
-        Exec("DELETE FROM DownloadJobs WHERE Status IN ('Pending', 'Downloading')");
+        // Unless stable is being replaced: nothing else will finish them then, so they stay and
+        // the preview resumes them.
+        if (!switchingForGood) Exec("DELETE FROM DownloadJobs WHERE Status IN ('Pending', 'Downloading')");
 
         // The library now comes from stable; don't offer to copy it again.
         Exec("DELETE FROM AppConfigs WHERE Key = $k", ("$k", OfferedKey));

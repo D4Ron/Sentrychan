@@ -55,18 +55,22 @@
                                        Width="40" Height="40" Stretch="UniformToFill"/>
                             </Grid>
                         </Border>
-                        <TextBlock x:Name="LogoText" Text="Sentrychan" IsVisible="{Binding IsSidebarExpanded}"
-                                   FontSize="17" FontWeight="700" Foreground="{DynamicResource TextPrimaryBrush}"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="v1" IsVisible="{Binding IsSidebarExpanded}"
-                                   FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="2,5,0,0"/>
-                        <!-- Preview builds say so beside the name, so the two apps can't be mistaken
-                             for each other when both are installed. -->
-                        <Panel IsVisible="{Binding IsSidebarExpanded}">
-                            <Border Classes="chip preview" IsVisible="{x:Static core:BuildInfo.IsPreview}">
-                                <TextBlock Text="Preview"/>
+                        <!-- Preview builds say so under the name, so the two apps can't be mistaken
+                             for each other when both are installed. (Beside the name it ran past
+                             the sidebar's edge.) -->
+                        <StackPanel IsVisible="{Binding IsSidebarExpanded}" VerticalAlignment="Center" Spacing="3">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="LogoText" Text="Sentrychan"
+                                           FontSize="17" FontWeight="700" Foreground="{DynamicResource TextPrimaryBrush}"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="v1"
+                                           FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="4,5,0,0"/>
+                            </StackPanel>
+                            <Border Classes="chip preview" HorizontalAlignment="Left" Padding="7,1"
+                                    IsVisible="{x:Static core:BuildInfo.IsPreview}">
+                                <TextBlock Text="Preview" FontSize="10"/>
                             </Border>
-                        </Panel>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

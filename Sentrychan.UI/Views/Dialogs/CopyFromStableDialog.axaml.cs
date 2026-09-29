@@ -35,9 +35,13 @@ public partial class CopyFromStableDialog : Window
 
         SetBusy(true);
         ShowNotice("Copying your library…");
+        var switchingForGood = SwitchBox.IsChecked == true;
         try
         {
-            await Task.Run(() => StableLibraryCopy.Stage(AppPaths.StableDataDir, AppPaths.DataDir));
+            await Task.Run(() => StableLibraryCopy.Stage(AppPaths.StableDataDir, AppPaths.DataDir, switchingForGood));
+            // Clear the busy flag first: OnClosing refuses to close while busy, which kept the
+            // dialog up on "Copying…" forever after a successful copy, and the restart never came.
+            _busy = false;
             Close(true);
         }
         catch (Exception ex)
@@ -62,6 +66,7 @@ public partial class CopyFromStableDialog : Window
         _busy = busy;
         CopyButton.IsEnabled = !busy;
         FreshButton.IsEnabled = !busy;
+        SwitchBox.IsEnabled = !busy;
     }
 
     // A copy finishing after the dialog is gone would be applied on the next launch without the

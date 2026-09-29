@@ -25,15 +25,24 @@
         <StackPanel Spacing="8">
             <TextBlock Text="Left behind" FontSize="12.5" FontWeight="SemiBold"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                       Text="• Your vault key. The preview starts a vault of its own (a separate hidden folder in your library), so private items from Sentrychan's vault don't appear here."/>
+                       Text="• Your vault key, unless you tick the box below. The preview starts a vault of its own (a separate hidden folder in your library), so private items from Sentrychan's vault don't appear here."/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                        Text="• Your sign-in. Sign in again in the preview if you use an account."/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                       Text="• Downloads still in progress. Sentrychan finishes and files them."/>
+                       Text="• Downloads still in progress, unless you tick the box below. Sentrychan finishes and files them."/>
         </StackPanel>
 
         <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}"
                    Text="Both apps use the same library and download folders. Only one works on them at a time: whichever starts second pauses monitoring and downloads."/>
+
+        <!-- For people replacing stable rather than trying the preview beside it. -->
+        <StackPanel Spacing="4">
+            <CheckBox x:Name="SwitchBox" FontSize="12.5"
+                      Content="I'm replacing Sentrychan with the preview — bring everything"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Margin="28,0,0,0"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="Your vault comes along (the preview opens the same one, so private items stay with you) and unfinished downloads carry on here. Only for a real switch: if you open Sentrychan again afterwards, both apps change one vault and can undo each other's changes."/>
+        </StackPanel>
 
         <!-- Why Copy can't go ahead yet, or why it failed. -->
         <Border x:Name="NoticeBox" IsVisible="False" CornerRadius="8" Padding="12,9"
