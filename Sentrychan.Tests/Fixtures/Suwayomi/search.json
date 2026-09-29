@@ -1,0 +1,19 @@
+{
+    "data": {
+        "fetchSourceManga": {
+            "hasNextPage": false,
+            "mangas": [
+                {
+                    "id": 2,
+                    "title": "Invented Title",
+                    "thumbnailUrl": "/api/v1/manga/2/thumbnail"
+                },
+                {
+                    "id": 1,
+                    "title": "Another Invented Title",
+                    "thumbnailUrl": "/api/v1/manga/1/thumbnail"
+                }
+            ]
+        }
+    }
+}

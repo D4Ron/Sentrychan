@@ -59,7 +59,7 @@ public sealed record MangaPage(IReadOnlyList<MangaSearchResult> Items, bool HasN
 /// <item><see cref="Info"/> — stable id, language, adult flag, whether Latest works.</item>
 /// <item><see cref="GetPopularAsync"/> and <see cref="GetLatestAsync"/> — paged listings.</item>
 /// <item><see cref="GetFilterList"/> and <see cref="SearchAsync(string, int, FilterList, CancellationToken)"/>
-/// — filtered, paged search.</item>
+/// — filtered, paged search (<see cref="GetFilterListAsync"/> when the filters have to be fetched).</item>
 /// </list>
 /// The defaults fall back to the version 1 members (<see cref="BrowseAsync"/> and the
 /// query-only <see cref="SearchAsync(string, int, int, CancellationToken)"/>), so a v1 source
@@ -141,6 +141,13 @@ public interface IMangaSourceService
     /// clones the list before the user edits it. Empty when the source has none (the default).
     /// </summary>
     FilterList GetFilterList() => FilterList.Empty;
+
+    /// <summary>
+    /// <see cref="GetFilterList"/> for a source that has to ask something else for its filters
+    /// (a server, a site's genre list). The app calls this one; the default returns
+    /// <see cref="GetFilterList"/>, so a source with a fixed list only implements that.
+    /// </summary>
+    Task<FilterList> GetFilterListAsync(CancellationToken ct = default) => Task.FromResult(GetFilterList());
 
     /// <summary>
     /// Search with filters. <paramref name="query"/> may be empty (browse by filters alone);

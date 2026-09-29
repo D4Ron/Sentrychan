@@ -35,6 +35,9 @@ public static class AppPaths
     public static string Sources  => Path.Combine(DataDir, "sources");
     public static string VaultKey => Path.Combine(DataDir, "vault.key");
 
+    /// <summary>The Mihon extension bridge: the helper server it downloads and that server's own data.</summary>
+    public static string MihonBridge => Path.Combine(DataDir, "mihon-bridge");
+
     /// <summary>A path inside the data directory.</summary>
     public static string Combine(params string[] parts) => Path.Combine([DataDir, .. parts]);
 

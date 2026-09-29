@@ -18,6 +18,9 @@ public interface IMangaSourceRegistry
     /// <summary>Adds a source discovered at runtime (a loaded source-pack plugin). No-op on duplicate names.</summary>
     void Add(IMangaSourceService source);
 
+    /// <summary>Takes out a source that went away at runtime (an uninstalled bridged extension).</summary>
+    void Remove(IMangaSourceService source) { }
+
     /// <summary>A source by its stable id (<see cref="MangaSourceInfo.Id"/>) or name; null when none matches — no fallback.</summary>
     IMangaSourceService? Find(string? idOrName) =>
         string.IsNullOrEmpty(idOrName) ? null

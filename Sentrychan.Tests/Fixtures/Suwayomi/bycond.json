@@ -1,0 +1,12 @@
+{
+    "data": {
+        "mangas": {
+            "nodes": [
+                {
+                    "id": 2,
+                    "title": "Invented Title"
+                }
+            ]
+        }
+    }
+}

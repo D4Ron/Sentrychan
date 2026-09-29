@@ -1,0 +1,82 @@
+{
+    "data": {
+        "source": {
+            "preferences": [
+                {
+                    "__typename": "SwitchPreference",
+                    "key": "data_saver",
+                    "title": "Data saver",
+                    "summary": "Smaller images",
+                    "visible": true,
+                    "enabled": true,
+                    "switchValue": null,
+                    "switchDefault": false
+                },
+                {
+                    "__typename": "ListPreference",
+                    "key": "quality",
+                    "title": "Image quality",
+                    "summary": "%s",
+                    "visible": true,
+                    "enabled": true,
+                    "listValue": "high",
+                    "listDefault": "medium",
+                    "entries": [
+                        "Low",
+                        "Medium",
+                        "High"
+                    ],
+                    "entryValues": [
+                        "low",
+                        "medium",
+                        "high"
+                    ]
+                },
+                {
+                    "__typename": "EditTextPreference",
+                    "key": "user_agent",
+                    "title": "User agent",
+                    "summary": null,
+                    "visible": false,
+                    "enabled": true,
+                    "textValue": null,
+                    "textDefault": "",
+                    "dialogTitle": "User agent",
+                    "dialogMessage": "Leave empty for the default"
+                },
+                {
+                    "__typename": "MultiSelectListPreference",
+                    "key": "langs",
+                    "title": "Languages",
+                    "summary": null,
+                    "visible": true,
+                    "enabled": false,
+                    "multiValue": [
+                        "en"
+                    ],
+                    "multiDefault": [],
+                    "dialogTitle": null,
+                    "dialogMessage": null,
+                    "entries": [
+                        "English",
+                        "Spanish"
+                    ],
+                    "entryValues": [
+                        "en",
+                        "es"
+                    ]
+                },
+                {
+                    "__typename": "CheckBoxPreference",
+                    "key": "blur",
+                    "title": "Blur covers",
+                    "summary": null,
+                    "visible": true,
+                    "enabled": true,
+                    "checkBoxValue": true,
+                    "checkBoxDefault": false
+                }
+            ]
+        }
+    }
+}
