@@ -92,7 +92,8 @@ public sealed class MangaDownloadQueueTests : IDisposable
         var tasks = Enumerable.Range(1, 4).Select(Queue).ToList();
         await Until(() => _source.Started.Count == 2);
         await Task.Delay(50);
-        Assert.Equal(["c1", "c2"], _source.Started);
+        // The first two start together, so they reach the source in either order.
+        Assert.Equal(["c1", "c2"], _source.Started.Order());
         Assert.Equal([1, 2, 3, 4], _downloads.Queue.Select(q => q.Chapter.Id));
         Assert.Equal([true, true, false, false], _downloads.Queue.Select(q => q.IsRunning));
 
