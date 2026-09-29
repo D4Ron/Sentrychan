@@ -507,6 +507,15 @@ public class SettingsViewModel : ViewModelBase
         this.RaisePropertyChanged(nameof(LayoutMode));
         this.RaisePropertyChanged(nameof(SelectedTheme));
         BackgroundImagePath = await GetConfig(db, "BackgroundImagePath", "", ct);
+        MangaUiStyle = await GetConfig(db, MainWindowViewModel.MangaUiStyleKey, "Classic", ct) == "Mihon" ? "Mihon" : "Classic";
+    }
+
+    // Manga screens: the classic pages, or the Mihon-style ones (opt-in while they settle in).
+    private string _mangaUiStyle = "Classic";
+    public string MangaUiStyle
+    {
+        get => _mangaUiStyle;
+        set => this.RaiseAndSetIfChanged(ref _mangaUiStyle, value);
     }
 
     // ── Speed limits (integrated downloader) ───────────────────────
@@ -726,6 +735,7 @@ public class SettingsViewModel : ViewModelBase
             await SetConfig(db, "SelectedTheme",       SelectedTheme,       ct);
             await SetConfig(db, "LayoutMode",          LayoutMode,          ct);
             await SetConfig(db, "BackgroundImagePath", BackgroundImagePath, ct);
+            await SetConfig(db, MainWindowViewModel.MangaUiStyleKey, MangaUiStyle, ct);
 
             await db.SaveChangesAsync(ct);
             

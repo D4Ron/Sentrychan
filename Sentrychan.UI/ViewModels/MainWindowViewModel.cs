@@ -469,6 +469,68 @@ public class MainWindowViewModel : ViewModelBase,
         set => this.RaiseAndSetIfChanged(ref _mangaDetailVm, value);
     }
 
+    // ── Manga screens style (Settings → Appearance) ────────────────
+    public const string MangaUiStyleKey = "MangaUiStyle";
+
+    private bool _isMihonMangaUi;
+    /// <summary>The Mihon-style manga screens instead of the classic ones. Opt-in for now.</summary>
+    public bool IsMihonMangaUi
+    {
+        get => _isMihonMangaUi;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isMihonMangaUi, value);
+            this.RaisePropertyChanged(nameof(IsClassicMangaUi));
+        }
+    }
+    public bool IsClassicMangaUi => !IsMihonMangaUi;
+
+    private Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? _mihonMangaVm;
+    public Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? MihonMangaVm
+    {
+        get => _mihonMangaVm;
+        set => this.RaiseAndSetIfChanged(ref _mihonMangaVm, value);
+    }
+
+    private Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? _mihonNovelVm;
+    public Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? MihonNovelVm
+    {
+        get => _mihonNovelVm;
+        set => this.RaiseAndSetIfChanged(ref _mihonNovelVm, value);
+    }
+
+    /// <summary>Re-reads the manga screens style — after Settings saves.</summary>
+    public async Task ReloadMangaUiStyleAsync()
+    {
+        if (_dbContextFactory == null) return;
+        try
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            IsMihonMangaUi = (await db.AppConfigs.AsNoTracking().FirstOrDefaultAsync(c => c.Key == MangaUiStyleKey))?.Value == "Mihon";
+        }
+        catch { /* keep the current style */ }
+    }
+
+    private Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? CreateMihonVm(bool novels)
+    {
+        if (App.Services == null) return null;
+        if (App.Services.GetService(typeof(IMangaService)) is not IMangaService mangaService
+            || App.Services.GetService(typeof(IMangaSourceRegistry)) is not IMangaSourceRegistry registry
+            || App.Services.GetService(typeof(IMangaDownloadService)) is not IMangaDownloadService downloads
+            || App.Services.GetService(typeof(Sentrychan.Core.MangaLibrary.MangaLibraryService)) is not Sentrychan.Core.MangaLibrary.MangaLibraryService library)
+            return null;
+        var secret = App.Services.GetService(typeof(ISecretModeService)) as ISecretModeService;
+        var config = App.Services.GetService(typeof(IConfigService)) as IConfigService;
+        var updater = App.Services.GetService(typeof(Sentrychan.Core.Services.MangaUpdateService)) as Sentrychan.Core.Services.MangaUpdateService;
+
+        var vm = new Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel(library, mangaService, registry, downloads, secret, config, novels,
+            openTitle: m => _ = OpenMangaDetailAsync(m),
+            openReader: (m, chapterId) => _ = OpenReaderAsync(m, chapterId),
+            checkForUpdates: updater == null ? null : async () => (await updater.CheckForUpdatesAsync()).WithNewChapters);
+        vm.BrowseHost.ReadPreview = (result, source) => OpenPreviewReaderAsync(result, source);
+        return vm;
+    }
+
     private bool _isShowingManga;
     public bool IsShowingManga
     {
@@ -1383,7 +1445,11 @@ public class MainWindowViewModel : ViewModelBase,
                 OpenAccount = OpenAccountDialogAsync,
             };
             // Appearance settings that live on the main window follow a save.
-            vm.Saved += () => BackgroundImagePath = vm.BackgroundImagePath;
+            vm.Saved += () =>
+            {
+                BackgroundImagePath = vm.BackgroundImagePath;
+                _ = ReloadMangaUiStyleAsync();
+            };
             SettingsVm = vm;
         }
 
@@ -1566,6 +1632,7 @@ public class MainWindowViewModel : ViewModelBase,
     private async Task LoadAppearanceAsync()
     {
         if (_dbContextFactory == null) return;
+        await ReloadMangaUiStyleAsync();
         try
         {
             await using var db = await _dbContextFactory.CreateDbContextAsync();
@@ -2278,6 +2345,13 @@ public class MainWindowViewModel : ViewModelBase,
 
     private void ShowManga()
     {
+        if (IsMihonMangaUi)
+        {
+            MihonMangaVm ??= CreateMihonVm(novels: false);
+            SetCurrentView(AppView.Manga);
+            _ = MihonMangaVm?.LoadTabAsync();
+            return;
+        }
         if (MangaLibraryVm == null && App.Services != null)
         {
             var mangaService = App.Services.GetService(typeof(IMangaService)) as IMangaService;
@@ -2296,6 +2370,13 @@ public class MainWindowViewModel : ViewModelBase,
 
     private void ShowNovels()
     {
+        if (IsMihonMangaUi)
+        {
+            MihonNovelVm ??= CreateMihonVm(novels: true);
+            SetCurrentView(AppView.Novels);
+            _ = MihonNovelVm?.LoadTabAsync();
+            return;
+        }
         if (NovelLibraryVm == null && App.Services != null)
         {
             var mangaService = App.Services.GetService(typeof(IMangaService)) as IMangaService;
@@ -2410,8 +2491,14 @@ public class MainWindowViewModel : ViewModelBase,
         // Back returns to whichever section this title lives in (Manga vs Novels).
         Action back = manga.IsNovel ? ShowNovels : ShowManga;
         MangaDetailVm?.Detach();
+        var library = App.Services.GetService(typeof(Sentrychan.Core.MangaLibrary.MangaLibraryService))
+            as Sentrychan.Core.MangaLibrary.MangaLibraryService;
         MangaDetailVm = new MangaDetailViewModel(manga, mangaService, source, downloader, back,
-            chapterId => _ = OpenReaderAsync(manga, chapterId));
+            chapterId => _ = OpenReaderAsync(manga, chapterId), library)
+        {
+            // After a migration the title lives on another source; open it there.
+            MigratedTo = migrated => _ = OpenMangaDetailAsync(migrated),
+        };
         SetCurrentView(AppView.MangaDetail);
         await MangaDetailVm.InitializeAsync();
     }

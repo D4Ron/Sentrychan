@@ -444,6 +444,19 @@
                                 </Grid>
                             </ctrls:SettingsSection>
 
+                            <ctrls:SettingsSection Title="Manga screens"
+                                                   Description="How the Manga and Novels pages look. Applies when you next open them.">
+                                <StackPanel>
+                                    <TextBlock Text="Style" Classes="label"/>
+                                    <ComboBox SelectedItem="{Binding MangaUiStyle}" HorizontalAlignment="Left" MinWidth="260">
+                                        <x:String>Classic</x:String>
+                                        <x:String>Mihon</x:String>
+                                    </ComboBox>
+                                    <TextBlock Classes="hint" TextWrapping="Wrap"
+                                               Text="Mihon — Library with categories, Updates, History, Browse by source with filters, and a download queue. Classic — the pages you know."/>
+                                </StackPanel>
+                            </ctrls:SettingsSection>
+
                             <ctrls:SettingsSection Title="Background"
                                                    Description="A blurred image behind the library.">
                                 <StackPanel>

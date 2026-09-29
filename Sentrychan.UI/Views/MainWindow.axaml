@@ -15,6 +15,7 @@
         Width="1200" Height="720"
         xmlns:models="using:Sentrychan.Core.Models"
         xmlns:core="using:Sentrychan.Core"
+        xmlns:mihonviews="using:Sentrychan.UI.Views.Mihon"
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
@@ -265,11 +266,23 @@
                     <Panel IsVisible="{Binding IsShowingSettings}">
                         <views:SettingsView DataContext="{Binding SettingsVm}"/>
                     </Panel>
+                    <!-- Manga and novels: the classic screens, or the Mihon-style ones (Settings → Appearance).
+                         The style panel wraps each view so IsVisible binds to this window, not the view's own context. -->
                     <Panel IsVisible="{Binding IsShowingManga}">
-                        <views:MangaLibraryView DataContext="{Binding MangaLibraryVm}"/>
+                        <Panel IsVisible="{Binding IsClassicMangaUi}">
+                            <views:MangaLibraryView DataContext="{Binding MangaLibraryVm}"/>
+                        </Panel>
+                        <Panel IsVisible="{Binding IsMihonMangaUi}">
+                            <mihonviews:MihonMangaView DataContext="{Binding MihonMangaVm}"/>
+                        </Panel>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingNovels}">
-                        <views:MangaLibraryView DataContext="{Binding NovelLibraryVm}"/>
+                        <Panel IsVisible="{Binding IsClassicMangaUi}">
+                            <views:MangaLibraryView DataContext="{Binding NovelLibraryVm}"/>
+                        </Panel>
+                        <Panel IsVisible="{Binding IsMihonMangaUi}">
+                            <mihonviews:MihonMangaView DataContext="{Binding MihonNovelVm}"/>
+                        </Panel>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingQuiz}">
                         <views:AnimeQuizView DataContext="{Binding AnimeQuizVm}"/>
@@ -278,7 +291,12 @@
                         <views:BattleRoyaleView DataContext="{Binding BattleRoyaleVm}"/>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingMangaDetail}">
-                        <views:MangaDetailView DataContext="{Binding MangaDetailVm}"/>
+                        <Panel IsVisible="{Binding IsClassicMangaUi}">
+                            <views:MangaDetailView DataContext="{Binding MangaDetailVm}"/>
+                        </Panel>
+                        <Panel IsVisible="{Binding IsMihonMangaUi}">
+                            <mihonviews:MihonTitleView DataContext="{Binding MangaDetailVm}"/>
+                        </Panel>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingDownloadHub}">
                         <views:DownloadHubView DataContext="{Binding DownloadHubVm}"/>
