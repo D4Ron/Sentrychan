@@ -209,6 +209,36 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — **Phase 3 done** (Mihon-style manga UI, opt-in). 127 tests pass.
+  - **Setting:** `MangaUiStyle` (`Classic` default | `Mihon`), Settings → Appearance → Manga screens; the
+    main window swaps the Manga, Novels and title-page views (`IsMihonMangaUi`).
+  - **Data:** migration `AddMangaLibrary` — `MangaCategories`, `MangaCategoryLinks`, `MangaChapterBookmarks`,
+    `MangaReadingHistory` (one row per chapter), `MangaChapter.FetchedAt` (set only for chapters found on a
+    title already synced — the first sync isn't "news") and `.SourceOrder`. `MangaService` writes history on
+    every reader position save.
+  - **Core:** `Sentrychan.Core/MangaLibrary/` — `MangaLibraryService` (categories, entries, updates, history,
+    bookmarks, bulk read/unread keeping progress consistent, mark-previous, **migration** matching chapters
+    by number and carrying read state/bookmarks/history/categories), `LibraryQuery`/`ChapterQuery`/`UpdatesQuery`.
+    A chapter counts as read if its flag is set *or* it's ≤ the title's progress (classic "mark read" only
+    moved progress).
+  - **Download queue:** `MangaDownloadService` is now an ordered queue (2 slots) with `PauseAll`/`ResumeAll`
+    (running chapters keep their place and pages), `Move`, `CancelEverything`, `Queue`, `QueueChanged` —
+    interface members default-implemented.
+  - **UI:** `ViewModels/Mihon/*`, `Views/Mihon/*`, dialogs `MangaCategoriesDialog` (edit + pick mode) and
+    `MangaMigrateDialog`. `MangaDetailViewModel` is shared (partial `.Mihon.cs` adds filters/sort/selection/
+    bookmarks/download-next/migrate); new screens (Updates, History, Browse, Queue, Mihon library) have
+    their own VMs since classic has no counterpart. Browse reuses `MangaResultVm` and the preview dialog.
+  - **Headless UI smoke tests** (`Sentrychan.Tests/UiSmoke`, Avalonia.Headless + Skia): every Mihon tab, the
+    Mihon title page and the Tidy dialog load with real VMs over a seeded DB. Set `SENTRYCHAN_SCREENSHOTS`
+    to a folder to get PNGs — a first visual check; they looked right after one fix (cards shrank to
+    their title width).
+  - **Needs checking on Windows:** everything visually with real covers and a big library (hundreds of
+    titles: the library grid isn't virtualised; the title page's chapter list is); flyouts/context menus;
+    the reader opened from History/Updates returns to the title page; category pick dialog; migrate with
+    two real sources; pause/resume with real downloads.
+  - **Not done / follow-ups:** the queue isn't persisted across restarts; per-category display settings are
+    global (Mihon has per-category); library "update" runs the existing `MangaUpdateService` for everything.
+
 - 2026-09-29 — **Phase 2 done** (manga source contract v2). 106 tests pass.
   - `IMangaSourceService` gains, all default-implemented: `Info` (`MangaSourceInfo`: stable id, name,
     language, `IsNsfw`, `SupportsLatest`), `GetPopularAsync(page)`, `GetLatestAsync(page)`,
