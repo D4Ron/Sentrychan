@@ -295,13 +295,6 @@ public static class Program
 
         var host = hostBuilder.Build();
 
-        // Initialize download backend router
-        using (var scope = host.Services.CreateScope())
-        {
-            var router = scope.ServiceProvider.GetRequiredService<IDownloadBackendRouter>();
-            router.InitializeAsync().GetAwaiter().GetResult();
-        }
-
         // Apply migrations
         using (var scope = host.Services.CreateScope())
         {
@@ -348,6 +341,14 @@ public static class Program
 
             // No feeds are seeded here. The app ships knowing no content site; default feeds,
             // if any, come from a loaded source pack (see SeedProviderDefaults).
+        }
+
+        // Initialize download backend router — after the migrations: it reads its settings, and on
+        // a first run there's no settings table before them.
+        using (var scope = host.Services.CreateScope())
+        {
+            var router = scope.ServiceProvider.GetRequiredService<IDownloadBackendRouter>();
+            router.InitializeAsync().GetAwaiter().GetResult();
         }
 
         // Hand service provider to Avalonia
