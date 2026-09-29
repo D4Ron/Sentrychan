@@ -1,0 +1,15 @@
+<Project>
+
+  <!-- Build flavour. Stable is what ships on main; Preview is a separate app (own data folder,
+       own update channel) that installs beside it. Pick one with `-p:Flavor=Preview`.
+       Sentrychan.Core turns this into BuildInfo so every project reads the same answer. -->
+  <PropertyGroup>
+    <Flavor Condition="'$(Flavor)' == ''">Stable</Flavor>
+  </PropertyGroup>
+
+  <Target Name="ValidateFlavor" BeforeTargets="BeforeBuild"
+          Condition="'$(Flavor)' != 'Stable' and '$(Flavor)' != 'Preview'">
+    <Error Text="Flavor must be Stable or Preview, not '$(Flavor)'." />
+  </Target>
+
+</Project>

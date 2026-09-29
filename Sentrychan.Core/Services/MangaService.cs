@@ -108,6 +108,16 @@ public class MangaService : IMangaService
         if (lastPage > chapter.LastReadPage) chapter.LastReadPage = lastPage;
         if (markRead && !chapter.IsRead) chapter.IsRead = true;
 
+        // Reading history: one row per chapter, moved to "now" each time it's read.
+        var history = await db.MangaReadingHistory.FirstOrDefaultAsync(h => h.ChapterId == chapterId, ct);
+        if (history == null)
+            db.MangaReadingHistory.Add(new MangaReadingHistory { MangaId = chapter.MangaId, ChapterId = chapterId, LastPage = lastPage });
+        else
+        {
+            history.ReadAt = DateTime.UtcNow;
+            history.LastPage = lastPage;
+        }
+
         await db.SaveChangesAsync(ct);
 
         // Finishing a chapter advances the manga's overall progress.
@@ -128,15 +138,21 @@ public class MangaService : IMangaService
         // anything keyed on the id, like a vault download's resume.
         var prior = manga.Chapters.GroupBy(c => c.SourceId).ToDictionary(g => g.Key, g => g.First());
         var listed = new HashSet<string>();
+        // Chapters that turn up on a title already synced are news (the Updates page);
+        // the first sync of a newly added title is not.
+        var isFirstSync = prior.Count == 0;
+        var now = DateTime.UtcNow;
+        var order = 0;
 
         foreach (var info in chapters)
         {
             if (!listed.Add(info.SourceId)) continue; // a source listing the same chapter twice
             if (!prior.TryGetValue(info.SourceId, out var row))
             {
-                row = new MangaChapter { SourceId = info.SourceId };
+                row = new MangaChapter { SourceId = info.SourceId, FetchedAt = isFirstSync ? null : now };
                 manga.Chapters.Add(row);
             }
+            row.SourceOrder     = order++;
             row.ChapterNumber   = info.ChapterNumber;
             row.ChapterSort     = info.ChapterSort;
             row.Volume          = info.Volume;

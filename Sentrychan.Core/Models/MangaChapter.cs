@@ -36,4 +36,14 @@ public class MangaChapter
 
     /// <summary>Local folder/CBZ once downloaded for offline reading (Stage 3). Null = online only.</summary>
     public string? DownloadedPath { get; set; }
+
+    /// <summary>
+    /// When the app first saw this chapter on a title it already knew — what the Updates page
+    /// lists. Null for chapters that came with the first sync of a newly added title (those
+    /// aren't news) and for chapters from before this was recorded.
+    /// </summary>
+    public DateTime? FetchedAt { get; set; }
+
+    /// <summary>Position in the source's own chapter list at the last sync — the "source order" sort.</summary>
+    public int SourceOrder { get; set; }
 }

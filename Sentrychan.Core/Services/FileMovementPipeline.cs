@@ -320,8 +320,9 @@ public class FileMovementPipeline : IFileMovementPipeline
             return;
         }
 
-        var baseTitle    = SeasonDetector.ExtractBaseTitle(series.Title);
-        var seriesFolder = SanitizeFolderName(baseTitle);
+        var naming = await LoadNamingAsync(db, ct);
+        var showSeasons = await ShowSeasonsAsync(db, ct);
+        string? showFolder = null;
 
         int previousEpisode = series.LastEpisodeNumber;
         int maxEpisode      = series.LastEpisodeNumber;
@@ -336,14 +337,17 @@ public class FileMovementPipeline : IFileMovementPipeline
             var episodeNum = _normalizer.ExtractEpisodeNumber(fileName);
 
             // Per-file season detection (batches can span seasons)
-            int seasonNumber = series.SeasonNumber;
+            int seasonNumber = SeasonSearch.EffectiveSeason(series.Title, series.SeasonNumber);
             var detected = SeasonDetector.DetectSeason(fileName);
             if (detected > 1 || SeasonDetector.HasSeasonIndicator(fileName))
                 seasonNumber = detected;
 
-            var destDir = Path.Combine(libraryPath, seriesFolder, $"Season {seasonNumber}");
+            var (relative, renamed) = Library.LibraryFiling.Destination(
+                naming, series, showSeasons, Path.GetFileName(file), seasonNumber, episodeNum);
+            var destPath = Path.Combine(libraryPath, relative);
+            var destDir  = Path.GetDirectoryName(destPath)!;
             Directory.CreateDirectory(destDir);
-            var destPath = Path.Combine(destDir, Path.GetFileName(file));
+            showFolder ??= Path.Combine(libraryPath, relative.Split(Path.DirectorySeparatorChar)[0]);
 
             if (File.Exists(destPath) && destPath != file &&
                 ResolveCollision(file, destPath) != Collision.ReplaceDamaged)
@@ -358,6 +362,7 @@ public class FileMovementPipeline : IFileMovementPipeline
                 if (file != destPath) File.Move(file, destPath);
                 movedCount++;
                 lastDest = destPath;
+                if (renamed) await Library.TidyRecords.MoveOriginAsync(db, file, destPath, ct);
             }
             catch (Exception ex)
             {
@@ -385,7 +390,7 @@ public class FileMovementPipeline : IFileMovementPipeline
 
         job.Status        = JobStatus.Completed;
         job.CompletedAt   = DateTime.UtcNow;
-        job.FinalFilePath = Path.Combine(libraryPath, seriesFolder);
+        job.FinalFilePath = showFolder ?? Path.Combine(libraryPath, Library.LibraryFiling.LegacyShowFolder(series.Title));
 
         bool episodeUpdated = maxEpisode > previousEpisode;
         if (episodeUpdated) series.LastEpisodeNumber = maxEpisode;
@@ -630,14 +635,9 @@ public class FileMovementPipeline : IFileMovementPipeline
             return;
         }
 
-        // Use the base title (stripped of season qualifiers) for the folder name
-        // so "Oshi no Ko 2nd Season" → Oshi no Ko/Season 2 (Plex/Jellyfin compatible)
-        var baseTitle    = SeasonDetector.ExtractBaseTitle(series.Title);
-        var seriesFolder = SanitizeFolderName(baseTitle);
-
         // Prefer season detected from RSS title (most accurate for what was actually downloaded)
-        // Fall back to the DB-stored SeasonNumber set by user or auto-detection on add
-        int seasonNumber = series.SeasonNumber;
+        // Fall back to the series' own season — stored, or in its title ("Oshi no Ko 2nd Season").
+        int seasonNumber = SeasonSearch.EffectiveSeason(series.Title, series.SeasonNumber);
         if (!string.IsNullOrEmpty(job.RssTitle))
         {
             var rssDetected = SeasonDetector.DetectSeason(job.RssTitle);
@@ -645,11 +645,14 @@ public class FileMovementPipeline : IFileMovementPipeline
                 seasonNumber = rssDetected;
         }
 
-        var seasonFolder = $"Season {seasonNumber}";
-        var destDir      = Path.Combine(libraryPath, seriesFolder, seasonFolder);
+        // The naming template decides the folders and name — "Show (2023)/Season 02/Show S02E05.mkv"
+        // by default — exactly as Tidy library would, so a later tidy has nothing to redo.
+        var (relative, renamed) = Library.LibraryFiling.Destination(
+            await LoadNamingAsync(db, ct), series, await ShowSeasonsAsync(db, ct),
+            Path.GetFileName(sourcePath), seasonNumber, job.EpisodeNumber > 0 ? job.EpisodeNumber : null);
+        var destPath = Path.Combine(libraryPath, relative);
+        var destDir  = Path.GetDirectoryName(destPath)!;
         Directory.CreateDirectory(destDir);
-
-        var destPath = Path.Combine(destDir, Path.GetFileName(sourcePath));
 
         var alreadyFiled = false;
         if (File.Exists(destPath) && destPath != sourcePath)
@@ -678,6 +681,8 @@ public class FileMovementPipeline : IFileMovementPipeline
                 _logger.LogInformation(
                     "[Pipeline] Moved '{File}' → '{Dest}'",
                     Path.GetFileName(sourcePath), destPath);
+                // Episode repair finds this file's torrent by the name it downloaded as.
+                if (renamed) await Library.TidyRecords.MoveOriginAsync(db, sourcePath, destPath, ct);
             }
         }
         catch (Exception ex)
@@ -923,6 +928,23 @@ public class FileMovementPipeline : IFileMovementPipeline
             if (alts != null) titles.AddRange(alts);
         }
         return titles;
+    }
+
+    private static async Task<Library.NamingTemplate> LoadNamingAsync(AppDbContext db, CancellationToken ct) =>
+        Library.NamingTemplate.FromConfig(
+            await GetConfigValueAsync(db, Library.NamingTemplate.PresetKey, ct),
+            await GetConfigValueAsync(db, Library.NamingTemplate.TemplateKey, ct));
+
+    /// <summary>
+    /// Every tracked series — the filing rules need the siblings sharing a show folder. Fills in a
+    /// missing year and type from the offline anime database first, so the folder gets its year.
+    /// </summary>
+    private async Task<List<Series>> ShowSeasonsAsync(AppDbContext db, CancellationToken ct)
+    {
+        var all = await db.Series.ToListAsync(ct);
+        if (_titleResolver.IsReady && Library.LibraryMetadata.Backfill(all, _titleResolver) > 0)
+            await db.SaveChangesAsync(ct);
+        return all;
     }
 
     private static string SanitizeFolderName(string name) =>

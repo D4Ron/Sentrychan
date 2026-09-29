@@ -30,7 +30,10 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <Content Include="Assets\frpc.exe">
+    <!-- frpc.exe is git-ignored (not ours to redistribute) and dropped in by hand on the Windows
+         machine that packs releases. Without the condition, a fresh clone can't build at all;
+         FrpTunnelService already reports a missing binary at runtime. -->
+    <Content Include="Assets\frpc.exe" Condition="Exists('Assets\frpc.exe')">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -63,6 +66,12 @@
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
     <Product>Sentrychan</Product>
+  </PropertyGroup>
+
+  <!-- Shows up in the file properties and Task Manager, where both apps may sit side by side. -->
+  <PropertyGroup Condition="'$(Flavor)' == 'Preview'">
+    <Product>Sentrychan Preview</Product>
+    <AssemblyTitle>Sentrychan Preview</AssemblyTitle>
   </PropertyGroup>
 
 </Project>

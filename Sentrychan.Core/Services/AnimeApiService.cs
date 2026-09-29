@@ -23,9 +23,7 @@ public class AnimeApiService : IAnimeApiService
     private static readonly TimeSpan MemoryCacheTtl = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan PersistentCacheTtl = TimeSpan.FromDays(7);
 
-    private readonly string _imageCacheDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Sentrychan", "ImageCache");
+    private readonly string _imageCacheDir = AppPaths.Combine("ImageCache");
 
     
 

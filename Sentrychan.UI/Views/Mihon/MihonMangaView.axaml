@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mihon="using:Sentrychan.UI.ViewModels.Mihon"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             xmlns:views="using:Sentrychan.UI.Views.Mihon"
+             x:Class="Sentrychan.UI.Views.Mihon.MihonMangaView"
+             x:DataType="mihon:MihonMangaViewModel">
+
+    <TabControl Classes="pills" Margin="20,14,20,0" SelectedIndex="{Binding SelectedTab}">
+        <TabItem Header="Library">
+            <views:MihonLibraryView DataContext="{Binding Library}"/>
+        </TabItem>
+        <TabItem Header="Updates">
+            <views:MangaUpdatesView DataContext="{Binding Updates}"/>
+        </TabItem>
+        <TabItem Header="History">
+            <views:MangaHistoryView DataContext="{Binding History}"/>
+        </TabItem>
+        <TabItem Header="Browse">
+            <views:MangaBrowseView DataContext="{Binding Browse}"/>
+        </TabItem>
+        <TabItem Header="Downloads">
+            <views:MangaQueueView DataContext="{Binding Queue}"/>
+        </TabItem>
+    </TabControl>
+</UserControl>

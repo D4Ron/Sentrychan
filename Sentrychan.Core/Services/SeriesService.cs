@@ -11,15 +11,18 @@ public class SeriesService : ISeriesService
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly IAnimeApiService _animeApiService;
     private readonly ILogger<SeriesService> _logger;
+    private readonly ITitleResolverService? _titleResolver;
 
     public SeriesService(
         IDbContextFactory<AppDbContext> dbFactory,
         IAnimeApiService animeApiService,
-        ILogger<SeriesService> logger)
+        ILogger<SeriesService> logger,
+        ITitleResolverService? titleResolver = null)
     {
         _dbFactory = dbFactory;
         _animeApiService = animeApiService;
         _logger = logger;
+        _titleResolver = titleResolver;
     }
 
     public async Task<List<Series>> GetAllAsync(CancellationToken ct = default)
@@ -64,6 +67,11 @@ public class SeriesService : ISeriesService
                     detected, series.Title);
             }
         }
+
+        // Year and type name the library folder ("Title (2023)") and tell a movie from a
+        // series. Most add paths don't carry them; the offline anime database does.
+        if (_titleResolver?.IsReady == true)
+            Library.LibraryMetadata.Backfill([series], _titleResolver);
 
         db.Series.Add(series);
         await db.SaveChangesAsync(ct);

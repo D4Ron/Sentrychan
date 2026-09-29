@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.Services;
 
@@ -14,8 +15,7 @@ namespace Sentrychan.UI.Services;
 /// </summary>
 public static class PlaybackPositionStore
 {
-    private static readonly string FilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "playback.json");
+    private static readonly string FilePath = AppPaths.Combine("playback.json");
 
     private static readonly object Gate = new();
     private static Dictionary<string, double[]>? _positions;
@@ -56,6 +56,24 @@ public static class PlaybackPositionStore
                 Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
                 File.WriteAllText(FilePath, JsonSerializer.Serialize(Positions));
             }
+            catch { /* resume is a convenience */ }
+        }
+    }
+
+    /// <summary>Carries saved positions over to files that were renamed or moved (Tidy library, and its undo).</summary>
+    public static void Move(IEnumerable<(string From, string To)> moves)
+    {
+        lock (Gate)
+        {
+            var changed = false;
+            foreach (var (from, to) in moves)
+            {
+                if (!Positions.Remove(Key(from), out var v)) continue;
+                Positions[Key(to)] = v;
+                changed = true;
+            }
+            if (!changed) return;
+            try { File.WriteAllText(FilePath, JsonSerializer.Serialize(Positions)); }
             catch { /* resume is a convenience */ }
         }
     }

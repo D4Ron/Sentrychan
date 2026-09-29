@@ -23,6 +23,12 @@ public partial class App : Application
     /// </summary>
     public static Action? PostInitAction { get; set; }
 
+    /// <summary>
+    /// Relaunches the app and shuts this instance down. Set by the composition root, which knows
+    /// how this process was started; null where restarting isn't possible (design time).
+    /// </summary>
+    public static Action? Restart { get; set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -35,22 +41,10 @@ public partial class App : Application
                 System.Diagnostics.Debug.WriteLine($"[RxApp] unobserved command error: {ex.Message}"));
     }
 
-    private static bool _vlcInitialized = false;
-
     public override void OnFrameworkInitializationCompleted()
     {
-        try 
-        {
-            if (!_vlcInitialized) 
-            {
-                LibVLCSharp.Shared.Core.Initialize();
-                _vlcInitialized = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"LibVLC Core.Initialize failed: {ex}");
-        }
+        // The player explains what's missing (system libvlc on Linux) instead of failing later.
+        Sentrychan.UI.Services.VideoSupport.Initialize();
         MainWindowViewModel? mainVm = null;
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -59,6 +53,21 @@ public partial class App : Application
 
             desktop.MainWindow = new MainWindow { DataContext = mainVm };
             Sentrychan.UI.Services.TrayService.Initialize();
+
+            // macOS: clicking the Dock icon of a running app whose window is hidden brings it back.
+            if (OperatingSystem.IsMacOS()
+                && TryGetFeature(typeof(Avalonia.Controls.ApplicationLifetimes.IActivatableLifetime))
+                    is Avalonia.Controls.ApplicationLifetimes.IActivatableLifetime activatable)
+            {
+                activatable.Activated += (_, e) =>
+                {
+                    if (e.Kind != Avalonia.Controls.ApplicationLifetimes.ActivationKind.Reopen
+                        || desktop.MainWindow is not { } w) return;
+                    w.Show();
+                    w.WindowState = Avalonia.Controls.WindowState.Normal;
+                    w.Activate();
+                };
+            }
         }
 
         base.OnFrameworkInitializationCompleted();

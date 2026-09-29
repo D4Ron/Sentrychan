@@ -22,7 +22,8 @@ public record ResolvedAnime(
     string? ThumbnailUrl,
     int? Year,
     string? AnimeSeason,
-    string? Status = null);   // FINISHED / ONGOING / UPCOMING
+    string? Status = null,    // FINISHED / ONGOING / UPCOMING
+    string? Type = null);     // TV / MOVIE / OVA / ONA / SPECIAL
 
 /// <summary>
 /// Anime name recognition: parses release names into structured fields
@@ -50,6 +51,9 @@ public interface ITitleResolverService
 
     /// <summary>Look up an already-clean title. Null when nothing matches confidently.</summary>
     ResolvedAnime? ResolveTitle(string title, int season = 1);
+
+    /// <summary>The offline database's entry for a MAL id — year and type for library naming. Null when unknown or not ready.</summary>
+    ResolvedAnime? GetByMalId(int malId) => null;
 
     /// <summary>
     /// Free-text search over the offline database — every title/synonym is matched,

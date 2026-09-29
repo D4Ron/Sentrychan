@@ -33,6 +33,26 @@ public class Series
     public bool IsCensored { get; set; } = false;
 
     /// <summary>
+    /// Year this entry started airing. Names the library folder ("Title (2023)") the way
+    /// Jellyfin and Plex expect. Null until known — the folder is then just "Title".
+    /// </summary>
+    public int? Year { get; set; }
+
+    /// <summary>
+    /// TV, Movie, OVA, ONA, Special… as the anime database reports it. A Movie is filed as
+    /// "Title (Year)/Title (Year).ext" instead of by season and episode.
+    /// </summary>
+    public string? MediaType { get; set; }
+
+    /// <summary>"Don't tidy": Tidy library leaves this series alone, and new episodes keep the old layout.</summary>
+    public bool TidyExcluded { get; set; }
+
+    /// <summary>"Keep full file names": files move into the naming template's folders but keep their release names.</summary>
+    public bool KeepFileNames { get; set; }
+
+    public bool IsMovie => string.Equals(MediaType, "Movie", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// AniDB cover URL populated at runtime when Secret Mode activates.
     /// Not persisted — fetched on demand by the UI layer.
     /// </summary>

@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Notifications;
 using Avalonia.Platform;
 using Microsoft.Extensions.DependencyInjection;
+using Sentrychan.Core;
 using Sentrychan.Core.Interfaces;
 using System;
 
@@ -13,7 +14,7 @@ public static class TrayService
 {
     private static TrayIcon? _trayIcon;
     private static WindowNotificationManager? _notificationManager;
-    private static string _baseTooltip = "Sentrychan";
+    private static string _baseTooltip = BuildInfo.AppName;
 
     public static void Initialize()
     {
@@ -24,7 +25,7 @@ public static class TrayService
         _trayIcon = new TrayIcon
         {
             Icon = new WindowIcon(iconStream),
-            ToolTipText = "Sentrychan"
+            ToolTipText = BuildInfo.AppName
         };
 
         var menu = new NativeMenu();
@@ -76,7 +77,7 @@ public static class TrayService
                         : "avares://Sentrychan.UI/Assets/logo.png";
                     using var stream = AssetLoader.Open(new Uri(assetPath));
                     _trayIcon.Icon = new WindowIcon(stream);
-                    _baseTooltip = isSecret ? "Sentrykun" : "Sentrychan";
+                    _baseTooltip = isSecret ? "Sentrykun" : BuildInfo.AppName;
                     _trayIcon.ToolTipText = _baseTooltip;
                 }
                 catch { /* Ignore icon swap failures */ }

@@ -1,0 +1,33 @@
+{
+    "data": {
+        "fetchSourceManga": {
+            "hasNextPage": false,
+            "mangas": [
+                {
+                    "id": 1,
+                    "title": "Another Invented Title",
+                    "thumbnailUrl": "/api/v1/manga/1/thumbnail",
+                    "url": "Another Invented Title",
+                    "status": "UNKNOWN",
+                    "author": null,
+                    "artist": null,
+                    "description": null,
+                    "genre": [],
+                    "initialized": false
+                },
+                {
+                    "id": 2,
+                    "title": "Invented Title",
+                    "thumbnailUrl": "/api/v1/manga/2/thumbnail",
+                    "url": "Invented Title",
+                    "status": "UNKNOWN",
+                    "author": null,
+                    "artist": null,
+                    "description": null,
+                    "genre": [],
+                    "initialized": false
+                }
+            ]
+        }
+    }
+}

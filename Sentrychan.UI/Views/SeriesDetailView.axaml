@@ -283,6 +283,25 @@
                     </Border>
                 </StackPanel>
 
+                <!-- Section 7b: Library naming exceptions -->
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Library Files" FontSize="20" FontWeight="Bold"/>
+                    <Border Background="{DynamicResource CardBackgroundBrush}" Padding="20" CornerRadius="8">
+                        <Grid ColumnDefinitions="*, *">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <CheckBox IsChecked="{Binding TidyExcluded}" Content="Don't tidy"/>
+                                <TextBlock Text="Tidy library leaves this series alone, and new episodes keep the old Title / Season N layout with their release names."
+                                           FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="32,-4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="4" Margin="24,0,0,0">
+                                <CheckBox IsChecked="{Binding KeepFileNames}" Content="Keep full file names"/>
+                                <TextBlock Text="Files go into the naming template's folders but keep their release names."
+                                           FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="32,-4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
                 <!-- Section 8: Recommendations -->
                 <StackPanel Spacing="16">
                     <TextBlock Text="You Might Also Like" FontSize="20" FontWeight="Bold"/>

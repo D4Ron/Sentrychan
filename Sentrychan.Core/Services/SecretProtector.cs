@@ -1,18 +1,21 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using Sentrychan.Core.Secrets;
 
 namespace Sentrychan.Core.Services;
 
 /// <summary>
 /// Encrypts small secrets (currently the qBittorrent password) before they go into
 /// AppConfigs, which is a plain SQLite file any process running as the user — or
-/// anything that scoops up %AppData% — can read.
+/// anything that scoops up the data folder — can read.
 ///
-/// Uses Windows DPAPI scoped to the current user: no key to manage, and the ciphertext
-/// is useless on another machine or under another account. Values are tagged with a
-/// prefix so we can tell an encrypted value from a legacy plaintext one and migrate
-/// transparently on the next save rather than locking anyone out of their own config.
+/// Sealed by the system's secret store (<see cref="SecretStores"/>): DPAPI on Windows, as
+/// always, so existing values keep opening; the Keychain or the Secret Service elsewhere.
+/// Values are tagged with a prefix so we can tell an encrypted value from a legacy plaintext
+/// one and migrate transparently on the next save rather than locking anyone out of their own
+/// config. With no secret store, saving a secret fails with a message saying so — it is never
+/// written in the clear.
 /// </summary>
 public static class SecretProtector
 {
@@ -23,49 +26,36 @@ public static class SecretProtector
         !string.IsNullOrEmpty(value) && value.StartsWith(Prefix, StringComparison.Ordinal);
 
     /// <summary>
-    /// Encrypts a secret for storage. Returns the input unchanged if it's empty, and
-    /// falls back to plaintext if DPAPI is unavailable (non-Windows) — the app must
-    /// keep working rather than lose the user's settings.
+    /// Encrypts a secret for storage. Returns the input unchanged if it's empty.
+    /// Throws <see cref="SecretStoreUnavailableException"/> when the system can't keep secrets.
     /// </summary>
-    public static string Protect(string? plaintext)
+    public static string Protect(string? plaintext, ISecretStore? store = null)
     {
         if (string.IsNullOrEmpty(plaintext)) return string.Empty;
         if (IsProtected(plaintext)) return plaintext; // already encrypted — don't double-wrap
 
-        if (!OperatingSystem.IsWindows()) return plaintext;
-
-        try
-        {
-            var bytes = ProtectedData.Protect(
-                Encoding.UTF8.GetBytes(plaintext), null, DataProtectionScope.CurrentUser);
-            return Prefix + Convert.ToBase64String(bytes);
-        }
-        catch
-        {
-            return plaintext;
-        }
+        var bytes = (store ?? SecretStores.Current).Protect(Encoding.UTF8.GetBytes(plaintext));
+        return Prefix + Convert.ToBase64String(bytes);
     }
 
     /// <summary>
     /// Decrypts a stored secret. A value without the prefix is a legacy plaintext
     /// entry and is returned as-is, so existing installs keep working until the next
-    /// save re-writes it encrypted.
+    /// save re-writes it encrypted. Throws <see cref="SecretStoreUnavailableException"/> when
+    /// the system can't open secrets at all.
     /// </summary>
-    public static string Unprotect(string? stored)
+    public static string Unprotect(string? stored, ISecretStore? store = null)
     {
         if (string.IsNullOrEmpty(stored)) return string.Empty;
         if (!IsProtected(stored)) return stored;
 
-        if (!OperatingSystem.IsWindows()) return string.Empty;
-
         try
         {
             var payload = stored[Prefix.Length..];
-            var bytes = ProtectedData.Unprotect(
-                Convert.FromBase64String(payload), null, DataProtectionScope.CurrentUser);
+            var bytes = (store ?? SecretStores.Current).Unprotect(Convert.FromBase64String(payload));
             return Encoding.UTF8.GetString(bytes);
         }
-        catch
+        catch (Exception ex) when (ex is CryptographicException or FormatException or PlatformNotSupportedException)
         {
             // Wrong user/machine, or a corrupted value — treat as unset rather than
             // handing a garbage password to qBittorrent.

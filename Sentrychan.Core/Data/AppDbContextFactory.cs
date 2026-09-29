@@ -14,9 +14,7 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
 
         // Use a local path for migrations — production path is configured by Program.cs at runtime.
-        var dbPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Sentrychan", "sentrychan.db");
+        var dbPath = AppPaths.Database;
 
         optionsBuilder.UseSqlite($"Data Source={dbPath}");
         return new AppDbContext(optionsBuilder.Options);

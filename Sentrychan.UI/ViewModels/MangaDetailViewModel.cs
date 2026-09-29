@@ -14,7 +14,7 @@ namespace Sentrychan.UI.ViewModels;
 /// reading-progress tracking. Stage 1 tracks progress via "mark read"; Stage 2 adds
 /// the actual reader.
 /// </summary>
-public class MangaDetailViewModel : ViewModelBase
+public partial class MangaDetailViewModel : ViewModelBase
 {
     private readonly IMangaService _mangaService;
     private readonly IMangaSourceService _source;
@@ -66,13 +66,16 @@ public class MangaDetailViewModel : ViewModelBase
     public string ContinueLabel { get => _continueLabel; set => this.RaiseAndSetIfChanged(ref _continueLabel, value); }
 
     public MangaDetailViewModel(Manga manga, IMangaService mangaService, IMangaSourceService source,
-        IMangaDownloadService downloader, Action onBack, Action<int> onRead)
+        IMangaDownloadService downloader, Action onBack, Action<int> onRead,
+        Sentrychan.Core.MangaLibrary.MangaLibraryService? library = null)
     {
         Manga = manga;
         _mangaService = mangaService;
         _source = source;
         _downloader = downloader;
         _onRead = onRead;
+        _library = library;
+        InitMihon();
 
         RefreshCommand     = ReactiveCommand.CreateFromTask(() => LoadChaptersAsync(forceRefresh: true));
         MarkAllReadCommand = ReactiveCommand.CreateFromTask(MarkAllReadAsync);
@@ -223,6 +226,7 @@ public class MangaDetailViewModel : ViewModelBase
 
     public async Task InitializeAsync()
     {
+        if (_library != null) _bookmarks = await _library.GetBookmarksAsync(Manga.Id);
         // Prefer cached chapters for an instant list; refresh from the source if empty.
         var stored = await _mangaService.GetByIdAsync(Manga.Id);
         if (stored != null) Manga = stored;
@@ -271,7 +275,12 @@ public class MangaDetailViewModel : ViewModelBase
             foreach (var c in chapters.OrderByDescending(c => c.ChapterSort ?? double.MinValue))
             {
                 var vm = new MangaChapterVm(c, MarkReadAsync, vm => _onRead(vm.Chapter.Id), DownloadChapterAsync,
-                    !Manga.IsNovel, CancelDownload, RemoveDownloadAsync);
+                    !Manga.IsNovel, CancelDownload, RemoveDownloadAsync)
+                {
+                    IsRead = Sentrychan.Core.MangaLibrary.LibraryQuery.IsRead(Manga, c),
+                    IsBookmarked = _bookmarks.Contains(c.Id),
+                    SelectionChanged = OnChapterSelectionChanged,
+                };
                 // A download started earlier (this page was left and reopened) is still running.
                 var status = _downloader.GetStatus(c.Id);
                 if (status != null && (status.IsActive || status.State is ChapterDownloadState.Failed or ChapterDownloadState.Cancelled))
@@ -288,6 +297,7 @@ public class MangaDetailViewModel : ViewModelBase
             }
             UpdateContinueState();
             UpdateDownloadSummary();
+            RebuildVisible();
         });
     }
 

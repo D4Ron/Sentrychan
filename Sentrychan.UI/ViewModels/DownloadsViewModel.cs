@@ -400,35 +400,7 @@ public class DownloadsViewModel : ViewModelBase
     /// Reveals the finished file in Explorer (selected), or falls back to opening the
     /// containing folder when we only know the directory.
     /// </summary>
-    private void OpenFolder(DownloadJobRowVm row)
-    {
-        try
-        {
-            var path = row.FilePath;
-            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = $"/select,\"{path}\"",
-                    UseShellExecute = true
-                });
-                return;
-            }
-
-            var dir = !string.IsNullOrEmpty(path)
-                ? System.IO.Path.GetDirectoryName(path)
-                : null;
-            if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir))
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = dir, UseShellExecute = true
-                });
-            }
-        }
-        catch { /* nothing useful to show the user if Explorer refuses */ }
-    }
+    private void OpenFolder(DownloadJobRowVm row) => Services.ShellLauncher.Reveal(row.FilePath);
 
     private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".mkv", ".mp4", ".avi", ".webm", ".m4v", ".mov", ".wmv" };

@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mihon="using:Sentrychan.UI.ViewModels.Mihon"
+        x:Class="Sentrychan.UI.Views.Dialogs.MangaCategoriesDialog"
+        x:DataType="mihon:EditCategoriesViewModel"
+        Title="Categories"
+        Width="480" Height="520" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <!-- Two uses: "Edit categories" (rename/reorder/delete) and, when PickMode is on, "Set categories"
+         for the chosen titles (tick boxes). The same list serves both. -->
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="22">
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
+            <TextBlock x:Name="Heading" Text="Edit categories" FontSize="19" FontWeight="Bold"/>
+            <TextBlock x:Name="Hint" TextWrapping="Wrap" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="Titles on no category show under Default. Deleting a category keeps its titles."/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+            <TextBox Text="{Binding NewName}" Watermark="New category">
+                <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding AddCommand}"/>
+                </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="1" Content="Add" Classes="ghost" Command="{Binding AddCommand}"/>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2">
+            <ItemsControl ItemsSource="{Binding Categories}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="mihon:CategoryChoiceVm">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                            <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                      IsVisible="{Binding $parent[Window].Tag, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            <TextBox Grid.Column="1" Text="{Binding Name}">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Enter"
+                                                Command="{Binding $parent[Window].((mihon:EditCategoriesViewModel)DataContext).RenameCommand}"
+                                                CommandParameter="{Binding}"/>
+                                </TextBox.KeyBindings>
+                            </TextBox>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="6,0,0,0">
+                                <Button Content="Rename" Classes="ghost" FontSize="11" Padding="8,4"
+                                        Command="{Binding $parent[Window].((mihon:EditCategoriesViewModel)DataContext).RenameCommand}"
+                                        CommandParameter="{Binding}"/>
+                                <Button Content="↑" Classes="ghost" FontSize="11" Padding="8,4" ToolTip.Tip="Move up"
+                                        Command="{Binding $parent[Window].((mihon:EditCategoriesViewModel)DataContext).MoveUpCommand}"
+                                        CommandParameter="{Binding}"/>
+                                <Button Content="↓" Classes="ghost" FontSize="11" Padding="8,4" ToolTip.Tip="Move down"
+                                        Command="{Binding $parent[Window].((mihon:EditCategoriesViewModel)DataContext).MoveDownCommand}"
+                                        CommandParameter="{Binding}"/>
+                                <Button Content="Delete" Classes="ghost" FontSize="11" Padding="8,4"
+                                        Foreground="{DynamicResource StatusRedBrush}"
+                                        Command="{Binding $parent[Window].((mihon:EditCategoriesViewModel)DataContext).DeleteCommand}"
+                                        CommandParameter="{Binding}"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+            <TextBlock Text="{Binding Error}" Foreground="{DynamicResource StatusRedBrush}" FontSize="12"
+                       TextWrapping="Wrap" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button x:Name="CancelButton" Content="Cancel" Classes="ghost" Click="OnCancel" IsVisible="False"/>
+                <Button x:Name="DoneButton" Content="Done" Classes="accent" Click="OnDone"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

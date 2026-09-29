@@ -1,0 +1,44 @@
+{
+    "data": {
+        "sources": {
+            "nodes": [
+                {
+                    "id": "0",
+                    "name": "Local source",
+                    "lang": "localsourcelang",
+                    "displayName": "Local source",
+                    "isNsfw": false,
+                    "supportsLatest": true,
+                    "isConfigurable": false
+                },
+                {
+                    "id": "1234567890123456789",
+                    "name": "Example Reader",
+                    "lang": "en",
+                    "displayName": "Example Reader",
+                    "isNsfw": false,
+                    "supportsLatest": true,
+                    "isConfigurable": true
+                },
+                {
+                    "id": "-4611686018427387904",
+                    "name": "Example Reader",
+                    "lang": "es",
+                    "displayName": "Example Reader (ES)",
+                    "isNsfw": false,
+                    "supportsLatest": false,
+                    "isConfigurable": false
+                },
+                {
+                    "id": "77",
+                    "name": "Grown-ups Only",
+                    "lang": "all",
+                    "displayName": "Grown-ups Only",
+                    "isNsfw": true,
+                    "supportsLatest": true,
+                    "isConfigurable": false
+                }
+            ]
+        }
+    }
+}

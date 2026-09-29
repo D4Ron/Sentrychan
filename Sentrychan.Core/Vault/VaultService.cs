@@ -62,7 +62,10 @@ public sealed class VaultCollectionInfo
 /// </summary>
 public sealed class VaultService
 {
-    private const string RootConfigKey = "VaultRoot";
+    /// <summary>The AppConfigs key that pins the vault's location once it has been created.</summary>
+    public const string RootConfigKey = "VaultRoot";
+    // Named for DPAPI, which it has always been passed to on Windows; the other secret stores bind
+    // it in the same way, so the key file can't be opened as anything else.
     private static readonly byte[] DpapiEntropy = "Sentrychan.vault.v1"u8.ToArray();
 
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
@@ -71,8 +74,7 @@ public sealed class VaultService
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private readonly object _indexLock = new();
 
-    private readonly string _keyPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "vault.key");
+    private readonly string _keyPath = AppPaths.VaultKey;
 
     private byte[]? _key;
     private string _root = string.Empty;
@@ -191,11 +193,11 @@ public sealed class VaultService
     private byte[] LoadOrCreateKey()
     {
         if (File.Exists(_keyPath))
-            return ProtectedData.Unprotect(File.ReadAllBytes(_keyPath), DpapiEntropy, DataProtectionScope.CurrentUser);
+            return Secrets.SecretStores.Current.Unprotect(File.ReadAllBytes(_keyPath), DpapiEntropy);
 
         var key = RandomNumberGenerator.GetBytes(32);
         Directory.CreateDirectory(Path.GetDirectoryName(_keyPath)!);
-        File.WriteAllBytes(_keyPath, ProtectedData.Protect(key, DpapiEntropy, DataProtectionScope.CurrentUser));
+        File.WriteAllBytes(_keyPath, Secrets.SecretStores.Current.Protect(key, DpapiEntropy));
         return key;
     }
 
@@ -211,14 +213,22 @@ public sealed class VaultService
         if (!string.IsNullOrWhiteSpace(stored?.Value)) return stored.Value;
 
         var library = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "LibraryPath", ct))?.Value;
-        var root = !string.IsNullOrWhiteSpace(library) && Directory.Exists(library)
-            ? Path.Combine(library, ".cache")
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "cache", "store");
+        var root = DefaultRoot(library, AppPaths.DataDir, BuildInfo.IsPreview);
 
         db.AppConfigs.Add(new AppConfig { Key = RootConfigKey, Value = root });
         await db.SaveChangesAsync(ct);
         return root;
     }
+
+    /// <summary>
+    /// Where a new vault goes: a hidden folder in the library, else inside the data directory.
+    /// The preview gets its own folder name because stable and preview usually share a library
+    /// but never a key — two apps writing one encrypted index would each lock the other out.
+    /// </summary>
+    public static string DefaultRoot(string? libraryPath, string dataDir, bool isPreview) =>
+        !string.IsNullOrWhiteSpace(libraryPath) && Directory.Exists(libraryPath)
+            ? Path.Combine(libraryPath, isPreview ? ".cache-preview" : ".cache")
+            : Path.Combine(dataDir, "cache", "store");
 
     private byte[] Key => _key ?? throw new InvalidOperationException("Vault not opened.");
 
@@ -456,7 +466,7 @@ public sealed class VaultService
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(_keyPath)!);
-        await File.WriteAllBytesAsync(_keyPath, ProtectedData.Protect(key, DpapiEntropy, DataProtectionScope.CurrentUser), ct);
+        await File.WriteAllBytesAsync(_keyPath, Secrets.SecretStores.Current.Protect(key, DpapiEntropy), ct);
         _key = key;
         _index = index;
         _private = NewPrivateSet(index.PrivateDownloads);

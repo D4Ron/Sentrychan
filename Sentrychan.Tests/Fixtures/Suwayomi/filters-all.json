@@ -1,0 +1,83 @@
+{
+    "data": {
+        "source": {
+            "filters": [
+                {
+                    "__typename": "HeaderFilter",
+                    "name": "Filters are ignored with a text query"
+                },
+                {
+                    "__typename": "SelectFilter",
+                    "name": "Status",
+                    "values": [
+                        "Any",
+                        "Ongoing",
+                        "Completed"
+                    ],
+                    "selectDefault": 0
+                },
+                {
+                    "__typename": "TextFilter",
+                    "name": "Author",
+                    "textDefault": ""
+                },
+                {
+                    "__typename": "CheckBoxFilter",
+                    "name": "Has chapters",
+                    "checkBoxDefault": true
+                },
+                {
+                    "__typename": "SeparatorFilter",
+                    "name": ""
+                },
+                {
+                    "__typename": "SortFilter",
+                    "name": "Sort",
+                    "values": [
+                        "Popularity",
+                        "Latest",
+                        "Title"
+                    ],
+                    "sortDefault": {
+                        "index": 1,
+                        "ascending": false
+                    }
+                },
+                {
+                    "__typename": "GroupFilter",
+                    "name": "Genres",
+                    "filters": [
+                        {
+                            "__typename": "TriStateFilter",
+                            "name": "Action",
+                            "triStateDefault": "IGNORE"
+                        },
+                        {
+                            "__typename": "TriStateFilter",
+                            "name": "Romance",
+                            "triStateDefault": "EXCLUDE"
+                        },
+                        {
+                            "__typename": "CheckBoxFilter",
+                            "name": "Completed only",
+                            "checkBoxDefault": false
+                        }
+                    ]
+                },
+                {
+                    "__typename": "FutureFilter",
+                    "name": "Something newer"
+                },
+                {
+                    "__typename": "SortFilter",
+                    "name": "Unsorted",
+                    "values": [
+                        "A",
+                        "B"
+                    ],
+                    "sortDefault": null
+                }
+            ]
+        }
+    }
+}

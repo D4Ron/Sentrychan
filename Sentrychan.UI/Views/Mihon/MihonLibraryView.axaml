@@ -1,0 +1,239 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mihon="using:Sentrychan.UI.ViewModels.Mihon"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             x:Class="Sentrychan.UI.Views.Mihon.MihonLibraryView"
+             x:DataType="mihon:MihonLibraryViewModel">
+
+    <UserControl.Resources>
+        <!-- Badges on a cover: unread (accent) and downloaded (green), as in Mihon. -->
+        <DataTemplate x:Key="Badges" x:DataType="mihon:LibraryItemVm">
+            <StackPanel Orientation="Horizontal" Spacing="0" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <Border Background="{DynamicResource AccentBrush}" CornerRadius="4,0,0,4" Padding="5,1"
+                        IsVisible="{Binding ShowUnread}">
+                    <TextBlock Text="{Binding UnreadText}" FontSize="10.5" FontWeight="Bold" Foreground="White"/>
+                </Border>
+                <Border Background="{DynamicResource StatusGreenBrush}" CornerRadius="0,4,4,0" Padding="5,1"
+                        IsVisible="{Binding ShowDownloaded}">
+                    <TextBlock Text="{Binding DownloadedText}" FontSize="10.5" FontWeight="Bold" Foreground="#0B0D14"/>
+                </Border>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ComfortableCard" x:DataType="mihon:LibraryItemVm">
+            <Button Width="150" Margin="6" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
+                    Command="{Binding OpenCommand}" Cursor="Hand">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                        <MenuItem Header="Select" Command="{Binding ToggleSelectCommand}"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <StackPanel Spacing="6">
+                    <Border Height="215" CornerRadius="6" ClipToBounds="True" BorderThickness="2"
+                            Background="{DynamicResource SurfaceBackgroundBrush}"
+                            BorderBrush="{Binding IsSelected, Converter={x:Static mihon:SelectionBrush.Instance}}">
+                        <Panel>
+                            <controls:AsyncImage Url="{Binding CoverPath}" SourceName="{Binding Source}" Stretch="UniformToFill"/>
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Badges}"/>
+                        </Panel>
+                    </Border>
+                    <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
+                               MaxLines="2" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CompactCard" x:DataType="mihon:LibraryItemVm">
+            <Button Width="128" Margin="4" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
+                    Command="{Binding OpenCommand}" Cursor="Hand">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                        <MenuItem Header="Select" Command="{Binding ToggleSelectCommand}"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <Border Height="184" CornerRadius="6" ClipToBounds="True" BorderThickness="2"
+                        Background="{DynamicResource SurfaceBackgroundBrush}"
+                        BorderBrush="{Binding IsSelected, Converter={x:Static mihon:SelectionBrush.Instance}}">
+                    <Panel>
+                        <controls:AsyncImage Url="{Binding CoverPath}" SourceName="{Binding Source}" Stretch="UniformToFill"/>
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Badges}"/>
+                        <Border VerticalAlignment="Bottom" Padding="7,18,7,6">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                    <GradientStop Color="#00000000" Offset="0"/>
+                                    <GradientStop Color="#D0000000" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold" Foreground="White"
+                                       TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                        </Border>
+                    </Panel>
+                </Border>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CoverOnlyCard" x:DataType="mihon:LibraryItemVm">
+            <Button Width="118" Margin="4" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
+                    Command="{Binding OpenCommand}" Cursor="Hand" ToolTip.Tip="{Binding Title}">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                        <MenuItem Header="Select" Command="{Binding ToggleSelectCommand}"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <Border Height="170" CornerRadius="6" ClipToBounds="True" BorderThickness="2"
+                        Background="{DynamicResource SurfaceBackgroundBrush}"
+                        BorderBrush="{Binding IsSelected, Converter={x:Static mihon:SelectionBrush.Instance}}">
+                    <Panel>
+                        <controls:AsyncImage Url="{Binding CoverPath}" SourceName="{Binding Source}" Stretch="UniformToFill"/>
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Badges}"/>
+                    </Panel>
+                </Border>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ListRow" x:DataType="mihon:LibraryItemVm">
+            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,2" Padding="8,6"
+                    Background="Transparent" BorderThickness="0" Command="{Binding OpenCommand}" Cursor="Hand">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                        <MenuItem Header="Select" Command="{Binding ToggleSelectCommand}"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <Border CornerRadius="6" Padding="6" BorderThickness="2"
+                        BorderBrush="{Binding IsSelected, Converter={x:Static mihon:SelectionBrush.Instance}}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Border Width="40" Height="56" CornerRadius="4" ClipToBounds="True"
+                                Background="{DynamicResource SurfaceBackgroundBrush}">
+                            <controls:AsyncImage Url="{Binding CoverPath}" SourceName="{Binding Source}" Stretch="UniformToFill"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Text="{Binding Detail}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                        </StackPanel>
+                        <ContentControl Grid.Column="2" Content="{Binding}" ContentTemplate="{StaticResource Badges}"
+                                        VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Margin="0,12,0,0">
+        <!-- Toolbar -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+            <TextBox Text="{Binding Search}" Watermark="Search the library" MaxWidth="360" HorizontalAlignment="Left" MinWidth="240"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <ComboBox ItemsSource="{Binding DisplayModes}" SelectedItem="{Binding DisplayModeLabel}" MinWidth="150"
+                          ToolTip.Tip="Display"/>
+                <Button Classes="ghost" ToolTip.Tip="Filter">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="Filter"/>
+                        <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource AccentBrush}"
+                                IsVisible="{Binding FiltersActive}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                            <StackPanel Spacing="4" MinWidth="220">
+                                <TextBlock Text="Click to cycle: include ✓ · exclude ✕ · any" FontSize="11"
+                                           Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,0,0,4"/>
+                                <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Command="{Binding CycleFilterCommand}" CommandParameter="Downloaded">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding DownloadedGlyph}" Width="14" FontWeight="Bold"/>
+                                        <TextBlock Text="Downloaded"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Command="{Binding CycleFilterCommand}" CommandParameter="Unread">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding UnreadGlyph}" Width="14" FontWeight="Bold"/>
+                                        <TextBlock Text="Unread"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Command="{Binding CycleFilterCommand}" CommandParameter="Started">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding StartedGlyph}" Width="14" FontWeight="Bold"/>
+                                        <TextBlock Text="Started"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Command="{Binding CycleFilterCommand}" CommandParameter="Completed">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding CompletedGlyph}" Width="14" FontWeight="Bold"/>
+                                        <TextBlock Text="Completed"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="ghost" Content="Reset filters" Command="{Binding ResetFiltersCommand}"
+                                        IsVisible="{Binding FiltersActive}"/>
+                                <Separator Margin="0,4"/>
+                                <CheckBox IsChecked="{Binding ShowUnreadBadge}" Content="Unread badge"/>
+                                <CheckBox IsChecked="{Binding ShowDownloadedBadge}" Content="Downloaded badge"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Classes="ghost" Content="{Binding SortLabel}" ToolTip.Tip="Sort — pick again to flip the direction">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuItem Header="Title" Command="{Binding SetSortCommand}" CommandParameter="Title"/>
+                            <MenuItem Header="Last read" Command="{Binding SetSortCommand}" CommandParameter="LastRead"/>
+                            <MenuItem Header="Latest chapter" Command="{Binding SetSortCommand}" CommandParameter="LatestChapter"/>
+                            <MenuItem Header="Unread count" Command="{Binding SetSortCommand}" CommandParameter="UnreadCount"/>
+                            <MenuItem Header="Date added" Command="{Binding SetSortCommand}" CommandParameter="DateAdded"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Classes="ghost" Content="Categories…" Click="OnEditCategories"/>
+                <Button Classes="ghost" Content="Refresh" Command="{Binding RefreshCommand}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Category tabs -->
+        <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                 IsVisible="{Binding ShowTabs}" Background="Transparent" Margin="0,0,0,8">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="mihon:CategoryTabVm">
+                    <TextBlock Text="{Binding Header}" FontSize="12.5" Margin="4,0"/>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Selection bar -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding InSelection}" Background="{DynamicResource AccentSubtleBrush}"
+                CornerRadius="8" Padding="12,6" Margin="0,0,0,8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Text="{Binding SelectionText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                    <Button Classes="ghost" Content="Select all" Command="{Binding SelectAllCommand}"/>
+                    <Button Classes="ghost" Content="Set categories…" Click="OnSetCategories"/>
+                    <Button Classes="ghost" Content="Mark read" Command="{Binding MarkSelectedReadCommand}"/>
+                    <Button Classes="ghost" Content="Mark unread" Command="{Binding MarkSelectedUnreadCommand}"/>
+                    <Button Classes="ghost" Command="{Binding RemoveSelectedCommand}" Foreground="{DynamicResource StatusRedBrush}">
+                        <Panel>
+                            <TextBlock Text="Remove" IsVisible="{Binding !ConfirmingRemove}"/>
+                            <TextBlock Text="Remove from library?" IsVisible="{Binding ConfirmingRemove}"/>
+                        </Panel>
+                    </Button>
+                    <Button Classes="ghost" Content="✕" ToolTip.Tip="Clear selection" Command="{Binding ClearSelectionCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Panel>
+            <ScrollViewer>
+                <ItemsControl x:Name="Shelf" ItemsSource="{Binding Items}"/>
+            </ScrollViewer>
+            <TextBlock Text="{Binding EmptyText}" IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center"
+                       VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"/>
+        </Panel>
+    </DockPanel>
+</UserControl>

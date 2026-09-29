@@ -5,6 +5,7 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sentrychan.Core.Interfaces;
+using Sentrychan.Core;
 
 namespace Sentrychan.App;
 
@@ -21,8 +22,7 @@ namespace Sentrychan.App;
 /// </summary>
 public static class PluginSourceLoader
 {
-    public static string UserSourcesDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "sources");
+    public static string UserSourcesDir => AppPaths.Sources;
 
     private static string BundledSourcesDir => Path.Combine(AppContext.BaseDirectory, "sources");
 

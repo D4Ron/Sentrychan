@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sentrychan.UI.Views.Dialogs.CopyFromStableDialog"
+        Title="Welcome to Sentrychan Preview"
+        Width="560" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <StackPanel Margin="28" Spacing="16">
+        <StackPanel Orientation="Horizontal" Spacing="14">
+            <Border Width="52" Height="52" CornerRadius="26" ClipToBounds="True" Background="#0B0D14">
+                <Image Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
+            </Border>
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="Copy your library from Sentrychan?" FontSize="19" FontWeight="Bold"/>
+                <TextBlock Text="The preview keeps its own data, apart from Sentrychan."
+                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock TextWrapping="Wrap" FontSize="12.5"
+                   Text="Sentrychan Preview can start with a copy of your series, manga, feeds, reading progress, download history, settings and imported source packs. The copy is one way: Sentrychan is only read, never changed, and nothing you do in the preview reaches it."/>
+
+        <StackPanel Spacing="8">
+            <TextBlock Text="Left behind" FontSize="12.5" FontWeight="SemiBold"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="• Your vault key. The preview starts a vault of its own (a separate hidden folder in your library), so private items from Sentrychan's vault don't appear here."/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="• Your sign-in. Sign in again in the preview if you use an account."/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="• Downloads still in progress. Sentrychan finishes and files them."/>
+        </StackPanel>
+
+        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}"
+                   Text="Both apps use the same library and download folders. Only one works on them at a time: whichever starts second pauses monitoring and downloads."/>
+
+        <!-- Why Copy can't go ahead yet, or why it failed. -->
+        <Border x:Name="NoticeBox" IsVisible="False" CornerRadius="8" Padding="12,9"
+                Background="{DynamicResource AccentSubtleBrush}">
+            <TextBlock x:Name="NoticeText" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+            <Button x:Name="FreshButton" Content="Start fresh" Classes="ghost" Click="OnStartFresh"/>
+            <Button x:Name="CopyButton" Content="Copy my library" Classes="accent" Click="OnCopy"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

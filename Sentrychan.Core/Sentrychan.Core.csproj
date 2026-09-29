@@ -39,4 +39,22 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- BuildInfo.g.cs: the build flavour (see Directory.Build.props) as code. Written only when
+       it changes, so switching flavour recompiles and an unchanged build stays incremental. -->
+  <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <_BuildInfoFile>$(IntermediateOutputPath)BuildInfo.g.cs</_BuildInfoFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_BuildInfoFile)" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="// &lt;auto-generated/&gt;;namespace Sentrychan.Core%3B;public static partial class BuildInfo;{;    public static string Flavor =&gt; &quot;$(Flavor)&quot;%3B;}" />
+    <ItemGroup>
+      <Compile Include="$(_BuildInfoFile)" />
+      <FileWrites Include="$(_BuildInfoFile)" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sentrychan.Tests" />
+  </ItemGroup>
+
 </Project>

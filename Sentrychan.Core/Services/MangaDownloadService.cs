@@ -47,19 +47,51 @@ public class MangaDownloadService : IMangaDownloadService
     // (switching into secret mode does) while a long chapter is still going — joins the
     // running one. Two writers on one folder is what failed the 500-page chapter on
     // 2026-09-26 ("496.webp is being used by another process").
-    private readonly Dictionary<int, Task<string?>> _inFlight = new();
-    private readonly Dictionary<int, CancellationTokenSource> _cancels = new();
+    //
+    // The queue is an ordered list rather than a semaphore so it can be paused and
+    // reordered: running entries stay in it (flagged) until they finish, and the dispatcher
+    // always starts the first entry that isn't running.
+    private sealed class Entry
+    {
+        public required Manga Manga { get; init; }
+        public required MangaChapter Chapter { get; init; }
+        public IProgress<double>? Progress { get; init; }
+        public required CancellationTokenSource UserCts { get; init; }
+        public TaskCompletionSource<string?> Result { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationTokenSource? RunCts { get; set; }
+        public CancellationTokenRegistration CallerCancel { get; set; }
+        public bool Running { get; set; }
+    }
+
+    private readonly object _queueLock = new();
+    private readonly List<Entry> _queue = [];
+    private int _running;
+    private bool _paused;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, ChapterDownloadStatus> _status = new();
 
     // Two chapters at a time across the whole app: "Download all" on a long series queues
     // every chapter at once, and each chapter is already dozens of image requests.
-    private readonly SemaphoreSlim _slots = new(2, 2);
+    private const int Slots = 2;
 
     private const int PageAttempts = 3;
 
     public event Action<ChapterDownloadStatus>? StatusChanged;
+    public event Action? QueueChanged;
 
     public ChapterDownloadStatus? GetStatus(int chapterId) => _status.GetValueOrDefault(chapterId);
+
+    public bool IsPaused { get { lock (_queueLock) return _paused; } }
+
+    public IReadOnlyList<MangaQueueItem> Queue
+    {
+        get
+        {
+            lock (_queueLock)
+                return _queue.Select(e => new MangaQueueItem(e.Manga, e.Chapter,
+                    GetStatus(e.Chapter.Id) ?? new ChapterDownloadStatus(e.Chapter.Id, e.Manga.Id, ChapterDownloadState.Queued),
+                    e.Running)).ToList();
+        }
+    }
 
     private void Report(ChapterDownloadStatus s)
     {
@@ -67,68 +99,185 @@ public class MangaDownloadService : IMangaDownloadService
         try { StatusChanged?.Invoke(s); } catch (Exception ex) { _logger.LogDebug(ex, "[MangaDL] status listener failed"); }
     }
 
+    private void RaiseQueueChanged()
+    {
+        try { QueueChanged?.Invoke(); } catch (Exception ex) { _logger.LogDebug(ex, "[MangaDL] queue listener failed"); }
+    }
+
     public void Cancel(int chapterId)
     {
-        lock (_inFlight) if (_cancels.TryGetValue(chapterId, out var cts)) cts.Cancel();
+        Entry? waiting = null;
+        lock (_queueLock)
+        {
+            var e = _queue.FirstOrDefault(x => x.Chapter.Id == chapterId);
+            if (e == null) return;
+            e.UserCts.Cancel();
+            // A running entry notices through its token and cleans up itself.
+            if (!e.Running) { _queue.Remove(e); waiting = e; }
+        }
+        if (waiting != null) Finish(waiting, null, cancelled: true);
     }
 
     public void CancelAll(int mangaId)
     {
-        foreach (var s in _status.Values.Where(s => s.MangaId == mangaId && s.IsActive).ToList())
-            Cancel(s.ChapterId);
+        List<int> ids;
+        lock (_queueLock) ids = _queue.Where(e => e.Manga.Id == mangaId).Select(e => e.Chapter.Id).ToList();
+        foreach (var id in ids) Cancel(id);
+    }
+
+    public void CancelEverything()
+    {
+        List<int> ids;
+        lock (_queueLock) ids = _queue.Select(e => e.Chapter.Id).ToList();
+        foreach (var id in ids) Cancel(id);
+    }
+
+    /// <summary>
+    /// Stops starting chapters and interrupts the running ones, which go back to the front of
+    /// the queue. Pages already saved are kept, so resuming picks up where each one stopped.
+    /// </summary>
+    public void PauseAll()
+    {
+        lock (_queueLock)
+        {
+            _paused = true;
+            foreach (var e in _queue.Where(e => e.Running)) e.RunCts?.Cancel();
+        }
+        RaiseQueueChanged();
+    }
+
+    public void ResumeAll()
+    {
+        lock (_queueLock) _paused = false;
+        Pump();
+        RaiseQueueChanged();
+    }
+
+    /// <summary>Moves a queued chapter to a position in the queue (0 = next). Running chapters keep running.</summary>
+    public void Move(int chapterId, int newIndex)
+    {
+        lock (_queueLock)
+        {
+            var e = _queue.FirstOrDefault(x => x.Chapter.Id == chapterId);
+            if (e == null) return;
+            _queue.Remove(e);
+            _queue.Insert(Math.Clamp(newIndex, 0, _queue.Count), e);
+        }
+        RaiseQueueChanged();
     }
 
     public Task<string?> DownloadChapterAsync(
         Manga manga, MangaChapter chapter, IProgress<double>? progress = null, CancellationToken ct = default)
     {
-        lock (_inFlight)
+        if (InstanceGuard.PausedForOtherInstance)
         {
-            if (_inFlight.TryGetValue(chapter.Id, out var running)) return running;
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            _cancels[chapter.Id] = cts;
-            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Queued));
-            var task = QueuedDownloadAsync(manga, chapter, progress, cts.Token);
-            _inFlight[chapter.Id] = task;
-            _ = task.ContinueWith(_ =>
-            {
-                lock (_inFlight) { _inFlight.Remove(chapter.Id); _cancels.Remove(chapter.Id); }
-                cts.Dispose();
-            }, TaskScheduler.Default);
-            return task;
+            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Failed,
+                Error: InstanceGuard.PausedMessage));
+            return Task.FromException<string?>(new MangaDownloadException(InstanceGuard.PausedMessage));
         }
+
+        Entry entry;
+        lock (_queueLock)
+        {
+            var existing = _queue.FirstOrDefault(e => e.Chapter.Id == chapter.Id);
+            if (existing != null) return existing.Result.Task;
+            entry = new Entry
+            {
+                Manga = manga, Chapter = chapter, Progress = progress,
+                UserCts = CancellationTokenSource.CreateLinkedTokenSource(ct),
+            };
+            _queue.Add(entry);
+        }
+        // The caller's token cancels it too — while waiting as well as while running. Hooked on
+        // the caller's token, not UserCts, so Cancel() cancelling UserCts doesn't re-enter itself.
+        if (ct.CanBeCanceled) entry.CallerCancel = ct.Register(() => Cancel(chapter.Id));
+
+        Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Queued));
+        RaiseQueueChanged();
+        Pump();
+        return entry.Result.Task;
     }
 
-    private async Task<string?> QueuedDownloadAsync(Manga manga, MangaChapter chapter, IProgress<double>? progress, CancellationToken ct)
+    /// <summary>Starts queued chapters while slots are free and the queue isn't paused.</summary>
+    private void Pump()
     {
-        await Task.Yield(); // the caller's lock is released before any real work starts
-        try { await _slots.WaitAsync(ct); }
-        catch (OperationCanceledException)
+        var start = new List<Entry>();
+        lock (_queueLock)
         {
-            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Cancelled));
-            return null;
+            while (!_paused && _running < Slots && _queue.FirstOrDefault(e => !e.Running) is { } next)
+            {
+                next.Running = true;
+                next.RunCts = CancellationTokenSource.CreateLinkedTokenSource(next.UserCts.Token);
+                _running++;
+                start.Add(next);
+            }
         }
+        foreach (var e in start) _ = Task.Run(() => RunAsync(e));
+        if (start.Count > 0) RaiseQueueChanged();
+    }
 
+    private async Task RunAsync(Entry e)
+    {
+        string? path = null;
+        Exception? failure = null;
         try
         {
-            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Starting));
-            var path = await DownloadChapterCoreAsync(manga, chapter, progress, ct);
-            var prev = GetStatus(chapter.Id);
-            Report(path != null
-                ? new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Done, prev?.PagesTotal ?? 0, prev?.PagesTotal ?? 0)
-                : ct.IsCancellationRequested
-                    ? (prev ?? new(chapter.Id, manga.Id, ChapterDownloadState.Cancelled)) with { State = ChapterDownloadState.Cancelled }
-                    : new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Failed,
-                        Error: "This chapter has no pages the app can download — it's licensed or hosted elsewhere."));
-            return path;
+            Report(new ChapterDownloadStatus(e.Chapter.Id, e.Manga.Id, ChapterDownloadState.Starting));
+            path = await DownloadChapterCoreAsync(e.Manga, e.Chapter, e.Progress, e.RunCts!.Token);
         }
-        catch (MangaDownloadException ex)
+        catch (Exception ex) { failure = ex; }
+
+        var cancelled = e.UserCts.IsCancellationRequested;
+        var paused = !cancelled && e.RunCts!.IsCancellationRequested;
+
+        lock (_queueLock)
         {
-            var prev = GetStatus(chapter.Id);
-            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Failed,
-                prev?.PagesDone ?? 0, prev?.PagesTotal ?? 0, ex.Message));
-            throw;
+            _running--;
+            e.Running = false;
+            e.RunCts?.Dispose();
+            e.RunCts = null;
+            // Interrupted by a pause: it never left its place in the list, so it simply waits
+            // there again — ahead of everything queued after it.
+            if (!(paused && failure == null)) _queue.Remove(e);
         }
-        finally { _slots.Release(); }
+
+        if (paused && failure == null)
+        {
+            var prev = GetStatus(e.Chapter.Id);
+            Report(new ChapterDownloadStatus(e.Chapter.Id, e.Manga.Id, ChapterDownloadState.Queued,
+                prev?.PagesDone ?? 0, prev?.PagesTotal ?? 0));
+        }
+        else if (failure != null) Fail(e, failure);
+        else Finish(e, path, cancelled);
+
+        RaiseQueueChanged();
+        Pump();
+    }
+
+    private void Finish(Entry e, string? path, bool cancelled)
+    {
+        var prev = GetStatus(e.Chapter.Id);
+        Report(path != null
+            ? new ChapterDownloadStatus(e.Chapter.Id, e.Manga.Id, ChapterDownloadState.Done, prev?.PagesTotal ?? 0, prev?.PagesTotal ?? 0)
+            : cancelled
+                ? (prev ?? new(e.Chapter.Id, e.Manga.Id, ChapterDownloadState.Cancelled)) with { State = ChapterDownloadState.Cancelled }
+                : new ChapterDownloadStatus(e.Chapter.Id, e.Manga.Id, ChapterDownloadState.Failed,
+                    Error: "This chapter has no pages the app can download — it's licensed or hosted elsewhere."));
+        e.Result.TrySetResult(path);
+        e.CallerCancel.Dispose();
+        e.UserCts.Dispose();
+        RaiseQueueChanged();
+    }
+
+    private void Fail(Entry e, Exception ex)
+    {
+        var prev = GetStatus(e.Chapter.Id);
+        var error = ex is MangaDownloadException ? ex : new MangaDownloadException($"Download failed: {ex.Message}", ex);
+        Report(new ChapterDownloadStatus(e.Chapter.Id, e.Manga.Id, ChapterDownloadState.Failed,
+            prev?.PagesDone ?? 0, prev?.PagesTotal ?? 0, error.Message));
+        e.Result.TrySetException(error);
+        e.CallerCancel.Dispose();
+        e.UserCts.Dispose();
     }
 
     private async Task<string?> DownloadChapterCoreAsync(
@@ -424,8 +573,7 @@ public class MangaDownloadService : IMangaDownloadService
         var lib = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "LibraryPath", ct))?.Value;
         if (!string.IsNullOrWhiteSpace(lib) && Directory.Exists(lib)) return lib!;
 
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan");
+        return AppPaths.DataDir;
     }
 
     private static string Sanitize(string name)
