@@ -229,11 +229,8 @@ public class WatchPartyViewModel : ViewModelBase, IAsyncDisposable
             }
         });
 
-        OpenDiscordCommand = ReactiveCommand.Create(() => 
-        {
-            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://discord.gg/anime") { UseShellExecute = true }); }
-            catch { /* Log error */ }
-        });
+        // Was a hardcoded invite to an unrelated server.
+        OpenDiscordCommand = ReactiveCommand.Create(() => Services.AppLinks.Open(Services.AppLinks.Discord));
 
         StartCommand = ReactiveCommand.CreateFromTask(StartSessionAsync);
 

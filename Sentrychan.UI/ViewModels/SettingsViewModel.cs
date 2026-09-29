@@ -240,6 +240,9 @@ public class SettingsViewModel : ViewModelBase
                 System.Diagnostics.Process.Start("explorer.exe", dir);
         });
 
+    public ReactiveCommand<string, Unit> OpenLinkCommand { get; } =
+        ReactiveCommand.Create<string>(Services.AppLinks.Open);
+
     public ReactiveCommand<Unit, Unit> ShowTutorialCommand { get; } =
         ReactiveCommand.CreateFromTask(async () =>
         {

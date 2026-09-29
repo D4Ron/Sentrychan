@@ -4,6 +4,7 @@
              xmlns:views="using:Sentrychan.UI.Views"
              xmlns:ctrls="using:Sentrychan.UI.Controls"
              xmlns:converters="using:Sentrychan.UI.Converters"
+             xmlns:services="using:Sentrychan.UI.Services"
              x:Class="Sentrychan.UI.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
@@ -469,6 +470,17 @@
                                     <TextBlock Text="{Binding UpdateStatus}" FontSize="13" TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextSecondaryBrush}"
                                                IsVisible="{Binding UpdateStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                </StackPanel>
+                            </ctrls:SettingsSection>
+
+                            <ctrls:SettingsSection Title="Community" Description="Questions, bug reports and what's coming next.">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button Content="Join the Discord" Classes="accent pill" Command="{Binding OpenLinkCommand}"
+                                            CommandParameter="{x:Static services:AppLinks.Discord}"/>
+                                    <Button Content="Website" Classes="ghost pill" Command="{Binding OpenLinkCommand}"
+                                            CommandParameter="{x:Static services:AppLinks.Website}"/>
+                                    <Button Content="Report a bug" Classes="ghost pill" Command="{Binding OpenLinkCommand}"
+                                            CommandParameter="{x:Static services:AppLinks.Issues}"/>
                                 </StackPanel>
                             </ctrls:SettingsSection>
 

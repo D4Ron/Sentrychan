@@ -30,7 +30,8 @@ into a library. This file is the brief. Read all of it before changing anything,
    interfaces. New interface members get **default implementations** so an older pack still loads.
 3. The public build (`-p:IncludeSources=false`) must still connect to nothing on its own.
 4. Don't commit secrets, and don't touch release packaging/publishing (`pack.ps1`, Velopack upload,
-   GitHub Releases, the website in `docs/`) — that's done on Windows, outside this plan.
+   GitHub Releases) or the website in `docs/` — that's done on Windows, outside this plan. The one
+   exception is the website section of Phase 6.
 
 ### Codebase orientation
 
@@ -162,10 +163,45 @@ Import a Mihon backup (`.tachibk`: gzip-compressed protobuf; schema in Mihon's s
 entries, categories, read chapters, history. Match source ids to bridged sources (Phase 4); list what
 couldn't be matched. Works without the bridge for categories/reading state of titles already present.
 
+## Phase 6 — macOS and Linux
+
+The UI (Avalonia) and runtime (.NET 9) are cross-platform already; the work is the Windows-only edges.
+Find them with `grep -rn "ProtectedData\|DllImport\|user32\|FileAttributes.Hidden\|\.exe\"\|Registry" --include=*.cs`.
+
+- **Paths:** `AppPaths` (Phase 0) resolves per OS — `%AppData%` on Windows,
+  `~/Library/Application Support` on macOS, `$XDG_DATA_HOME` (or `~/.local/share`) on Linux.
+- **Secrets:** an `ISecretStore` for everything DPAPI protects today (vault key, sign-in session):
+  DPAPI on Windows, Keychain on macOS, the Secret Service (libsecret) on Linux, with a clear error — not
+  a silent plaintext fallback — when none is available. Existing Windows data must keep opening.
+- **Video:** LibVLC per OS (`VideoLAN.LibVLC.Mac` on macOS; the system libvlc on Linux — detect it and
+  explain how to install it if missing).
+- **Notifications and tray:** keep the Windows toasts; add macOS and Linux implementations (or Avalonia's
+  own where it suffices) behind the existing notification interface.
+- **Everything else Windows-specific** (hidden/system attributes, bundled `.exe` helpers such as the
+  tunnel client, `Process.Start` of URLs/folders) gets a per-OS path or a graceful "not available on
+  this OS" — never a crash. The Mihon bridge (Phase 4) downloads the matching Suwayomi build per OS.
+- **Builds:** a GitHub Actions workflow (on `preview`) that builds and packs unsigned macOS (arm64 and
+  x64) and Linux (x64 AppImage) artifacts with Velopack and uploads them as **workflow artifacts only** —
+  it must not create or edit GitHub Releases. Apple Silicon binaries need at least ad-hoc signing to run.
+- **macOS signing is not funded.** Without Apple's paid Developer ID the app is unsigned and
+  unnotarised: macOS will block the first launch until the user allows it in System Settings →
+  Privacy & Security → "Open Anyway". Don't try to work around Gatekeeper; document it.
+- **Website — the one exception to "no website changes", and only once this phase works:** on `preview`
+  (it goes live when merged at release time), in `docs/index.html`:
+  - Download buttons per OS (detect the visitor's OS; always show links to the other two). Stable-only
+    until a stable release carries Mac/Linux assets — the preview card lists what the preview has.
+  - Wording that says "on Windows" (tagline, meta description, Installing) covers all three.
+  - In **Installing**, a **macOS notice**: the Mac version works but is unsigned, so macOS warns on first
+    launch (with the Open Anyway steps); signing and notarising it needs an Apple developer membership,
+    which needs **further funding** — link it with the page's existing funding link (class `js-fund`).
+    State plainly that funding is what stands between the Mac build and a warning-free install.
+  - A **Linux notice**: AppImage, how to make it executable, the libvlc dependency for video.
+- **Tests:** `AppPaths` per OS, the secret-store selection, and that the build runs on Linux in CI.
+
 ## Not for the cloud session (done on Windows)
 
-Preview packaging and release, website changes, process-lifetime checks on Windows, filter support
-inside the external source pack, and a visual pass over every new view.
+Preview packaging and release, website changes other than the Phase 6 section above, process-lifetime
+checks on Windows, filter support inside the external source pack, and a visual pass over every new view.
 
 ---
 
@@ -173,4 +209,5 @@ inside the external source pack, and a visual pass over every new view.
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — Phase 6 (macOS and Linux, plus its website section) added.
 - 2026-09-29 — Plan written. Nothing started.
