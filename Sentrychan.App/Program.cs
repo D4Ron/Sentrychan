@@ -30,8 +30,7 @@ public static class Program
     // launch must not just surface a running stable window and exit. Stable keeps the names
     // older builds used, so an updated and a not-yet-updated stable still see each other.
     private static System.Threading.Mutex? _instanceMutex;
-    private static readonly string MutexName = BuildInfo.IsPreview
-        ? @"Global\SentrychanPreview_SingleInstance" : @"Global\Sentrychan_SingleInstance";
+    private static readonly string MutexName = InstanceGuard.OwnInstanceMutex;
     private static readonly string ShowEventName = BuildInfo.IsPreview
         ? @"Global\SentrychanPreview_ShowWindow" : @"Global\Sentrychan_ShowWindow";
 
@@ -61,6 +60,9 @@ public static class Program
             return;
         }
         StartShowWindowListener();
+
+        // Stable and preview may run side by side, but only one of them works the library.
+        InstanceGuard.CheckOtherInstance();
 
         AppPaths.EnsureDataDir();
         var dbPath = AppPaths.Database;
@@ -411,6 +413,9 @@ public static class Program
                 // resumed torrent can finish, or a private one would be filed in the library.
                 try { await host.Services.GetRequiredService<Sentrychan.Core.Vault.VaultService>().EnsureReadyAsync(); }
                 catch (Exception ex) { Console.WriteLine($"Vault open failed: {ex.Message}"); }
+                // The other flavour is running and resuming its own copy of these jobs; two
+                // engines writing the same files would corrupt them.
+                if (InstanceGuard.PausedForOtherInstance) return;
                 try { await monoTorrent.RestoreAsync(CancellationToken.None); }
                 catch (Exception ex) { Console.WriteLine($"Torrent restore failed: {ex.Message}"); }
                 await host.Services.GetRequiredService<Sentrychan.Core.Services.DownloadQueueManager>()

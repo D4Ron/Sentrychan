@@ -65,6 +65,13 @@ public class DownloadFolderWatcher : BackgroundService, IDownloadFolderWatcher
 
     public new async Task StartAsync(CancellationToken ct = default)
     {
+        // The other flavour watches the same folder; two apps filing one file race each other.
+        if (InstanceGuard.PausedForOtherInstance)
+        {
+            _logger.LogInformation("[DownloadWatcher] Not watching — {Reason}", InstanceGuard.PausedMessage);
+            return;
+        }
+
         await RefreshConfigAsync(ct);
 
         if (string.IsNullOrEmpty(_downloadPath) || !Directory.Exists(_downloadPath))

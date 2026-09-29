@@ -24,8 +24,9 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
     private volatile bool _paused;
     private const string PausedKey = "MonitoringPaused";
 
-    // Monitoring is "on" only while the loop is alive AND not paused by the user.
-    public bool IsMonitoring => _running && !_paused;
+    // Monitoring is "on" only while the loop is alive AND not paused — by the user, or because
+    // the other flavour of the app is running.
+    public bool IsMonitoring => _running && !_paused && !InstanceGuard.PausedForOtherInstance;
 
     // Regex and normalization moved to IEpisodeNormalizer
     private readonly IEpisodeNormalizer _normalizer;
@@ -146,6 +147,14 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
     // ── Core Check Logic ───────────────────────────────────────────
     private async Task RunCheckAsync(bool isManual, CancellationToken ct, int? singleFeedId = null)
     {
+        // Covers manual checks too (the tray's Check Now, a single feed): a check enqueues downloads.
+        // Not persisted like a user pause, so the user's own choice is intact for next time.
+        if (InstanceGuard.PausedForOtherInstance)
+        {
+            _logger.LogInformation("RSS check skipped — {Reason}", InstanceGuard.PausedMessage);
+            return;
+        }
+
         await _mediator.Publish(
             new MonitorStatusEvent(MonitorStatus.CheckStarted, IsManual: isManual), ct);
 

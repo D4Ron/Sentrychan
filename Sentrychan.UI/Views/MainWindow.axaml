@@ -134,7 +134,7 @@
         </Border>
 
         <!-- Main Content area 5.2 -->
-        <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+        <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*">
 
             <!-- Top Bar layout: horizontal navigation (alternative to the sidebar) -->
             <Border Grid.Row="0" Height="52" Background="{DynamicResource SurfaceBackgroundBrush}"
@@ -221,8 +221,22 @@
                 </Grid>
             </Border>
 
+            <!-- Stable and preview both running: this one isn't monitoring or downloading.
+                 Stays up for the session — it's a state, not a notification. -->
+            <Border Grid.Row="2" IsVisible="{Binding IsPausedForOtherInstance}"
+                    Background="{DynamicResource AccentSubtleBrush}"
+                    BorderBrush="{DynamicResource BorderEmphasisBrush}" BorderThickness="0,0,0,1"
+                    Padding="16,9">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border Width="8" Height="8" CornerRadius="4" VerticalAlignment="Center"
+                            Background="{DynamicResource StatusAmberBrush}"/>
+                    <TextBlock Text="{Binding OtherInstanceMessage}" TextWrapping="Wrap" FontSize="12.5"
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </StackPanel>
+            </Border>
+
             <!-- 5.5 Content Area -->
-                <Grid Grid.Row="2" RowDefinitions="*">
+                <Grid Grid.Row="3" RowDefinitions="*">
                 <Panel Grid.Row="0">
                     <!-- Switchable Views -->
                     <ContentControl Content="{Binding WatchPartyVm}"

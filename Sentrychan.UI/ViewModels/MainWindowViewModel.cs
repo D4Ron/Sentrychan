@@ -181,7 +181,17 @@ public class MainWindowViewModel : ViewModelBase,
     }
 
     /// <summary>Sidebar label. Used to be the hardcoded literal "Monitoring Active".</summary>
-    public string MonitorStatusText => IsMonitoring ? "Monitoring active" : "Monitoring paused";
+    public string MonitorStatusText =>
+        IsMonitoring ? "Monitoring active"
+        : IsPausedForOtherInstance ? "Paused — other app running"
+        : "Monitoring paused";
+
+    /// <summary>
+    /// The other flavour (stable or preview) was already running when this one started, so
+    /// monitoring and downloads are paused here for the session. Shown as a banner.
+    /// </summary>
+    public bool IsPausedForOtherInstance => InstanceGuard.PausedForOtherInstance;
+    public string OtherInstanceMessage => InstanceGuard.PausedMessage;
 
     private bool _hasPendingEpisodes;
     public bool HasPendingEpisodes
@@ -1252,6 +1262,8 @@ public class MainWindowViewModel : ViewModelBase,
         var svc = App.Services?.GetService(typeof(Sentrychan.Core.Services.MangaUpdateService))
             as Sentrychan.Core.Services.MangaUpdateService;
         if (svc == null) return;
+        // The other app checks the same follows and would notify about every chapter too.
+        if (IsPausedForOtherInstance) return;
 
         var report = await svc.CheckForUpdatesAsync(CancellationToken.None);
         if (report.WithNewChapters == 0) return;
@@ -1412,7 +1424,7 @@ public class MainWindowViewModel : ViewModelBase,
                 await using var db = await _dbContextFactory.CreateDbContextAsync();
                 paused = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "MonitoringPaused"))?.Value == "true";
             }
-            IsMonitoring = !paused;
+            IsMonitoring = !paused && !IsPausedForOtherInstance;
             UpdateStatus(IsMonitoring ? "● Monitoring" : "● Idle", IsMonitoring ? "#00FF00" : "#808080");
         }
         catch { /* leave the default state */ }
@@ -1713,6 +1725,12 @@ public class MainWindowViewModel : ViewModelBase,
     private async Task ToggleMonitoringAsync()
     {
         if (_rssMonitor == null) return;
+        // Resuming here would persist "not paused" without monitoring anything; say why instead.
+        if (IsPausedForOtherInstance)
+        {
+            ShowToast("Monitoring paused", OtherInstanceMessage);
+            return;
+        }
         if (IsMonitoring)
         {
             _rssMonitor.Pause();               // actually halt the background checks
@@ -1745,6 +1763,11 @@ public class MainWindowViewModel : ViewModelBase,
     private async Task ManualCheckAsync()
     {
         if (_rssMonitor == null) return;
+        if (IsPausedForOtherInstance)
+        {
+            ShowToast("Monitoring paused", OtherInstanceMessage);
+            return;
+        }
         UpdateStatus("● Checking...", "#FFA726");
         await _rssMonitor.ManualCheckAsync();
     }

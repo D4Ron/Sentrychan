@@ -81,6 +81,13 @@ public class MangaDownloadService : IMangaDownloadService
     public Task<string?> DownloadChapterAsync(
         Manga manga, MangaChapter chapter, IProgress<double>? progress = null, CancellationToken ct = default)
     {
+        if (InstanceGuard.PausedForOtherInstance)
+        {
+            Report(new ChapterDownloadStatus(chapter.Id, manga.Id, ChapterDownloadState.Failed,
+                Error: InstanceGuard.PausedMessage));
+            return Task.FromException<string?>(new MangaDownloadException(InstanceGuard.PausedMessage));
+        }
+
         lock (_inFlight)
         {
             if (_inFlight.TryGetValue(chapter.Id, out var running)) return running;

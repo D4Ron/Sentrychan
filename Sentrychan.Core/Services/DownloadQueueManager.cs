@@ -166,6 +166,8 @@ public class DownloadQueueManager
             _logger.LogWarning("Enqueue ignored — empty download link for {Title}", seriesTitle);
             return EnqueueOutcome.Failed("no download link");
         }
+        if (InstanceGuard.PausedForOtherInstance)
+            return EnqueueOutcome.Failed(InstanceGuard.PausedMessage);
 
         var duplicate = await FindDuplicateAsync(url, seriesId, episodeNumber, seriesTitle, rssTitle, allowExistingFile, ct);
         if (duplicate != null)
@@ -274,6 +276,7 @@ public class DownloadQueueManager
     /// </summary>
     public async Task PromotePendingAsync(CancellationToken ct = default)
     {
+        if (InstanceGuard.PausedForOtherInstance) return;
         if (!await _promoteLock.WaitAsync(0, ct)) return; // a promotion pass is already running
 
         try
