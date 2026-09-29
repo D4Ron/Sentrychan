@@ -30,7 +30,12 @@
 		<!-- Animated-GIF frame decoding for the reader (matches Avalonia's own Skia). -->
 		<PackageReference Include="SkiaSharp" Version="2.88.9" />
 		<PackageReference Include="QRCoder" Version="1.6.0" />
-		<PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
+		<!-- The VLC library each system's build carries. Linux uses the system's libvlc instead
+		     (see Services/VideoSupport). A build with no runtime identifier stays as it was:
+		     the Windows one. -->
+		<PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23"
+		                  Condition="!$(RuntimeIdentifier.StartsWith('osx')) And !$(RuntimeIdentifier.StartsWith('linux'))" />
+		<PackageReference Include="VideoLAN.LibVLC.Mac" Version="3.1.3.1" Condition="$(RuntimeIdentifier.StartsWith('osx'))" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Sentrychan.Core\Sentrychan.Core.csproj" />
