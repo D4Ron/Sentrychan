@@ -14,6 +14,9 @@ public sealed record ChapterDownloadStatus(
     public bool IsActive => State is ChapterDownloadState.Queued or ChapterDownloadState.Starting or ChapterDownloadState.Downloading;
 }
 
+/// <summary>A chapter in the download queue, in queue order. Running chapters stay listed until they finish.</summary>
+public sealed record MangaQueueItem(Manga Manga, MangaChapter Chapter, ChapterDownloadStatus Status, bool IsRunning);
+
 /// <summary>
 /// Downloads manga chapters for offline reading. Manga pages are plain HTTP images
 /// (not torrents), so this is its own downloader rather than the torrent queue.
@@ -39,6 +42,27 @@ public interface IMangaDownloadService
 
     /// <summary>Stops every queued or running download of one manga.</summary>
     void CancelAll(int mangaId);
+
+    /// <summary>Everything queued or running, in the order it will run.</summary>
+    IReadOnlyList<MangaQueueItem> Queue => [];
+
+    /// <summary>Raised on any thread when the queue's membership, order or paused state changes.</summary>
+    event Action? QueueChanged { add { } remove { } }
+
+    /// <summary>True while <see cref="PauseAll"/> holds the queue.</summary>
+    bool IsPaused => false;
+
+    /// <summary>Holds the queue; running chapters stop and return to its front, keeping saved pages.</summary>
+    void PauseAll() { }
+
+    /// <summary>Releases a paused queue.</summary>
+    void ResumeAll() { }
+
+    /// <summary>Moves a chapter to a position in the queue; 0 is next.</summary>
+    void Move(int chapterId, int newIndex) { }
+
+    /// <summary>Cancels everything queued or running.</summary>
+    void CancelEverything() { }
 
     /// <summary>
     /// Moves adult chapters downloaded as plain folders into the vault. Returns the count moved.
