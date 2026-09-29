@@ -145,16 +145,31 @@ public sealed class SuwayomiClient(HttpClient http, Uri baseUri)
         var d = await SendAsync("FetchChapters",
             "mutation FetchChapters($id: Int!) { fetchChapters(input: { mangaId: $id }) { chapters { id name chapterNumber scanlator uploadDate sourceOrder realUrl } } }",
             new JsonObject { ["id"] = mangaId }, ct);
-        return d.GetProperty("fetchChapters").GetProperty("chapters").EnumerateArray().Select(c =>
-        {
-            var upload = Long(c, "uploadDate");
-            return new BridgeChapter(c.GetProperty("id").GetInt32(), Str(c, "name") ?? "",
-                c.TryGetProperty("chapterNumber", out var n) && n.ValueKind == JsonValueKind.Number ? n.GetDouble() : -1,
-                Str(c, "scanlator"),
-                upload is > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(upload.Value).UtcDateTime : null,
-                c.TryGetProperty("sourceOrder", out var o) && o.ValueKind == JsonValueKind.Number ? o.GetInt32() : 0,
-                Str(c, "realUrl"));
-        }).ToList();
+        return d.GetProperty("fetchChapters").GetProperty("chapters").EnumerateArray().Select(ParseChapter).ToList();
+    }
+
+    private static BridgeChapter ParseChapter(JsonElement c)
+    {
+        var upload = Long(c, "uploadDate");
+        return new BridgeChapter(c.GetProperty("id").GetInt32(), Str(c, "name") ?? "",
+            c.TryGetProperty("chapterNumber", out var n) && n.ValueKind == JsonValueKind.Number ? n.GetDouble() : -1,
+            Str(c, "scanlator"),
+            upload is > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(upload.Value).UtcDateTime : null,
+            c.TryGetProperty("sourceOrder", out var o) && o.ValueKind == JsonValueKind.Number ? o.GetInt32() : 0,
+            Str(c, "realUrl"));
+    }
+
+    /// <summary>
+    /// The chapters the server already has for a title, without asking the source — used to
+    /// line a restored backup up with the library.
+    /// </summary>
+    public async Task<IReadOnlyList<(BridgeChapter Chapter, string Url)>> GetStoredChaptersAsync(int mangaId, CancellationToken ct = default)
+    {
+        var d = await SendAsync("StoredChapters",
+            "query StoredChapters($id: Int!) { chapters(condition: { mangaId: $id }) { nodes { id url name chapterNumber scanlator uploadDate sourceOrder realUrl } } }",
+            new JsonObject { ["id"] = mangaId }, ct);
+        return d.GetProperty("chapters").GetProperty("nodes").EnumerateArray()
+            .Select(c => (ParseChapter(c), Str(c, "url") ?? "")).ToList();
     }
 
     /// <summary>Absolute URLs of a chapter's page images, served by the server itself.</summary>
@@ -260,6 +275,53 @@ public sealed class SuwayomiClient(HttpClient http, Uri baseUri)
             "mutation RemoveRepo($url: String!) { removeExtensionStore(input: { indexUrl: $url }) { clientMutationId } }",
             new JsonObject { ["url"] = indexUrl }, ct);
 
+    // ── Backups ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Hands a Mihon backup to the server so it knows the backed-up titles and their chapters by
+    /// the sources' own URLs. Only titles and chapters: the app keeps categories, history and
+    /// reading state itself, and the server's settings are left alone. Returns the restore's id.
+    /// </summary>
+    public async Task<string> RestoreBackupAsync(byte[] backup, CancellationToken ct = default)
+    {
+        // GraphQL multipart request: the file travels as a part and "map" says which variable it fills.
+        var operations = new JsonObject
+        {
+            ["operationName"] = "RestoreBackup",
+            ["query"] = "mutation RestoreBackup($backup: Upload!, $flags: PartialBackupFlagsInput) " +
+                        "{ restoreBackup(input: { backup: $backup, flags: $flags }) { id } }",
+            ["variables"] = new JsonObject
+            {
+                ["backup"] = null,
+                ["flags"] = new JsonObject
+                {
+                    ["includeManga"] = true, ["includeChapters"] = true, ["includeCategories"] = false,
+                    ["includeTracking"] = false, ["includeHistory"] = false, ["includeClientData"] = false,
+                    ["includeServerSettings"] = false,
+                },
+            },
+        };
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent(operations.ToJsonString()), "operations" },
+            { new StringContent("""{"0":["variables.backup"]}"""), "map" },
+            { new ByteArrayContent(backup), "0", "backup.tachibk" },
+        };
+        var d = await PostAsync(form, ct);
+        return Str(d.GetProperty("restoreBackup"), "id") ?? throw BridgeException.FromServer("The restore didn't start.");
+    }
+
+    /// <summary>A restore's progress: state (IDLE, RESTORING_…, SUCCESS, FAILURE), titles done and total.</summary>
+    public async Task<(string State, int Done, int Total)> RestoreStatusAsync(string id, CancellationToken ct = default)
+    {
+        var d = await SendAsync("RestoreStatus",
+            "query RestoreStatus($id: String!) { restoreStatus(id: $id) { state mangaProgress totalManga } }",
+            new JsonObject { ["id"] = id }, ct);
+        var s = d.GetProperty("restoreStatus");
+        if (s.ValueKind == JsonValueKind.Null) return ("IDLE", 0, 0);
+        return (Str(s, "state") ?? "IDLE", s.GetProperty("mangaProgress").GetInt32(), s.GetProperty("totalManga").GetInt32());
+    }
+
     // ── Transport ───────────────────────────────────────────────────
 
     /// <summary>Runs one operation and returns its <c>data</c>; server errors become a <see cref="BridgeException"/>.</summary>
@@ -268,10 +330,15 @@ public sealed class SuwayomiClient(HttpClient http, Uri baseUri)
         var body = new JsonObject { ["operationName"] = operation, ["query"] = document };
         if (variables != null) body["variables"] = variables;
 
+        return await PostAsync(JsonContent.Create(body), ct);
+    }
+
+    private async Task<JsonElement> PostAsync(HttpContent content, CancellationToken ct)
+    {
         HttpResponseMessage resp;
         try
         {
-            resp = await http.PostAsJsonAsync(new Uri(BaseUri, "api/graphql"), body, ct);
+            resp = await http.PostAsync(new Uri(BaseUri, "api/graphql"), content, ct);
         }
         catch (HttpRequestException ex)
         {

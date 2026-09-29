@@ -46,7 +46,7 @@ public sealed class JavaBridgeProcessLauncher : IBridgeProcessLauncher
     /// The JVM arguments. Server settings are overridable with -D properties (read from the
     /// server's config module), which beat anything in its own config file — so whatever the
     /// server's saved settings say, it listens on loopback only, opens no browser or tray icon,
-    /// doesn't fetch its web UI, and makes no backups of its own.
+    /// doesn't fetch its web UI, and makes no backups or library updates of its own.
     /// </summary>
     public static IReadOnlyList<string> Arguments(BridgeLaunch l) =>
     [
@@ -57,6 +57,8 @@ public sealed class JavaBridgeProcessLauncher : IBridgeProcessLauncher
         Prefix + "initialOpenInBrowserEnabled=false",
         Prefix + "systemTrayEnabled=false",
         Prefix + "backupInterval=0",
+        // Its own library updates would fetch from sites on a timer; the app checks for new chapters itself.
+        Prefix + "globalUpdateInterval=0",
         Prefix + "kcefEnabled=" + (l.WebView ? "true" : "false"),
         "-Djava.awt.headless=true",
         "-jar", l.JarPath,

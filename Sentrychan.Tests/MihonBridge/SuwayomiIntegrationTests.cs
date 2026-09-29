@@ -1,8 +1,13 @@
-using System.IO.Compression;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sentrychan.Core.Data;
 using Sentrychan.Core.Interfaces;
+using Sentrychan.Core.MangaLibrary;
+using Sentrychan.Core.MihonBackup;
 using Sentrychan.Core.MihonBridge;
 using Sentrychan.Core.Services;
+using Sentrychan.Tests.MihonBackup;
 
 namespace Sentrychan.Tests.MihonBridge;
 
@@ -33,7 +38,76 @@ public sealed class SuwayomiIntegrationTests : IDisposable
 
     public void Dispose()
     {
+        SqliteConnection.ClearAllPools();
         try { Directory.Delete(_root, recursive: true); } catch { }
+    }
+
+    private sealed class Factory(string path) : IDbContextFactory<AppDbContext>
+    {
+        public AppDbContext CreateDbContext() => new(new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={path};Pooling=False").Options);
+    }
+
+    /// <summary>The unpacked bundle, linked in as installed server "vI".</summary>
+    private BridgeLayout LinkBundle(out Action cleanup)
+    {
+        var bundle = Environment.GetEnvironmentVariable(SuwayomiFactAttribute.Variable)!;
+        var layout = new BridgeLayout(_root);
+        Directory.CreateDirectory(Path.Combine(_root, "server"));
+        Directory.CreateSymbolicLink(layout.ServerDir("vI"), Path.GetFullPath(bundle));
+        var marker = Path.Combine(layout.ServerDir("vI"), ".installed");
+        var markerExisted = File.Exists(marker);
+        if (!markerExisted) File.WriteAllText(marker, "");
+        cleanup = () => { if (!markerExisted) File.Delete(marker); };
+        return layout;
+    }
+
+    [SuwayomiFact]
+    public async Task A_mihon_backup_is_restored_into_the_server_and_added_to_the_library()
+    {
+        var layout = LinkBundle(out var cleanup);
+        var factory = new Factory(Path.Combine(_root, "t.db"));
+        await using (var db = factory.CreateDbContext()) db.Database.Migrate();
+        var config = new MemoryConfig();
+        config.Values[MihonBridgeService.EnabledKey] = true;
+        var registry = new MangaSourceRegistry([]);
+        using var bridge = new MihonBridgeService(config, registry, NullLogger<MihonBridgeService>.Instance,
+            new JavaBridgeProcessLauncher(), layout, "vI", null, null, null, TimeSpan.FromMinutes(3));
+        // The server's local source stands in for an installed extension: no site involved.
+        registry.Add(new BridgedMangaSource(new BridgeSource("0", "Local source", "en", "Local source", false, true, false),
+            "Bridged local", bridge));
+        try
+        {
+            var manga = new MangaService(factory, NullLogger<MangaService>.Instance);
+            var library = new MangaLibraryService(factory, NullLogger<MangaLibraryService>.Instance);
+            var importer = new MihonBackupImporter(factory, manga, library, registry, bridge, NullLogger<MihonBackupImporter>.Instance);
+            var backup = TachibkWriter.Write(new MihonBackupData(
+                [new BackupManga(0, "Restored Invented Title", "Restored Invented Title", null, null, [], 0, null, 0,
+                    [new BackupChapter("Restored Invented Title/Ch 1", "Ch 1", null, true, false, 0, 0, 1, 1),
+                     new BackupChapter("Restored Invented Title/Ch 2", "Ch 2", null, false, true, 0, 0, 2, 0)],
+                    [0], true, [new BackupHistory("Restored Invented Title/Ch 1", 1_700_000_000_000)])],
+                [new BackupCategory("Reading", 0)], [new BackupSource("Local source", 0)]));
+
+            var plan = await importer.PlanAsync(backup);
+            Assert.Equal(1, plan.ToAdd);
+            var report = await importer.ApplyAsync(plan);
+            Assert.Equal((1, 1, 1, 1), (report.Added, report.ChaptersRead, report.Bookmarks, report.History));
+
+            var added = (await manga.GetByIdAsync((await manga.GetAllAsync()).Single().Id))!;
+            Assert.Equal("Bridged local", added.Source);
+            Assert.Equal(2, added.Chapters.Count);
+            Assert.True(added.Chapters.Single(c => c.ChapterSort == 1).IsRead);
+            Assert.Equal("Reading", (await library.GetCategoriesAsync()).Single().Name);
+
+            // A second import finds it by URL and changes nothing.
+            var again = await importer.PlanAsync(backup);
+            Assert.Equal(1, again.InLibrary);
+        }
+        finally
+        {
+            bridge.Stop();
+            cleanup();
+        }
     }
 
     private static byte[] Png()
@@ -45,14 +119,7 @@ public sealed class SuwayomiIntegrationTests : IDisposable
     [SuwayomiFact]
     public async Task The_bridge_drives_a_real_server_end_to_end()
     {
-        var bundle = Environment.GetEnvironmentVariable(SuwayomiFactAttribute.Variable)!;
-        var layout = new BridgeLayout(_root);
-        Directory.CreateDirectory(Path.Combine(_root, "server"));
-        Directory.CreateSymbolicLink(layout.ServerDir("vI"), Path.GetFullPath(bundle));
-        var marker = Path.Combine(layout.ServerDir("vI"), ".installed");
-        var markerExisted = File.Exists(marker);
-        if (!markerExisted) File.WriteAllText(marker, "");
-
+        var layout = LinkBundle(out var cleanup);
         foreach (var title in new[] { "Invented Title", "Another Invented Title" })
             for (var c = 1; c <= 2; c++)
             {
@@ -107,7 +174,7 @@ public sealed class SuwayomiIntegrationTests : IDisposable
         finally
         {
             bridge.Stop();
-            if (!markerExisted) File.Delete(marker);
+            cleanup();
         }
     }
 }

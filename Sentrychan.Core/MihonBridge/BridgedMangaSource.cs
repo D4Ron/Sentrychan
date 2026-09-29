@@ -82,13 +82,19 @@ public sealed class BridgedMangaSource(BridgeSource source, string sourceName, I
     public async Task<List<MangaChapterInfo>> GetChaptersAsync(string sourceId, string language = "en", CancellationToken ct = default)
     {
         if (!int.TryParse(sourceId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)) return [];
-        var chapters = await (await bridge.ClientAsync(ct)).FetchChaptersAsync(id, ct);
+        return ToChapterInfos(await (await bridge.ClientAsync(ct)).FetchChaptersAsync(id, ct));
+    }
+
+    /// <summary>The server's chapters as the app's, ascending — also used when importing a backup.</summary>
+    public List<MangaChapterInfo> ToChapterInfos(IEnumerable<BridgeChapter> chapters)
+    {
+        var list = chapters.ToList();
         var lang = Language(Source.Language);
         lock (_chapterUrls)
-            foreach (var c in chapters.Where(c => !string.IsNullOrEmpty(c.RealUrl)))
+            foreach (var c in list.Where(c => !string.IsNullOrEmpty(c.RealUrl)))
                 _chapterUrls[Id(c.Id)] = c.RealUrl!;
 
-        return chapters
+        return list
             // Mihon lists newest first (source order 0); unnumbered chapters (-1) keep that order.
             .OrderBy(c => c.ChapterNumber >= 0 ? c.ChapterNumber : double.MaxValue)
             .ThenByDescending(c => c.SourceOrder)
@@ -115,7 +121,7 @@ public sealed class BridgedMangaSource(BridgeSource source, string sourceName, I
 
     private MangaPage ToPage(BridgeMangaPage page) => new(page.Mangas.Select(ToResult).ToList(), page.HasNextPage);
 
-    private MangaSearchResult ToResult(BridgeManga m) => new(
+    public MangaSearchResult ToResult(BridgeManga m) => new(
         Id(m.Id), m.Title, null,
         m.Description,
         string.IsNullOrEmpty(m.ThumbnailUrl) ? string.Empty : ImageScheme + m.ThumbnailUrl,

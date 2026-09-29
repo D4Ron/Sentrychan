@@ -4,7 +4,15 @@
             "nodes": [
                 {
                     "id": 2,
-                    "title": "Invented Title"
+                    "title": "Invented Title",
+                    "thumbnailUrl": "/api/v1/manga/2/thumbnail",
+                    "url": "Invented Title",
+                    "realUrl": null,
+                    "status": "UNKNOWN",
+                    "author": null,
+                    "artist": null,
+                    "description": null,
+                    "genre": []
                 }
             ]
         }

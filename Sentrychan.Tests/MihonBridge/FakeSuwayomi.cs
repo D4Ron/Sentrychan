@@ -28,11 +28,20 @@ internal sealed class FakeSuwayomi : HttpMessageHandler
         ["SetPreference"] = "{\"data\":{\"updateSourcePreference\":" + "{\"preferences\":[]}}}",
         ["Extensions"] = "extensions",
         ["Repos"] = "repos",
+        ["StoredChapters"] = "stored-chapters",
+        ["RestoreBackup"] = "restore",
+        ["RestoreStatus"] = "restore-status",
     };
 
     public Dictionary<string, (byte[] Body, HttpStatusCode Status)> Files { get; } = new();
 
     public List<JsonObject> Requests { get; } = [];
+
+    /// <summary>Files sent with multipart requests (a restored backup).</summary>
+    public List<byte[]> Uploads { get; } = [];
+
+    /// <summary>Answers an operation before the table does (fixture name or raw JSON); null falls through.</summary>
+    public Func<string, JsonObject, string?>? Override { get; set; }
 
     /// <summary>Until this is true, GraphQL calls fail like a server that isn't listening yet.</summary>
     public Func<bool> Listening { get; set; } = () => true;
@@ -51,12 +60,23 @@ internal sealed class FakeSuwayomi : HttpMessageHandler
         }
 
         if (!Listening()) throw new HttpRequestException("Connection refused");
-        var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();
+        JsonObject body;
+        if (request.Content is MultipartFormDataContent form)
+        {
+            // A GraphQL multipart request: the operation is in "operations", the file in part "0".
+            var parts = form.ToList();
+            var ops = parts.First(p => p.Headers.ContentDisposition?.Name?.Trim('"') == "operations");
+            body = JsonNode.Parse(await ops.ReadAsStringAsync(ct))!.AsObject();
+            var file = parts.First(p => p.Headers.ContentDisposition?.Name?.Trim('"') == "0");
+            Uploads.Add(await file.ReadAsByteArrayAsync(ct));
+        }
+        else body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();
         lock (Requests) Requests.Add(body);
         var op = body["operationName"]!.GetValue<string>();
-        var name = op == "FetchSourceManga"
-            ? ListingFixture(body["variables"]!["type"]!.GetValue<string>())
-            : Responses.GetValueOrDefault(op) ?? throw new InvalidOperationException("No fixture for " + op);
+        var name = Override?.Invoke(op, body)
+            ?? (op == "FetchSourceManga"
+                ? ListingFixture(body["variables"]!["type"]!.GetValue<string>())
+                : Responses.GetValueOrDefault(op) ?? throw new InvalidOperationException("No fixture for " + op));
         var json = name.StartsWith('{') ? name : Fixture(name);
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
     }
