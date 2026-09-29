@@ -31,8 +31,7 @@ public static class Program
     // older builds used, so an updated and a not-yet-updated stable still see each other.
     private static System.Threading.Mutex? _instanceMutex;
     private static readonly string MutexName = InstanceGuard.OwnInstanceMutex;
-    private static readonly string ShowEventName = BuildInfo.IsPreview
-        ? @"Global\SentrychanPreview_ShowWindow" : @"Global\Sentrychan_ShowWindow";
+    private static IDisposable? _showWindowListener;
 
     // Passed to the new process by RestartApp, which starts it before this one has exited.
     private const string RestartedArg = "--restarted";
@@ -62,12 +61,9 @@ public static class Program
         }
         if (!isFirst)
         {
-            try
-            {
-                using var ev = System.Threading.EventWaitHandle.OpenExisting(ShowEventName);
-                ev.Set(); // ask the running instance to surface its window
-            }
-            catch { /* running instance may be mid-startup — just exit quietly */ }
+            // Ask the running instance to surface its window. It may be mid-startup and not
+            // listening yet — then just exit quietly.
+            ShowWindowSignal.Send(BuildInfo.IsPreview);
             return;
         }
         StartShowWindowListener();
@@ -564,38 +560,23 @@ public static class Program
     }
 
     /// <summary>
-    /// Waits (on a background thread) for a second launch to signal the show-window
-    /// event, then brings this instance's main window to the front instead of letting
-    /// a duplicate start.
+    /// Waits for a second launch to ask for the window, then brings this instance's main window
+    /// to the front instead of letting a duplicate start.
     /// </summary>
     private static void StartShowWindowListener()
     {
-        var thread = new System.Threading.Thread(() =>
-        {
-            using var ev = new System.Threading.EventWaitHandle(
-                false, System.Threading.EventResetMode.AutoReset, ShowEventName);
-            while (true)
+        _showWindowListener = ShowWindowSignal.Listen(BuildInfo.IsPreview, () =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                ev.WaitOne();
-                try
+                if (Avalonia.Application.Current?.ApplicationLifetime
+                        is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d
+                    && d.MainWindow is { } w)
                 {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        if (Avalonia.Application.Current?.ApplicationLifetime
-                                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d
-                            && d.MainWindow is { } w)
-                        {
-                            w.Show();
-                            w.WindowState = Avalonia.Controls.WindowState.Normal;
-                            w.Activate();
-                        }
-                    });
+                    w.Show();
+                    w.WindowState = Avalonia.Controls.WindowState.Normal;
+                    w.Activate();
                 }
-                catch { /* app may be shutting down */ }
-            }
-        })
-        { IsBackground = true, Name = "ShowWindowListener" };
-        thread.Start();
+            }));
     }
 
     /// <summary>
