@@ -209,5 +209,53 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — **Phase 0 done** (branch `preview`). Both flavours build (`dotnet build Sentrychan.sln`,
+  add `-p:Flavor=Preview`; also with `-p:IncludeSources=false`); `dotnet test Sentrychan.Tests` → 27 pass.
+  Warning count unchanged from `main` (26).
+  - **Build fix first:** `Assets/frpc.exe` is git-ignored, so a fresh clone failed MSB3030. It's now
+    copied only if present (`FrpTunnelService` already reports a missing binary).
+  - **`AppPaths`** (Core) replaces every hand-built `%AppData%/Sentrychan`; `SENTRYCHAN_DATA_DIR`
+    overrides. `AppPaths.StableDataDir` is stable's folder whatever the build (the copy source).
+  - **Flavour:** `Directory.Build.props` → `Flavor` (Stable|Preview, anything else fails the build);
+    Core generates `obj/.../BuildInfo.g.cs` (`BuildInfo.Flavor`, `.IsPreview`, `.AppName`). Preview:
+    data in `Sentrychan Preview`, title/tray/product name "Sentrychan Preview", `Border.chip.preview`
+    badge beside the logo (sidebar + top bar).
+  - **Updates:** `VelopackUpdateService` — stable unchanged; preview `prerelease: true` +
+    `ExplicitChannel = "preview"`. Preview packages must be packed with `--channel preview` (Windows).
+  - **Never both at once:** `InstanceGuard` (Core). Single-instance mutex/show-event names are now per
+    flavour (stable keeps the old names); at startup each probes the other's mutex (by taking it —
+    stale named mutexes survive crashes on Unix). If held: RSS checks (incl. manual/tray), torrent
+    enqueue, pending promotion + startup torrent resume, download-folder watcher, manga chapter
+    downloads and the manga update check are skipped for the session, and a banner shows
+    `InstanceGuard.PausedMessage`. Not persisted — the user's own Start/Stop survives. Decided once at
+    startup; restart to resume. Verified across real processes on Linux (held/released/crashed).
+  - **Vault:** `VaultService.DefaultRoot` → `<Library>/.cache-preview` for preview. A pinned
+    `VaultRoot` is left alone (the copy clears it).
+  - **First run of preview:** `StableLibraryCopy` + `CopyFromStableDialog`, offered when the preview
+    library is empty, stable has a DB and it hasn't been answered (`StableCopyOffered`). Only while
+    stable isn't running (checked on click). Stages a file copy (db + leftover -wal, `sources/`,
+    `Covers/`, `ImageCache/`, `playback.json`) into `import-from-stable`, fixes it up with plain SQL
+    (drop `VaultRoot`, repoint `Series.PosterPath`/`Manga.CoverPath`, drop Pending/Downloading jobs,
+    mark offered), then restarts (`--restarted` makes the new process wait for the old one's mutex).
+    `Program` swaps it in before the DB opens; what it replaces goes to `before-import-from-stable-<ts>`.
+    Not copied: `vault.key`, `Auth/` (session), logs, caches.
+  - **Needs checking on Windows:** badge + banner + copy dialog visually (both layouts, secret mode);
+    two flavours side by side (either order) → banner, nothing downloads in the second, stable's
+    window isn't surfaced by a preview launch; the copy end-to-end incl. the automatic restart from an
+    installed (Velopack) preview; preview toasts — `WindowsNotificationService` still uses the
+    `'Sentrychan'` notifier id, which may need the preview's own AUMID once it's packed; Velopack
+    preview channel against a real prerelease; that a stable build from before this change is
+    detected by the preview (same mutex name, should just work). The reverse (an old stable noticing
+    a running preview) can't work until stable carries `InstanceGuard`.
+  - **Known limits / follow-ups:** the pause doesn't lift if the other app quits (restart needed);
+    no Settings entry to re-offer the copy after "Start fresh"; if stable's DB is from a *newer*
+    schema than the preview knows, the copy is used as-is. The app doesn't start on Linux yet (named
+    `EventWaitHandle` is Windows-only) — Phase 6.
+  - **Cloud container note:** the default .NET download host is blocked here. The SDK was installed by
+    extracting the Debian 12 `dotnet-sdk-9.0` debs from packages.microsoft.com into `/root/.dotnet`
+    (host, hostfxr, runtime, aspnetcore-runtime, targeting/apphost packs); run built apps with
+    `DOTNET_ROOT=/root/.dotnet`.
+  - **Next:** Phase 1 (Tidy library).
+
 - 2026-09-29 — Phase 6 (macOS and Linux, plus its website section) added.
 - 2026-09-29 — Plan written. Nothing started.
