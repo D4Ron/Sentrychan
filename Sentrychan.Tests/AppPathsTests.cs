@@ -78,3 +78,41 @@ public class AppPathsTests
         }
     }
 }
+
+public class AppPathsPerOsTests
+{
+    private const string Home = "/home/someone";
+
+    [Fact]
+    public void Windows_keeps_roaming_app_data()
+    {
+        Assert.Equal(@"C:\Users\someone\AppData\Roaming",
+            AppPaths.PlatformRoot(AppPaths.Os.Windows, @"C:\Users\someone\AppData\Roaming", @"C:\Users\someone", null));
+    }
+
+    [Fact]
+    public void MacOS_uses_application_support()
+    {
+        Assert.Equal(Path.Combine("/Users/someone", "Library", "Application Support"),
+            AppPaths.PlatformRoot(AppPaths.Os.MacOS, "/Users/someone/.config", "/Users/someone", "/ignored"));
+    }
+
+    [Theory]
+    [InlineData(null, "/home/someone/.local/share")]
+    [InlineData("", "/home/someone/.local/share")]
+    [InlineData("relative/data", "/home/someone/.local/share")] // not absolute → ignored, per the XDG spec
+    [InlineData("/data/xdg", "/data/xdg")]
+    public void Linux_follows_xdg_data_home(string? xdg, string expected)
+    {
+        Assert.Equal(expected.Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar),
+            AppPaths.PlatformRoot(AppPaths.Os.Linux, "/home/someone/.config", Home, xdg)
+                .Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar));
+    }
+
+    [Fact]
+    public void Each_flavour_gets_its_folder_under_the_platform_root()
+    {
+        var root = AppPaths.PlatformRoot(AppPaths.Os.Linux, "", Home, null);
+        Assert.EndsWith(Path.Combine(".local", "share", "Sentrychan Preview"), AppPaths.ResolveDataDir(null, root, isPreview: true));
+    }
+}

@@ -17,7 +17,32 @@ public static class AppPaths
     public const string StableFolderName  = "Sentrychan";
     public const string PreviewFolderName = "Sentrychan Preview";
 
-    private static string RoamingRoot => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+    private static string RoamingRoot => PlatformRoot(CurrentOs,
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        Environment.GetEnvironmentVariable("XDG_DATA_HOME"));
+
+    public enum Os { Windows, MacOS, Linux }
+
+    public static Os CurrentOs =>
+        OperatingSystem.IsWindows() ? Os.Windows : OperatingSystem.IsMacOS() ? Os.MacOS : Os.Linux;
+
+    /// <summary>
+    /// The per-user folder that holds an app's data on each system, separated from the
+    /// environment so it can be tested: %AppData% (Roaming) on Windows, as it always was;
+    /// ~/Library/Application Support on macOS; $XDG_DATA_HOME, or ~/.local/share, on Linux.
+    /// .NET's own ApplicationData maps to ~/.config on both of the latter, which is for settings,
+    /// not a database and caches.
+    /// </summary>
+    public static string PlatformRoot(Os os, string windowsAppData, string home, string? xdgDataHome) => os switch
+    {
+        Os.Windows => windowsAppData,
+        Os.MacOS => Path.Combine(home, "Library", "Application Support"),
+        // The spec says a relative XDG_DATA_HOME is invalid and must be ignored.
+        _ => !string.IsNullOrWhiteSpace(xdgDataHome) && Path.IsPathRooted(xdgDataHome)
+            ? xdgDataHome
+            : Path.Combine(home, ".local", "share"),
+    };
 
     /// <summary>This build's data directory. Not created here — see <see cref="EnsureDataDir"/>.</summary>
     public static string DataDir =>
