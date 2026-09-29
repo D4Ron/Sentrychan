@@ -209,6 +209,35 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — **Phase 5 done** (Mihon backup import). 180 tests pass (+2 opt-in real-server tests, both pass here).
+  - **Reader:** `Core/MihonBackup/TachibkReader` — gzip (or raw) protobuf, hand-rolled wire reader, no new
+    dependency. Field numbers from Mihon's `data/backup/models` (listed in the class doc). Reads manga
+    (source id, url, title, description, status, cover, dateAdded, chapters, category *orders*, favorite,
+    history), categories (name, order), sources (name, id); skips the rest (tracking, prefs, stores).
+    Tests write backups with their own protobuf writer (`Tests/MihonBackup/TachibkWriter`), incl. packed
+    lists, negative ids and fields to skip.
+  - **Importer:** `MihonBackupImporter.PlanAsync` (no writes) → `ApplyAsync`. Only favourites are library
+    entries; a non-favourite already in the library still gets its reading state.
+    - Bridged source installed (`BridgedMangaSource.Source.Id` = backup source id): exact match by URL
+      (`mangas(condition:{sourceId,url})`). Unknown to the server → the whole file goes to its
+      `restoreBackup` (GraphQL multipart; flags: manga + chapters only), then looked up again. Chapters
+      come from the server's DB (`chapters(condition:{mangaId})`, no site request), synced in place, and
+      matched by URL.
+    - Otherwise: by normalised title among library titles (several → only if one is on a source with the
+      backup's source name), chapters by number (scanlator breaks ties) then name. Works with the bridge off.
+    - Categories created by name (existing reused), linked additively; reads only forward
+      (`SetReadAsync(read: true)`); bookmarks added; history upserted if newer. Re-import is a no-op.
+    - Unmatched: reason per title + "sources of the titles that couldn't be matched: X (n)".
+  - **Bridge:** now also started with `globalUpdateInterval=0` (the server's own timed library updates
+    would hit sites; the app runs its own update checks — verified the server accepts 0).
+  - **UI:** Settings → Library → Backup → "Import Mihon backup…" → `MihonImportDialog` (plan, Import,
+    progress, Stop, result).
+  - **Needs checking on Windows:** a real Mihon backup from a phone (size, speed, odd titles), the dialog
+    visually, the file picker filter (`*.tachibk`).
+  - **Known limits:** tracking, per-title reader settings, excluded scanlators and notes aren't imported;
+    history keeps one row per chapter (the app's model), so read durations are dropped.
+  - **Next:** Phase 6 (macOS and Linux).
+
 - 2026-09-29 — **Phase 4 done** (Mihon extension bridge, opt-in). 168 tests pass (+1 opt-in integration test).
   - **Server:** Suwayomi-Server **v2.3.2243** pinned in `Core/MihonBridge/BridgeRelease.cs` with SHA-256 per
     bundle (win-x64 zip, linux-x64 / osx-x64 / osx-arm64 tar.gz — hashed from the published files here).
