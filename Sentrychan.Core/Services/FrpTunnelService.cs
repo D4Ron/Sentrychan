@@ -35,7 +35,7 @@ public class FrpTunnelService : ITunnelService, IAsyncDisposable
 
         try
         {
-            var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan");
+            var appDataPath = AppPaths.DataDir;
             var frpcExePath = Path.Combine(AppContext.BaseDirectory, "Assets", "frpc.exe");
             var configPath = Path.Combine(appDataPath, "frpc.toml");
 

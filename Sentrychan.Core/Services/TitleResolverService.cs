@@ -49,9 +49,7 @@ public class TitleResolverService : ITitleResolverService
         _http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("Sentrychan/2.0");
 
-        var appData = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan");
-        Directory.CreateDirectory(appData);
+        var appData = AppPaths.EnsureDataDir();
         _dbFilePath = Path.Combine(appData, "anime-offline-database-min.json");
     }
 

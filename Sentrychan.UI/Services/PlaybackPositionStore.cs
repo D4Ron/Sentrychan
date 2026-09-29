@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.Services;
 
@@ -14,8 +15,7 @@ namespace Sentrychan.UI.Services;
 /// </summary>
 public static class PlaybackPositionStore
 {
-    private static readonly string FilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "playback.json");
+    private static readonly string FilePath = AppPaths.Combine("playback.json");
 
     private static readonly object Gate = new();
     private static Dictionary<string, double[]>? _positions;

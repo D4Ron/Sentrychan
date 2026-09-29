@@ -15,6 +15,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using Sentrychan.UI.Services;
 using Sentrychan.UI.Interfaces;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.ViewModels;
 
@@ -228,14 +229,12 @@ public class SettingsViewModel : ViewModelBase
         "v" + (System.Reflection.Assembly.GetEntryAssembly()?
             .GetName().Version?.ToString(3) ?? "1.0.0");
 
-    public string LogFolderPath => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "logs");
+    public string LogFolderPath => AppPaths.Logs;
 
     public ReactiveCommand<Unit, Unit> OpenLogsCommand { get; } =
         ReactiveCommand.Create(() =>
         {
-            var dir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "logs");
+            var dir = AppPaths.Logs;
             if (System.IO.Directory.Exists(dir))
                 System.Diagnostics.Process.Start("explorer.exe", dir);
         });
@@ -751,8 +750,7 @@ public class SettingsViewModel : ViewModelBase
     }
 
     // ── Source packs (Mihon-style installable sources) ──────────────
-    private static string SourcesDir => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "sources");
+    private static string SourcesDir => AppPaths.Sources;
 
     private async Task ImportSourcePackAsync()
     {

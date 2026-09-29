@@ -424,8 +424,7 @@ public class MangaDownloadService : IMangaDownloadService
         var lib = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "LibraryPath", ct))?.Value;
         if (!string.IsNullOrWhiteSpace(lib) && Directory.Exists(lib)) return lib!;
 
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan");
+        return AppPaths.DataDir;
     }
 
     private static string Sanitize(string name)

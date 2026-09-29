@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.Services;
 
@@ -27,9 +28,7 @@ public static class ThumbUrlCache
     private static bool _loaded;
     private static bool _dirty;
 
-    private static string CacheFile => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Sentrychan", "cache", "thumb-urls.json");
+    private static string CacheFile => AppPaths.Combine("cache", "thumb-urls.json");
 
     private static void EnsureLoaded()
     {

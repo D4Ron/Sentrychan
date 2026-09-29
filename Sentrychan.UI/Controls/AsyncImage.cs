@@ -13,6 +13,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.Controls;
 
@@ -80,9 +81,7 @@ public class AsyncImage : Image
     // from PosterPath, extended to manga covers/pages (and any remote image). Kept in
     // its OWN directory (not anime's ImageCache) so size-eviction here can never delete
     // a file an anime Series.PosterPath points at. Bounded by total size, oldest-first.
-    private static readonly string _diskCacheDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Sentrychan", "cache", "images");
+    private static readonly string _diskCacheDir = AppPaths.Combine("cache", "images");
     private const long MaxDiskBytes = 600L * 1024 * 1024; // ~600 MB ceiling
     private const long DiskTrimTo   = 450L * 1024 * 1024; // trim back down to this
     private static int _writesSinceTrim;

@@ -21,6 +21,7 @@ using Sentrychan.UI.Interfaces;
 using System.Windows.Input;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.ViewModels;
  
@@ -2113,7 +2114,7 @@ public class MainWindowViewModel : ViewModelBase,
         var files = await GetMainWindow()!.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions { Title = $"Select Poster for {series.Title}", AllowMultiple = false, FileTypeFilter = new[] { Avalonia.Platform.Storage.FilePickerFileTypes.ImageAll } });
         if (files != null && files.Count > 0)
         {
-            var coversDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "Covers");
+            var coversDir = AppPaths.Combine("Covers");
             Directory.CreateDirectory(coversDir);
             var destPath = Path.Combine(coversDir, $"{series.Id}_{DateTime.Now.Ticks}{Path.GetExtension(files[0].Path.LocalPath)}");
             File.Copy(files[0].Path.LocalPath, destPath, true);

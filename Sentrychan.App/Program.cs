@@ -18,6 +18,7 @@ using Sentrychan.UI;
 using Sentrychan.UI.ViewModels;
 using Sentrychan.UI.Interfaces;
 using Sentrychan.UI.Services;
+using Sentrychan.Core;
 
 namespace Sentrychan.App;
 
@@ -57,13 +58,10 @@ public static class Program
         }
         StartShowWindowListener();
 
-        var appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Sentrychan");
-        Directory.CreateDirectory(appDataPath);
-        var dbPath = Path.Combine(appDataPath, "sentrychan.db");
+        AppPaths.EnsureDataDir();
+        var dbPath = AppPaths.Database;
 
-        _logDir = Path.Combine(appDataPath, "logs");
+        _logDir = AppPaths.Logs;
         Directory.CreateDirectory(_logDir);
 
         // ── Global crash handling ──────────────────────────────────
@@ -246,7 +244,7 @@ public static class Program
                 {
                     logging.AddConsole();
 
-                    // Daily rolling file logs in %APPDATA%/Sentrychan/logs — survive
+                    // Daily rolling file logs in <AppPaths.DataDir>/logs — survive
                     // the WinExe (no-console) build so user reports are debuggable.
                     // Uses the maintained Serilog.Sinks.File directly; the old
                     // Serilog.Extensions.Logging.File wrapper is abandoned and dragged

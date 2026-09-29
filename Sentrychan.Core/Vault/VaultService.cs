@@ -71,8 +71,7 @@ public sealed class VaultService
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private readonly object _indexLock = new();
 
-    private readonly string _keyPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "vault.key");
+    private readonly string _keyPath = AppPaths.VaultKey;
 
     private byte[]? _key;
     private string _root = string.Empty;
@@ -213,7 +212,7 @@ public sealed class VaultService
         var library = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "LibraryPath", ct))?.Value;
         var root = !string.IsNullOrWhiteSpace(library) && Directory.Exists(library)
             ? Path.Combine(library, ".cache")
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "cache", "store");
+            : AppPaths.Combine("cache", "store");
 
         db.AppConfigs.Add(new AppConfig { Key = RootConfigKey, Value = root });
         await db.SaveChangesAsync(ct);

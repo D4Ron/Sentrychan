@@ -38,9 +38,7 @@ public class SupabaseAccountService : IAccountService, IAsyncDisposable
     private bool _initialized;
 
     // ── Session persistence ────────────────────────────────────────
-    private static readonly string _sessionDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Sentrychan", "Auth");
+    private static readonly string _sessionDir = AppPaths.Combine("Auth");
     private static readonly string _sessionFile = Path.Combine(_sessionDir, "session.dat");
 
     // ── Realtime channels (auto-attached on sign-in, torn down on sign-out) ─
