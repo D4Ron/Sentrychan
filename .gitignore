@@ -4,6 +4,8 @@ obj/
 /publish/
 /releases/
 /releases-beta-local/
+/publish-preview/
+/releases-preview/
 .vs/
 
 # Credentials - never commit.

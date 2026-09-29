@@ -7,6 +7,7 @@
 # Usage:
 #   .\pack.ps1 1.0.0
 #   .\pack.ps1 1.0.1        # any later build; Velopack computes the delta vs the last
+#   .\pack.ps1 1.1.0-preview.1 -Preview -Public   # a preview release (separate app + channel)
 #
 # The version MUST increase each release — Velopack refuses to pack a version that
 # isn't higher than what's already in .\releases, which is what makes auto-update work.
@@ -17,19 +18,32 @@ param(
 
     # -Public builds the source-less "RSS viewer" release (no manga/novel sources bundled).
     # Omit it for the beta/personal build, which bundles the source pack and auto-seeds it.
-    [switch]$Public
+    [switch]$Public,
+
+    # -Preview packs "Sentrychan Preview": its own app id (installs beside Sentrychan, own data
+    # folder), the "preview" update channel, and its own output folder so a preview can never
+    # land in .\releases. Publish it as a GitHub *pre-release*.
+    [switch]$Preview
 )
 
 $ErrorActionPreference = "Stop"
 
 $IncludeSources = if ($Public) { "false" } else { "true" }
 $Flavor = if ($Public) { "PUBLIC (no baked-in sources)" } else { "beta (sources bundled + auto-seeded)" }
+if ($Preview) {
+    # Stable picks the newest full release; a preview version has to say it's a pre-release.
+    if ($Version -notmatch '-preview\.\d+$') { throw "A preview version looks like 1.1.0-preview.1 (got '$Version')." }
+    $Flavor = "PREVIEW, $Flavor"
+}
+$BuildFlavor = if ($Preview) { "Preview" } else { "Stable" }
+$PackId      = if ($Preview) { "SentrychanPreview" } else { "Sentrychan" }
+$PackTitle   = if ($Preview) { "Sentrychan Preview" } else { "Sentrychan" }
 
 $App        = "Sentrychan.App"
 $Project    = "$App/$App.csproj"
 $Runtime    = "win-x64"
-$PublishDir = "publish"
-$ReleaseDir = "releases"
+$PublishDir = if ($Preview) { "publish-preview" } else { "publish" }
+$ReleaseDir = if ($Preview) { "releases-preview" } else { "releases" }
 
 Write-Host "== Sentrychan packager - v$Version - $Flavor ==" -ForegroundColor Cyan
 
@@ -43,6 +57,7 @@ $publishArgs = @(
     "-r", $Runtime,
     "--self-contained", "true",
     "-p:IncludeSources=$IncludeSources",
+    "-p:Flavor=$BuildFlavor",
     "-o", $PublishDir
 )
 & dotnet @publishArgs
@@ -70,15 +85,17 @@ Write-Host "`n[2/3] Packing with Velopack..." -ForegroundColor Yellow
 
 $packArgs = @(
     "pack",
-    "--packId", "Sentrychan",
+    "--packId", $PackId,
     "--packVersion", $Version,
     "--packDir", $PublishDir,
     "--mainExe", "$App.exe",
-    "--packTitle", "Sentrychan",
+    "--packTitle", $PackTitle,
     "--packAuthors", "D4Ron",
     "--icon", "$App/Assets/icon.ico",
     "--outputDir", $ReleaseDir
 )
+# Must match VelopackUpdateService.PreviewChannel, or installed previews never see an update.
+if ($Preview) { $packArgs += @("--channel", "preview") }
 & vpk @packArgs
 if ($LASTEXITCODE -ne 0) { throw "vpk pack failed" }
 
@@ -86,5 +103,7 @@ if ($LASTEXITCODE -ne 0) { throw "vpk pack failed" }
 Write-Host "`n[3/3] Done. Artifacts in .\$ReleaseDir :" -ForegroundColor Green
 Get-ChildItem $ReleaseDir | Select-Object Name, @{N='Size';E={"{0:N1} MB" -f ($_.Length/1MB)}} | Format-Table -AutoSize
 
-Write-Host "Upload the ENTIRE .\$ReleaseDir folder to a GitHub Release tagged v$Version." -ForegroundColor Cyan
-Write-Host "Users install with Sentrychan-win-Setup.exe; existing users auto-update from RELEASES." -ForegroundColor Cyan
+$kind = if ($Preview) { "GitHub PRE-release" } else { "GitHub Release" }
+Write-Host "Upload the ENTIRE .\$ReleaseDir folder to a $kind tagged v$Version." -ForegroundColor Cyan
+$setup = (Get-ChildItem $ReleaseDir -Filter "*-Setup.exe" | Select-Object -First 1).Name
+Write-Host "Users install with $setup; existing users auto-update from the release feed." -ForegroundColor Cyan
