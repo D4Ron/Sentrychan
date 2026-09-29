@@ -62,7 +62,8 @@ public sealed class VaultCollectionInfo
 /// </summary>
 public sealed class VaultService
 {
-    private const string RootConfigKey = "VaultRoot";
+    /// <summary>The AppConfigs key that pins the vault's location once it has been created.</summary>
+    public const string RootConfigKey = "VaultRoot";
     private static readonly byte[] DpapiEntropy = "Sentrychan.vault.v1"u8.ToArray();
 
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
@@ -210,14 +211,22 @@ public sealed class VaultService
         if (!string.IsNullOrWhiteSpace(stored?.Value)) return stored.Value;
 
         var library = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "LibraryPath", ct))?.Value;
-        var root = !string.IsNullOrWhiteSpace(library) && Directory.Exists(library)
-            ? Path.Combine(library, ".cache")
-            : AppPaths.Combine("cache", "store");
+        var root = DefaultRoot(library, AppPaths.DataDir, BuildInfo.IsPreview);
 
         db.AppConfigs.Add(new AppConfig { Key = RootConfigKey, Value = root });
         await db.SaveChangesAsync(ct);
         return root;
     }
+
+    /// <summary>
+    /// Where a new vault goes: a hidden folder in the library, else inside the data directory.
+    /// The preview gets its own folder name because stable and preview usually share a library
+    /// but never a key — two apps writing one encrypted index would each lock the other out.
+    /// </summary>
+    public static string DefaultRoot(string? libraryPath, string dataDir, bool isPreview) =>
+        !string.IsNullOrWhiteSpace(libraryPath) && Directory.Exists(libraryPath)
+            ? Path.Combine(libraryPath, isPreview ? ".cache-preview" : ".cache")
+            : Path.Combine(dataDir, "cache", "store");
 
     private byte[] Key => _key ?? throw new InvalidOperationException("Vault not opened.");
 
