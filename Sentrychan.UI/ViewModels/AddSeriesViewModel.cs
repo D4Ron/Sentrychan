@@ -214,7 +214,9 @@ public class AddSeriesViewModel : ViewModelBase
                 LastEpisodeNumber = startEpisode,
                 AddedAt = DateTime.UtcNow,
                 AiringStatus = Sentrychan.Core.Services.AiringStatusNormalizer.Normalize(SelectedResult.Status),
-                TotalEpisodes = SelectedResult.Episodes
+                TotalEpisodes = SelectedResult.Episodes,
+                Year = SelectedResult.Year ?? Sentrychan.Core.Library.LibraryMetadata.YearOf(SelectedResult.Aired?.From),
+                MediaType = Sentrychan.Core.Library.LibraryMetadata.NormalizeType(SelectedResult.Type),
             };
 
             var addedSeries = await _seriesService.AddAsync(series, SelectedResult.LargeImageUrl, ct);

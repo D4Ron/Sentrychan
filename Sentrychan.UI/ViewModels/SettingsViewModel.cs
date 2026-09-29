@@ -384,7 +384,7 @@ public class SettingsViewModel : ViewModelBase
     [
         nameof(StatusMessage), nameof(IsStatusError), nameof(IsDirty), nameof(QBitTestResult),
         nameof(MalImportResult), nameof(UpdateStatus), nameof(IsCheckingUpdate), nameof(UpdateAvailable),
-        nameof(ConfirmingReset), nameof(ShowSaveBar),
+        nameof(ConfirmingReset), nameof(ShowSaveBar), nameof(NamingExample), nameof(IsCustomNaming),
     ];
 
     private bool _loading;
@@ -476,6 +476,14 @@ public class SettingsViewModel : ViewModelBase
         LocalMangaPath = await GetConfig(db,
             Sentrychan.Core.Services.LocalMangaSourceService.RootConfigKey, "", ct);
 
+        var naming = Sentrychan.Core.Library.NamingTemplate.FromConfig(
+            await GetConfig(db, Sentrychan.Core.Library.NamingTemplate.PresetKey, "", ct),
+            await GetConfig(db, Sentrychan.Core.Library.NamingTemplate.TemplateKey, "", ct));
+        NamingPreset = LabelFromPreset(naming.Preset);
+        var storedTemplate = await GetConfig(db, Sentrychan.Core.Library.NamingTemplate.TemplateKey, "", ct);
+        CustomNamingTemplate = string.IsNullOrWhiteSpace(storedTemplate)
+            ? Sentrychan.Core.Library.NamingTemplate.JellyfinTemplate : storedTemplate;
+
         NotificationLevel = await GetConfig(db, Sentrychan.Core.Services.NotificationSettings.LevelKey, "Important", ct);
         WindowsNotifications = await GetConfig(db, Sentrychan.Core.Services.NotificationSettings.WindowsKey, "true", ct) == "true";
         WatchFolderMode = await GetConfig(db, "DownloadOrganizeMode", "Own", ct) == "Watch";
@@ -533,6 +541,81 @@ public class SettingsViewModel : ViewModelBase
         get => _autoRemoveCompleted;
         set => this.RaiseAndSetIfChanged(ref _autoRemoveCompleted, value);
     }
+
+    // ── Library naming ─────────────────────────────────────────────
+    // How finished downloads are named, and what Tidy library renames existing files to.
+    public string[] NamingPresets { get; } = ["Jellyfin/Plex", "Minimal", "Custom"];
+
+    private static Sentrychan.Core.Library.NamingPreset PresetFromLabel(string? label) => label switch
+    {
+        "Minimal" => Sentrychan.Core.Library.NamingPreset.Minimal,
+        "Custom"  => Sentrychan.Core.Library.NamingPreset.Custom,
+        _         => Sentrychan.Core.Library.NamingPreset.JellyfinPlex,
+    };
+
+    private static string LabelFromPreset(Sentrychan.Core.Library.NamingPreset preset) => preset switch
+    {
+        Sentrychan.Core.Library.NamingPreset.Minimal => "Minimal",
+        Sentrychan.Core.Library.NamingPreset.Custom  => "Custom",
+        _                                            => "Jellyfin/Plex",
+    };
+
+    private string _namingPreset = "Jellyfin/Plex";
+    public string NamingPreset
+    {
+        get => _namingPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _namingPreset, value);
+            this.RaisePropertyChanged(nameof(IsCustomNaming));
+            RaiseNamingExample();
+        }
+    }
+
+    private string _customNamingTemplate = Sentrychan.Core.Library.NamingTemplate.JellyfinTemplate;
+    public string CustomNamingTemplate
+    {
+        get => _customNamingTemplate;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _customNamingTemplate, value);
+            RaiseNamingExample();
+        }
+    }
+
+    public bool IsCustomNaming => NamingPreset == "Custom";
+
+    /// <summary>What the chosen naming produces for a sample episode — updates as the template is typed.</summary>
+    public string NamingExample
+    {
+        get
+        {
+            var preset = PresetFromLabel(NamingPreset);
+            if (preset == Sentrychan.Core.Library.NamingPreset.Custom
+                && Sentrychan.Core.Library.NamingTemplate.Validate(CustomNamingTemplate) is { } error)
+                return error;
+            var t = Sentrychan.Core.Library.NamingTemplate.For(preset, CustomNamingTemplate);
+            var episode = t.Render(new Sentrychan.Core.Library.EpisodeNaming("Sousou no Frieren", 2023, 1, 5, ".mkv", "Group", "1080p"));
+            var special = t.Render(new Sentrychan.Core.Library.EpisodeNaming("Sousou no Frieren", 2023, 0, 1, ".mkv", "Group", "1080p"));
+            return $"{episode.Replace('\\', '/')}\n{special.Replace('\\', '/')}   (a special)";
+        }
+    }
+
+    private void RaiseNamingExample() => this.RaisePropertyChanged(nameof(NamingExample));
+
+    public ReactiveCommand<Unit, Unit> OpenTidyLibraryCommand { get; } =
+        ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                    is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime { MainWindow: { } owner }
+                || App.Services?.GetService(typeof(Sentrychan.Core.Library.LibraryTidyService))
+                    is not Sentrychan.Core.Library.LibraryTidyService tidy)
+                return;
+            var vm = new TidyLibraryViewModel(tidy);
+            var dialog = new Views.Dialogs.TidyLibraryDialog { DataContext = vm };
+            _ = vm.RefreshAsync();
+            await dialog.ShowDialog(owner);
+        });
 
     // Folder the "Local" manga source reads (manga you already have on disk).
     private string _localMangaPath = string.Empty;
@@ -594,6 +677,12 @@ public class SettingsViewModel : ViewModelBase
             return;
         }
 
+        if (IsCustomNaming && Sentrychan.Core.Library.NamingTemplate.Validate(CustomNamingTemplate) is { } namingError)
+        {
+            Fail($"{namingError} — see the Library tab");
+            return;
+        }
+
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -630,6 +719,8 @@ public class SettingsViewModel : ViewModelBase
             await SetConfig(db, Sentrychan.Core.Services.NotificationSettings.WindowsKey,
                 WindowsNotifications ? "true" : "false", ct);
             await SetConfig(db, "DownloadOrganizeMode", WatchFolderMode ? "Watch" : "Own", ct);
+            await SetConfig(db, Sentrychan.Core.Library.NamingTemplate.PresetKey, PresetFromLabel(NamingPreset).ToString(), ct);
+            await SetConfig(db, Sentrychan.Core.Library.NamingTemplate.TemplateKey, CustomNamingTemplate?.Trim() ?? string.Empty, ct);
 
             // Appearance
             await SetConfig(db, "SelectedTheme",       SelectedTheme,       ct);
@@ -838,7 +929,9 @@ public class SettingsViewModel : ViewModelBase
                     LastEpisodeNumber = 0,
                     AddedAt = DateTime.UtcNow,
                     AiringStatus = Sentrychan.Core.Services.AiringStatusNormalizer.Normalize(anime.Status),
-                    TotalEpisodes = anime.Episodes
+                    TotalEpisodes = anime.Episodes,
+                    Year = anime.Year ?? Sentrychan.Core.Library.LibraryMetadata.YearOf(anime.Aired?.From),
+                    MediaType = Sentrychan.Core.Library.LibraryMetadata.NormalizeType(anime.Type),
                 };
                 
                 if (await _seriesService.AddAsync(series, anime.LargeImageUrl, ct) != null)

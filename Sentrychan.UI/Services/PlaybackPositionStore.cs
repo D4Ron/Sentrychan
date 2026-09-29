@@ -59,4 +59,22 @@ public static class PlaybackPositionStore
             catch { /* resume is a convenience */ }
         }
     }
+
+    /// <summary>Carries saved positions over to files that were renamed or moved (Tidy library, and its undo).</summary>
+    public static void Move(IEnumerable<(string From, string To)> moves)
+    {
+        lock (Gate)
+        {
+            var changed = false;
+            foreach (var (from, to) in moves)
+            {
+                if (!Positions.Remove(Key(from), out var v)) continue;
+                Positions[Key(to)] = v;
+                changed = true;
+            }
+            if (!changed) return;
+            try { File.WriteAllText(FilePath, JsonSerializer.Serialize(Positions)); }
+            catch { /* resume is a convenience */ }
+        }
+    }
 }

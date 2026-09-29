@@ -148,7 +148,7 @@
                                             <Button Grid.Column="1" Content="Browse" Classes="ghost field"
                                                     Command="{Binding BrowseLibraryCommand}"/>
                                         </Grid>
-                                        <TextBlock Classes="hint" Text="Finished downloads are moved here, into Title / Season N folders."/>
+                                        <TextBlock Classes="hint" Text="Finished downloads are moved here and named by the naming template (Library tab)."/>
                                     </StackPanel>
                                 </StackPanel>
                             </ctrls:SettingsSection>
@@ -324,6 +324,35 @@
                     <!-- ═══════════════ Library ═══════════════ -->
                     <TabItem Header="Library">
                         <StackPanel Margin="0,12,0,0">
+                            <ctrls:SettingsSection Title="File naming"
+                                                   Description="How finished downloads are named in the library. Jellyfin and Plex read the default without any setup.">
+                                <StackPanel Classes="fields">
+                                    <StackPanel>
+                                        <TextBlock Text="Naming" Classes="label"/>
+                                        <ComboBox ItemsSource="{Binding NamingPresets}" SelectedItem="{Binding NamingPreset}"
+                                                  HorizontalAlignment="Left" MinWidth="260"/>
+                                    </StackPanel>
+                                    <StackPanel IsVisible="{Binding IsCustomNaming}">
+                                        <TextBlock Text="Template" Classes="label"/>
+                                        <TextBox Text="{Binding CustomNamingTemplate}" FontFamily="Consolas,Menlo,monospace"/>
+                                        <TextBlock Classes="hint" TextWrapping="Wrap"
+                                                   Text="Folders are separated by /. Tokens: {Title} {Year} {Season} {Episode} {Group} {Quality} {Version}; pad numbers with {Season:00}. A token with no value disappears with the brackets around it. Movies are always named Title (Year)."/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Example" Classes="label"/>
+                                        <Border Background="{DynamicResource CardBackgroundBrush}" CornerRadius="8" Padding="12,9">
+                                            <TextBlock Text="{Binding NamingExample}" FontFamily="Consolas,Menlo,monospace" FontSize="12.5"
+                                                       TextWrapping="Wrap" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        </Border>
+                                        <TextBlock Classes="hint" TextWrapping="Wrap"
+                                                   Text="Applies to new downloads once saved. Files already in the library stay as they are until you tidy them."/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Button Content="Tidy library…" Classes="ghost pill" Command="{Binding OpenTidyLibraryCommand}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ctrls:SettingsSection>
+
                             <ctrls:SettingsSection Title="MyAnimeList import"
                                                    Description="Add everything on your MAL watching list to the library.">
                                 <StackPanel Classes="fields">
