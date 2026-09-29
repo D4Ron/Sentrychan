@@ -44,7 +44,12 @@ public class EpisodeRepairService
         if (string.IsNullOrWhiteSpace(downloadPath) || !File.Exists(damagedPath) || !File.Exists(torrentPath))
             return false;
 
-        var fileName = Path.GetFileName(damagedPath);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // The torrent knows the file by the name it downloaded as. A library file renamed by the
+        // naming template or Tidy library has to go back under that name, or the hash check
+        // finds nothing and starts the whole episode over.
+        var fileName = await Library.TidyRecords.OriginalNameAsync(db, damagedPath, ct);
         var staged   = Path.Combine(downloadPath, fileName);
         if (File.Exists(staged))
         {
@@ -57,7 +62,6 @@ public class EpisodeRepairService
 
         // The job goes in BEFORE the file moves: the folder watcher sees the file arrive, and
         // this row is what tells it an unfinished torrent owns that name.
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var job = new DownloadJob
         {
             SeriesId         = seriesId > 0 ? seriesId : null,
@@ -101,6 +105,9 @@ public class EpisodeRepairService
             await db.SaveChangesAsync(CancellationToken.None);
             return false;
         }
+
+        // The file has left the library; when the repair completes it's filed (and renamed) afresh.
+        await db.LibraryFileOrigins.Where(o => o.Path == damagedPath).ExecuteDeleteAsync(CancellationToken.None);
 
         _logger.LogInformation("[Repair] Repairing '{File}' in place (hash {Hash})", fileName, handle[..Math.Min(12, handle.Length)]);
         return true;
