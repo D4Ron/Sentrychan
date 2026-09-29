@@ -34,6 +34,9 @@ public static class Program
     private static readonly string ShowEventName = BuildInfo.IsPreview
         ? @"Global\SentrychanPreview_ShowWindow" : @"Global\Sentrychan_ShowWindow";
 
+    // Passed to the new process by RestartApp, which starts it before this one has exited.
+    private const string RestartedArg = "--restarted";
+
     [System.STAThread]
     public static void Main(string[] args)
     {
@@ -49,6 +52,14 @@ public static class Program
         // monitors firing their own notifications. That's the real cause of "too many
         // notifications". Second launches signal the running copy to show, then exit.
         _instanceMutex = new System.Threading.Mutex(true, MutexName, out var isFirst);
+        if (!isFirst && args.Contains(RestartedArg))
+        {
+            // Started by RestartApp while the old instance is still shutting down: wait for it to
+            // let go instead of asking it to show its window. Once we hold the mutex it has exited,
+            // so its database handles are closed too.
+            try { isFirst = _instanceMutex.WaitOne(TimeSpan.FromSeconds(30)); }
+            catch (System.Threading.AbandonedMutexException) { isFirst = true; }
+        }
         if (!isFirst)
         {
             try
@@ -69,6 +80,16 @@ public static class Program
 
         _logDir = AppPaths.Logs;
         Directory.CreateDirectory(_logDir);
+
+        // A library copied from stable on the preview's first run is swapped in here, before
+        // anything opens the database (see StableLibraryCopy). If it fails the app starts on
+        // what it had; the staged copy stays for the next attempt.
+        try
+        {
+            if (StableLibraryCopy.ApplyStaged(AppPaths.DataDir))
+                Console.WriteLine("[Program] Library copied from Sentrychan is now in place");
+        }
+        catch (Exception ex) { LogCrash("Applying the library copied from Sentrychan", ex); }
 
         // ── Global crash handling ──────────────────────────────────
         // Without a console (WinExe), an unhandled exception would vanish.
@@ -328,6 +349,7 @@ public static class Program
 
         // Hand service provider to Avalonia
         Sentrychan.UI.App.SetServiceProvider(host.Services);
+        Sentrychan.UI.App.Restart = RestartApp;
 
         // Logs and Windows notifications ask this before naming anything.
         var secretModeService = host.Services.GetRequiredService<ISecretModeService>();
@@ -554,6 +576,25 @@ public static class Program
         })
         { IsBackground = true, Name = "ShowWindowListener" };
         thread.Start();
+    }
+
+    /// <summary>
+    /// Starts a new instance and shuts this one down. The new one waits for this one's
+    /// single-instance mutex (see <see cref="RestartedArg"/>), so the two never run together.
+    /// </summary>
+    private static void RestartApp()
+    {
+        // Relaunch the way this process was launched: the installed exe, or `dotnet <dll>` in development.
+        var exe = Environment.ProcessPath!;
+        var psi = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+        if (Path.GetFileNameWithoutExtension(exe).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            psi.ArgumentList.Add(typeof(Program).Assembly.Location);
+        psi.ArgumentList.Add(RestartedArg);
+        System.Diagnostics.Process.Start(psi);
+
+        if (Avalonia.Application.Current?.ApplicationLifetime
+                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d)
+            d.Shutdown();
     }
 
     private static void LogCrash(string source, Exception? ex)

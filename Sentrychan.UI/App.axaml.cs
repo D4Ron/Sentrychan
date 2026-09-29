@@ -23,6 +23,12 @@ public partial class App : Application
     /// </summary>
     public static Action? PostInitAction { get; set; }
 
+    /// <summary>
+    /// Relaunches the app and shuts this instance down. Set by the composition root, which knows
+    /// how this process was started; null where restarting isn't possible (design time).
+    /// </summary>
+    public static Action? Restart { get; set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);

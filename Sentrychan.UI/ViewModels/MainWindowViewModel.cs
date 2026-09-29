@@ -1408,6 +1408,7 @@ public class MainWindowViewModel : ViewModelBase,
     {
         await LoadSeriesAsync();
         await LoadAppearanceAsync();
+        if (await MaybeOfferStableCopyAsync()) return; // restarting into the copied library
         await CheckFirstRunAsync();
         await MaybeShowTutorialAsync();
         await SyncMonitoringStateAsync();
@@ -1428,6 +1429,58 @@ public class MainWindowViewModel : ViewModelBase,
             UpdateStatus(IsMonitoring ? "● Monitoring" : "● Idle", IsMonitoring ? "#00FF00" : "#808080");
         }
         catch { /* leave the default state */ }
+    }
+
+    /// <summary>
+    /// Preview only: on first run, offer to copy the library from stable (see StableLibraryCopy).
+    /// Asked once — "Start fresh" is remembered, closing the dialog asks again next launch — and
+    /// never once this preview has a library of its own. Returns true when the app is restarting
+    /// to open the copy.
+    /// </summary>
+    private async Task<bool> MaybeOfferStableCopyAsync()
+    {
+        if (!BuildInfo.IsPreview || _dbContextFactory == null) return false;
+        try
+        {
+            // Copied last session but not restarted since (the restart failed, or was interrupted).
+            if (StableLibraryCopy.IsStaged(AppPaths.DataDir))
+            {
+                ShowToast("Library copied", "Restart Sentrychan Preview to open the library copied from Sentrychan.");
+                return false;
+            }
+            if (!StableLibraryCopy.StableDataExists(AppPaths.StableDataDir)) return false;
+
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            if (await db.AppConfigs.AnyAsync(c => c.Key == StableLibraryCopy.OfferedKey)) return false;
+            if (await db.Series.AnyAsync() || await db.Manga.AnyAsync()) return false;
+
+            var owner = GetMainWindow();
+            if (owner == null) return false;
+
+            var copied = await new Sentrychan.UI.Views.Dialogs.CopyFromStableDialog().ShowDialog<bool?>(owner);
+            if (copied == null) return false;
+
+            if (copied == false)
+            {
+                db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = StableLibraryCopy.OfferedKey, Value = "true" });
+                await db.SaveChangesAsync();
+                return false;
+            }
+
+            // The copy is swapped in at startup, before the database is opened.
+            if (App.Restart == null)
+            {
+                ShowToast("Library copied", "Restart Sentrychan Preview to open it.");
+                return false;
+            }
+            App.Restart();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[StableCopy] {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>
