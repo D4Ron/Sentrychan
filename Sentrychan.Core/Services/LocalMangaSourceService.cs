@@ -16,6 +16,12 @@ public class LocalMangaSourceService : IMangaSourceService
 {
     public string SourceName => "Local";
 
+    // The id is the name: tracked manga already store "Local" as their Source.
+    public MangaSourceInfo Info => new("Local", "Local", "all", IsNsfw: false, SupportsLatest: true);
+
+    private const int PageSize = IMangaSourceService.DefaultPageSize;
+    private static readonly string[] SortValues = ["Title", "Date modified"];
+
     private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
     private static readonly Regex ChapterNum = new(@"(\d+(?:\.\d+)?)", RegexOptions.Compiled);
 
@@ -60,6 +66,54 @@ public class LocalMangaSourceService : IMangaSourceService
             if (results.Count >= limit) break;
         }
         return results;
+    }
+
+    // ── Contract v2 ─────────────────────────────────────────────────
+
+    public FilterList GetFilterList() => new(new SortFilter("Sort by", SortValues, new SortSelection(0, true)));
+
+    public Task<MangaPage> GetPopularAsync(int page, CancellationToken ct = default) =>
+        ListAsync(string.Empty, new SortSelection(0, true), page, ct);
+
+    // "Latest" for a folder on disk: whatever changed most recently — a chapter added or re-downloaded.
+    public Task<MangaPage> GetLatestAsync(int page, CancellationToken ct = default) =>
+        ListAsync(string.Empty, new SortSelection(1, false), page, ct);
+
+    public Task<MangaPage> SearchAsync(string query, int page, FilterList filters, CancellationToken ct = default) =>
+        ListAsync(query, filters.Find<SortFilter>("Sort by")?.State ?? new SortSelection(0, true), page, ct);
+
+    private async Task<MangaPage> ListAsync(string query, SortSelection sort, int page, CancellationToken ct)
+    {
+        var root = await RootAsync(ct);
+        if (root == null || page < 1) return MangaPage.Empty;
+
+        var dirs = Directory.EnumerateDirectories(root)
+            .Select(d => new DirectoryInfo(d))
+            .Where(d => string.IsNullOrWhiteSpace(query) || d.Name.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        dirs = sort.Index == 1
+            ? (sort.Ascending ? dirs.OrderBy(LastChange) : dirs.OrderByDescending(LastChange))
+            : (sort.Ascending ? dirs.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                              : dirs.OrderByDescending(d => d.Name, StringComparer.OrdinalIgnoreCase));
+
+        var slice = dirs.Skip((page - 1) * PageSize).Take(PageSize + 1).ToList();
+        var items = slice.Take(PageSize).Select(d => new MangaSearchResult(
+            SourceId: d.Name, Title: d.Name, OriginalTitle: null, Description: null,
+            CoverUrl: FirstImageIn(d.FullName) ?? string.Empty,
+            Status: null, Year: null, LastChapter: null, AltTitles: [], IsAdult: false)).ToList();
+        return new MangaPage(items, slice.Count > PageSize);
+    }
+
+    // A manga folder's own timestamp only moves when a chapter folder is added or removed;
+    // pages written into an existing chapter show on the chapter folder.
+    private static DateTime LastChange(DirectoryInfo dir)
+    {
+        try
+        {
+            return dir.EnumerateDirectories().Select(c => c.LastWriteTimeUtc)
+                      .Append(dir.LastWriteTimeUtc).Max();
+        }
+        catch { return dir.LastWriteTimeUtc; }
     }
 
     public async Task<MangaSearchResult?> GetDetailsAsync(string sourceId, CancellationToken ct = default)

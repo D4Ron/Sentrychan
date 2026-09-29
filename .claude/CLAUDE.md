@@ -209,6 +209,20 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — **Phase 2 done** (manga source contract v2). 106 tests pass.
+  - `IMangaSourceService` gains, all default-implemented: `Info` (`MangaSourceInfo`: stable id, name,
+    language, `IsNsfw`, `SupportsLatest`), `GetPopularAsync(page)`, `GetLatestAsync(page)`,
+    `GetFilterList()`, `SearchAsync(query, page, FilterList)` → `MangaPage(Items, HasNextPage)`.
+    Defaults fall back to `BrowseAsync`/the v1 `SearchAsync` (page size 24; a full page ⇒ `HasNextPage`).
+    The XML docs on the interface are the pack authors' reference.
+  - Filters (`Interfaces/MangaFilters.cs`) mirror Mihon: Header, Separator, Select, Text, CheckBox,
+    TriState (Ignore/Include/Exclude, `Cycle()`), Sort (`SortSelection(Index, Ascending)`), Group.
+    Mutable state, `Clone()`/`Reset()`/`IsChanged`; the app always edits a clone.
+  - `LocalMangaSourceService`: Popular (by title), Latest (most recently changed folder), a "Sort by"
+    filter, real paging. `IMangaSourceRegistry.Find(idOrName)` (default-implemented, no fallback).
+  - **Compatibility verified:** a pack compiled against `main`'s Core loads with the new Core and gets
+    Info/Popular/filters through the defaults (checked by hand in the container; not a committed test).
+
 - 2026-09-29 — **Phase 1 done** (Tidy library). 94 tests pass; both flavours build.
   - **Core (`Sentrychan.Core/Library/`):** `NamingTemplate` (presets + tokens; empty tokens vanish with
     their brackets; Windows-illegal chars dropped like the old folder names), `ReleaseNameParser`
