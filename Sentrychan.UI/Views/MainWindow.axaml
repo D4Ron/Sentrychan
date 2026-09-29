@@ -132,15 +132,21 @@
             <Border Grid.Row="0" Height="52" Background="{DynamicResource SurfaceBackgroundBrush}"
                     BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
                     IsVisible="{Binding IsTopBarLayout}">
-                <Grid ColumnDefinitions="Auto,*,Auto" Margin="14,0">
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
-                        <Border Width="30" Height="30" CornerRadius="15" ClipToBounds="True" Background="#0B0D14">
-                            <Image Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
+                <!-- Equal star columns either side keep the nav centred on the window, not on
+                     whatever space the logo leaves; they shrink before anything overlaps. -->
+                <Grid x:Name="TopBarGrid" ColumnDefinitions="*,Auto,*" Margin="14,0">
+                    <!-- Spans the bar so the shrinking side column can't clip it; FitTopNav keeps the nav clear. -->
+                    <StackPanel x:Name="TopBrand" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="9"
+                                VerticalAlignment="Center" HorizontalAlignment="Left">
+                        <!-- Same triple-click as the sidebar logo: the way into (and out of) secret mode. -->
+                        <Border Width="30" Height="30" CornerRadius="15" ClipToBounds="True" Background="#0B0D14"
+                                PointerPressed="LogoMark_PointerPressed">
+                            <Image x:Name="TopLogoImage" Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
                         </Border>
-                        <TextBlock Text="Sentrychan" FontSize="15" FontWeight="700"
+                        <TextBlock x:Name="TopLogoText" Text="Sentrychan" FontSize="15" FontWeight="700"
                                    VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
+                    <StackPanel x:Name="TopNav" Grid.Column="1" Orientation="Horizontal" Spacing="2"
                                 HorizontalAlignment="Center" VerticalAlignment="Center">
                         <controls:NavItem Icon="LibraryRegular" Label="Library" Command="{Binding ShowSeriesCommand}" IsExpanded="True"/>
                         <controls:NavItem Icon="MangaRegular" Label="Manga" Command="{Binding ShowMangaCommand}" IsExpanded="True"/>
@@ -151,6 +157,8 @@
                         <controls:NavItem Icon="FolderRegular" Label="Files" Command="{Binding ShowFilesCommand}" IsExpanded="True"/>
                         <controls:NavItem Icon="CalendarRegular" Label="Seasonal" Command="{Binding ShowSeasonalCommand}" IsExpanded="True"/>
                         <controls:NavItem Icon="NewsRegular" Label="News" Command="{Binding ShowNewsCommand}" IsExpanded="True"/>
+                        <controls:NavItem Icon="LockRegular" Label="Vault" IsVisible="{Binding IsSecretMode}"
+                                          Command="{Binding ShowVaultCommand}" IsExpanded="True"/>
                         <controls:NavItem Icon="SettingsRegular" Label="Settings" Command="{Binding ShowSettingsCommand}" IsExpanded="True"/>
                     </StackPanel>
                 </Grid>

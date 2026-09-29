@@ -36,6 +36,11 @@ public partial class MainWindow : Window
             PanicKey.Trigger();
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         
+        // Top-bar layout: labels drop to icons (tooltips stay) when the centred nav and the
+        // logo can't both fit, rather than the nav running over the logo.
+        TopBarGrid.PropertyChanged += (_, e) => { if (e.Property == BoundsProperty) FitTopNav(); };
+        TopNav.PropertyChanged += (_, e) => { if (e.Property == BoundsProperty) FitTopNav(); };
+
         _themeService = App.Services?.GetService<IThemeService>();
         if (_themeService != null)
         {
@@ -81,6 +86,31 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool _topNavLabels = true;
+    private double _topNavFullWidth;
+
+    private void FitTopNav()
+    {
+        var available = TopBarGrid.Bounds.Width;
+        if (available <= 0 || !TopNav.IsEffectivelyVisible) return;
+
+        // Measure the labelled width whenever labels are showing; while collapsed, use the
+        // last measurement (widened a little if the Vault entry appeared since).
+        if (_topNavLabels) _topNavFullWidth = TopNav.Bounds.Width;
+        var brand = TopBrand.DesiredSize.Width + 16;
+
+        // Three steps: centred with labels; labels nudged right just enough to clear the
+        // logo (the default window size lands here); icons only, centred.
+        var labels = available >= _topNavFullWidth + brand;
+        var nudge = labels ? Math.Max(0, 2 * brand - (available - _topNavFullWidth)) : 0;
+        if (Math.Abs(TopNav.Margin.Left - nudge) > 0.5) TopNav.Margin = new Thickness(nudge, 0, 0, 0);
+        if (labels == _topNavLabels) return;
+
+        _topNavLabels = labels;
+        foreach (var item in TopNav.Children)
+            if (item is Controls.NavItem nav) nav.IsExpanded = labels;
+    }
+
     private void OnThemeChanged(bool isSecret)
     {
         // Both modes show artwork now — just swap which character.
@@ -91,11 +121,14 @@ public partial class MainWindow : Window
         try
         {
             using var logoStream = Avalonia.Platform.AssetLoader.Open(new Uri(logoAsset));
-            LogoImage.Source = new Avalonia.Media.Imaging.Bitmap(logoStream);
+            var logo = new Avalonia.Media.Imaging.Bitmap(logoStream);
+            LogoImage.Source = logo;
+            TopLogoImage.Source = logo; // the top-bar layout shows the same mark
         }
         catch { /* keep previous logo on load failure */ }
 
         LogoText.Text = isSecret ? "Sentrykun" : "Sentrychan";
+        TopLogoText.Text = LogoText.Text;
         Title = LogoText.Text;
 
         // Taskbar icon follows the mode

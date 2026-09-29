@@ -195,6 +195,14 @@
   .release-card .title{font-size:15px;font-weight:600;color:var(--c-text-1);margin-top:2px}
   .release-card .meta{font-size:12.5px;color:var(--c-text-3);margin-top:2px}
 
+  /* Stable and preview side by side, wrapping on narrow screens. */
+  .release-row{margin-top:32px;display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+  @media(min-width:960px){.release-row{justify-content:flex-start}}
+  .release-row .release-card{margin-top:0;width:min(100%,420px);justify-content:space-between}
+  .release-card.preview{border-style:dashed}
+  .release-card.preview .label{color:var(--c-brand-1)}
+  .release-card[hidden],.notice[hidden]{display:none}
+
   .hero-figure{display:flex;align-items:center;justify-content:center;position:relative;margin-top:48px}
   @media(min-width:960px){.hero-figure{margin-top:0}}
   .blob{
@@ -476,14 +484,25 @@
         </a>
         <a class="btn btn-alt btn-lg" href="#how">How it works</a>
       </div>
-      <a class="release-card rise-in d5" href="https://github.com/D4Ron/Sentrychan/releases/latest">
-        <div>
-          <div class="label">Latest release</div>
-          <div class="title" id="relTitle">Sentrychan for Windows</div>
-          <div class="meta" id="relMeta">Windows 10/11 · 64-bit · updates itself</div>
-        </div>
-        <span class="btn btn-brand">Download</span>
-      </a>
+      <div class="release-row rise-in d5">
+        <a class="release-card" href="https://github.com/D4Ron/Sentrychan/releases/latest">
+          <div>
+            <div class="label">Stable</div>
+            <div class="title" id="relTitle">Sentrychan for Windows</div>
+            <div class="meta" id="relMeta">Windows 10/11 · 64-bit · updates itself</div>
+          </div>
+          <span class="btn btn-brand">Download</span>
+        </a>
+        <!-- Shown by the script only while a pre-release newer than stable exists. -->
+        <a class="release-card preview" id="previewCard" href="https://github.com/D4Ron/Sentrychan/releases" hidden>
+          <div>
+            <div class="label">Preview</div>
+            <div class="title" id="prevTitle">Sentrychan Preview</div>
+            <div class="meta" id="prevMeta">New features first · installs separately</div>
+          </div>
+          <span class="btn btn-alt">Try it</span>
+        </a>
+      </div>
     </div>
     <div class="hero-figure rise-in d3">
       <div class="blob" aria-hidden="true"></div>
@@ -665,6 +684,18 @@
          first launch.</p>
       <p>That's expected. Click <code>More info</code> → <code>Run anyway</code>. The warning
          fades as more people install it.</p>
+    </div>
+
+    <div class="notice reveal" id="previewNotice" hidden>
+      <h3>Stable or Preview?</h3>
+      <p><strong>Stable</strong> is the version to use: it's the one that's been lived with,
+         and it only ever updates to other stable releases.</p>
+      <p><strong>Preview</strong> gets new features first, while they're still changing. It
+         installs as a separate app, <code>Sentrychan Preview</code>, with its own library and
+         settings — trying it never touches your stable setup, and you can keep both. Run one at
+         a time: both would otherwise watch the same feeds and fetch everything twice. Found
+         something broken? That's what it's for —
+         <a href="https://github.com/D4Ron/Sentrychan/issues">tell me on GitHub</a>.</p>
     </div>
 
     <div class="notice reveal">
@@ -915,23 +946,48 @@
 
   // ── Live release info ───────────────────────────────────────────
   // Progressive enhancement only: if this fails (offline, rate-limited, no release
-  // published yet) the static copy already in the card stands unchanged.
+  // published yet) the static copy already in the card stands unchanged, and the
+  // preview card stays hidden. One request covers both channels.
   (function () {
     var title = document.getElementById('relTitle');
     var meta = document.getElementById('relMeta');
     if (!title || !meta || !window.fetch) return;
-    fetch('https://api.github.com/repos/D4Ron/Sentrychan/releases/latest', {
+
+    function day(iso) {
+      return iso ? new Date(iso).toLocaleDateString(undefined,
+        { year: 'numeric', month: 'short', day: 'numeric' }) : null;
+    }
+
+    fetch('https://api.github.com/repos/D4Ron/Sentrychan/releases?per_page=20', {
       headers: { 'Accept': 'application/vnd.github+json' }
     })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-      .then(function (rel) {
-        if (!rel || !rel.tag_name) return;
-        title.textContent = 'Sentrychan ' + rel.tag_name;
-        var when = rel.published_at
-          ? new Date(rel.published_at).toLocaleDateString(undefined,
-              { year: 'numeric', month: 'short', day: 'numeric' })
-          : null;
-        meta.textContent = 'Windows 10/11 · 64-bit' + (when ? ' · released ' + when : '');
+      .then(function (list) {
+        if (!Array.isArray(list)) return;
+        var live = list.filter(function (r) { return !r.draft; });
+        // GitHub's own "latest" (which the Download button uses) is the newest release not
+        // marked pre-release, so the card reads the same one.
+        var stable = live.filter(function (r) { return !r.prerelease; })[0];
+        var preview = live.filter(function (r) { return r.prerelease; })[0];
+
+        if (stable) {
+          title.textContent = 'Sentrychan ' + stable.tag_name;
+          var when = day(stable.published_at);
+          meta.textContent = 'Windows 10/11 · 64-bit' + (when ? ' · released ' + when : '');
+        }
+
+        // A preview older than the current stable has been superseded — don't offer it.
+        if (!preview || (stable && new Date(preview.published_at) <= new Date(stable.published_at))) return;
+        var card = document.getElementById('previewCard');
+        var setup = (preview.assets || []).filter(function (a) { return /-Setup\.exe$/i.test(a.name); })[0];
+        card.href = setup ? setup.browser_download_url : preview.html_url;
+        document.getElementById('prevTitle').textContent = 'Sentrychan Preview ' + preview.tag_name;
+        var pwhen = day(preview.published_at);
+        document.getElementById('prevMeta').textContent =
+          'New features first · installs separately' + (pwhen ? ' · ' + pwhen : '');
+        card.hidden = false;
+        var notice = document.getElementById('previewNotice');
+        if (notice) notice.hidden = false;
       })
       .catch(function () { /* keep the static copy */ });
   })();
