@@ -64,6 +64,8 @@ public sealed class VaultService
 {
     /// <summary>The AppConfigs key that pins the vault's location once it has been created.</summary>
     public const string RootConfigKey = "VaultRoot";
+    // Named for DPAPI, which it has always been passed to on Windows; the other secret stores bind
+    // it in the same way, so the key file can't be opened as anything else.
     private static readonly byte[] DpapiEntropy = "Sentrychan.vault.v1"u8.ToArray();
 
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
@@ -191,11 +193,11 @@ public sealed class VaultService
     private byte[] LoadOrCreateKey()
     {
         if (File.Exists(_keyPath))
-            return ProtectedData.Unprotect(File.ReadAllBytes(_keyPath), DpapiEntropy, DataProtectionScope.CurrentUser);
+            return Secrets.SecretStores.Current.Unprotect(File.ReadAllBytes(_keyPath), DpapiEntropy);
 
         var key = RandomNumberGenerator.GetBytes(32);
         Directory.CreateDirectory(Path.GetDirectoryName(_keyPath)!);
-        File.WriteAllBytes(_keyPath, ProtectedData.Protect(key, DpapiEntropy, DataProtectionScope.CurrentUser));
+        File.WriteAllBytes(_keyPath, Secrets.SecretStores.Current.Protect(key, DpapiEntropy));
         return key;
     }
 
@@ -464,7 +466,7 @@ public sealed class VaultService
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(_keyPath)!);
-        await File.WriteAllBytesAsync(_keyPath, ProtectedData.Protect(key, DpapiEntropy, DataProtectionScope.CurrentUser), ct);
+        await File.WriteAllBytesAsync(_keyPath, Secrets.SecretStores.Current.Protect(key, DpapiEntropy), ct);
         _key = key;
         _index = index;
         _private = NewPrivateSet(index.PrivateDownloads);

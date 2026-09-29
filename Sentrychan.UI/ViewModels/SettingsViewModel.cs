@@ -514,8 +514,16 @@ public class SettingsViewModel : ViewModelBase
         QBitUsername = await GetConfig(db, "QBitUsername",  "admin",        ct);
         // Decrypt for editing; legacy plaintext values pass through untouched and get
         // re-written encrypted on the next save.
-        QBitPassword = Sentrychan.Core.Services.SecretProtector.Unprotect(
-            await GetConfig(db, "QBitPassword", "adminadmin", ct));
+        try
+        {
+            QBitPassword = Sentrychan.Core.Services.SecretProtector.Unprotect(
+                await GetConfig(db, "QBitPassword", "adminadmin", ct));
+        }
+        catch (Sentrychan.Core.Secrets.SecretStoreUnavailableException ex)
+        {
+            QBitPassword = string.Empty;
+            StatusMessage = ex.Message;
+        }
         SelectedDownloadBackend = await GetConfig(db, "SelectedDownloadBackend", "SystemDefault", ct);
 
         // Appearance

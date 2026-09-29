@@ -571,7 +571,7 @@ public class SupabaseAccountService : IAccountService, IAsyncDisposable
         }
     }
 
-    // ── DPAPI session storage ──────────────────────────────────────
+    // ── Session storage (sealed by the system's secret store) ──────
 
     private record StoredSession(string AccessToken, string RefreshToken);
 
@@ -582,8 +582,13 @@ public class SupabaseAccountService : IAccountService, IAsyncDisposable
             Directory.CreateDirectory(_sessionDir);
             var json     = JsonSerializer.Serialize(new StoredSession(accessToken, refreshToken));
             var plain    = Encoding.UTF8.GetBytes(json);
-            var cipher   = ProtectedData.Protect(plain, null, DataProtectionScope.CurrentUser);
+            var cipher   = Sentrychan.Core.Secrets.SecretStores.Current.Protect(plain);
             File.WriteAllBytes(_sessionFile, cipher);
+        }
+        catch (Sentrychan.Core.Secrets.SecretStoreUnavailableException ex)
+        {
+            // Never written in the clear: without a secret store the user signs in each start.
+            Console.WriteLine($"Sign-in not remembered: {ex.Message}");
         }
         catch { /* non-fatal — user will just need to re-login */ }
     }
@@ -594,7 +599,7 @@ public class SupabaseAccountService : IAccountService, IAsyncDisposable
         {
             if (!File.Exists(_sessionFile)) return null;
             var cipher = File.ReadAllBytes(_sessionFile);
-            var plain  = ProtectedData.Unprotect(cipher, null, DataProtectionScope.CurrentUser);
+            var plain  = Sentrychan.Core.Secrets.SecretStores.Current.Unprotect(cipher);
             var json   = Encoding.UTF8.GetString(plain);
             return JsonSerializer.Deserialize<StoredSession>(json);
         }

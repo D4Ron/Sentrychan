@@ -43,9 +43,15 @@ public class DownloadBackendRouter : IDownloadBackendRouter
                            ?? "http://localhost:8080";
             var qbitUser = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "QBitUsername", ct))?.Value
                            ?? "admin";
-            // Stored DPAPI-encrypted; Unprotect passes legacy plaintext through unchanged.
-            var qbitPass = SecretProtector.Unprotect(
-                (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "QBitPassword", ct))?.Value);
+            // Stored sealed by the system's secret store; Unprotect passes legacy plaintext through unchanged.
+            var stored = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "QBitPassword", ct))?.Value;
+            string qbitPass;
+            try { qbitPass = SecretProtector.Unprotect(stored); }
+            catch (Sentrychan.Core.Secrets.SecretStoreUnavailableException ex)
+            {
+                _logger.LogWarning("[BackendRouter] qBittorrent password can't be opened: {Message}", ex.Message);
+                qbitPass = string.Empty;
+            }
             if (string.IsNullOrEmpty(qbitPass)) qbitPass = "adminadmin";
             qbit.Configure(qbitUrl, qbitUser, qbitPass);
 
