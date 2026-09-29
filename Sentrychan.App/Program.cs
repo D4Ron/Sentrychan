@@ -149,6 +149,7 @@ public static class Program
                 services.AddSingleton<IAnimeApiService, AnimeApiService>();
                 services.AddSingleton<ISeriesService, SeriesService>();
                 services.AddSingleton<IMangaService, MangaService>();
+                services.AddSingleton<Sentrychan.Core.MangaLibrary.MangaLibraryService>();
                 // Manga/novel sources: only the built-in Local source is compiled in. Every
                 // online source is a source-pack plugin loaded at runtime (PluginSourceLoader),
                 // so the shipped app carries no online sources of its own.
