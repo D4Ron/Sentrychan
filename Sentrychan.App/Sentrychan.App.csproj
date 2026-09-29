@@ -68,4 +68,10 @@
     <Product>Sentrychan</Product>
   </PropertyGroup>
 
+  <!-- Shows up in the file properties and Task Manager, where both apps may sit side by side. -->
+  <PropertyGroup Condition="'$(Flavor)' == 'Preview'">
+    <Product>Sentrychan Preview</Product>
+    <AssemblyTitle>Sentrychan Preview</AssemblyTitle>
+  </PropertyGroup>
+
 </Project>

@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Sentrychan.UI.ViewModels;
 using Sentrychan.Core.Models;
+using Sentrychan.Core;
 using Sentrychan.UI.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -129,7 +130,8 @@ public partial class MainWindow : Window
 
         LogoText.Text = isSecret ? "Sentrykun" : "Sentrychan";
         TopLogoText.Text = LogoText.Text;
-        Title = LogoText.Text;
+        // The "Preview" badge sits beside the logo text; the title bar and taskbar need the words.
+        Title = BuildInfo.IsPreview ? LogoText.Text + " Preview" : LogoText.Text;
 
         // Taskbar icon follows the mode
         try

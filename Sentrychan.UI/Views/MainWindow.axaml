@@ -8,12 +8,13 @@
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="720"
         x:Class="Sentrychan.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Sentrychan"
+        Title="{x:Static core:BuildInfo.AppName}"
         Icon="avares://Sentrychan.UI/Assets/icon.ico"
         Background="{DynamicResource AppBackgroundBrush}"
         MinWidth="860" MinHeight="560"
         Width="1200" Height="720"
         xmlns:models="using:Sentrychan.Core.Models"
+        xmlns:core="using:Sentrychan.Core"
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
@@ -58,6 +59,13 @@
                                    VerticalAlignment="Center"/>
                         <TextBlock Text="v1" IsVisible="{Binding IsSidebarExpanded}"
                                    FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="2,5,0,0"/>
+                        <!-- Preview builds say so beside the name, so the two apps can't be mistaken
+                             for each other when both are installed. -->
+                        <Panel IsVisible="{Binding IsSidebarExpanded}">
+                            <Border Classes="chip preview" IsVisible="{x:Static core:BuildInfo.IsPreview}">
+                                <TextBlock Text="Preview"/>
+                            </Border>
+                        </Panel>
                     </StackPanel>
                 </Border>
 
@@ -145,6 +153,9 @@
                         </Border>
                         <TextBlock x:Name="TopLogoText" Text="Sentrychan" FontSize="15" FontWeight="700"
                                    VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <Border Classes="chip preview" IsVisible="{x:Static core:BuildInfo.IsPreview}">
+                            <TextBlock Text="Preview"/>
+                        </Border>
                     </StackPanel>
                     <StackPanel x:Name="TopNav" Grid.Column="1" Orientation="Horizontal" Spacing="2"
                                 HorizontalAlignment="Center" VerticalAlignment="Center">

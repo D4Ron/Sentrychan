@@ -26,10 +26,14 @@ public static class Program
 {
     private static string _logDir = string.Empty;
 
-    // Single-instance plumbing. Kept alive for the process lifetime.
+    // Single-instance plumbing. Kept alive for the process lifetime. Per flavour: a preview
+    // launch must not just surface a running stable window and exit. Stable keeps the names
+    // older builds used, so an updated and a not-yet-updated stable still see each other.
     private static System.Threading.Mutex? _instanceMutex;
-    private const string MutexName = @"Global\Sentrychan_SingleInstance";
-    private const string ShowEventName = @"Global\Sentrychan_ShowWindow";
+    private static readonly string MutexName = BuildInfo.IsPreview
+        ? @"Global\SentrychanPreview_SingleInstance" : @"Global\Sentrychan_SingleInstance";
+    private static readonly string ShowEventName = BuildInfo.IsPreview
+        ? @"Global\SentrychanPreview_ShowWindow" : @"Global\Sentrychan_ShowWindow";
 
     [System.STAThread]
     public static void Main(string[] args)
