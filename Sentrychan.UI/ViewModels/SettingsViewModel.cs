@@ -234,9 +234,7 @@ public class SettingsViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> OpenLogsCommand { get; } =
         ReactiveCommand.Create(() =>
         {
-            var dir = AppPaths.Logs;
-            if (System.IO.Directory.Exists(dir))
-                System.Diagnostics.Process.Start("explorer.exe", dir);
+            Services.ShellLauncher.OpenFolder(AppPaths.Logs);
         });
 
     public ReactiveCommand<string, Unit> OpenLinkCommand { get; } =

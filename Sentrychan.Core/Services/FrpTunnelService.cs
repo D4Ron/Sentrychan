@@ -36,12 +36,16 @@ public class FrpTunnelService : ITunnelService, IAsyncDisposable
         try
         {
             var appDataPath = AppPaths.DataDir;
-            var frpcExePath = Path.Combine(AppContext.BaseDirectory, "Assets", "frpc.exe");
+            var frpcExePath = Path.Combine(AppContext.BaseDirectory, "Assets", OperatingSystem.IsWindows() ? "frpc.exe" : "frpc");
             var configPath = Path.Combine(appDataPath, "frpc.toml");
 
             if (!File.Exists(frpcExePath))
             {
-                throw new FileNotFoundException($"frpc.exe not found at {frpcExePath}. Reinstall the application.");
+                // Only the Windows package carries the tunnel helper so far.
+                throw new FileNotFoundException(OperatingSystem.IsWindows()
+                    ? $"frpc.exe not found at {frpcExePath}. Reinstall the application."
+                    : "Internet watch parties aren't available on this system yet (the tunnel helper isn't included). " +
+                      "Parties on your local network work.");
             }
 
             string serverAddr = await GetFrpServerAddressAsync(ct);

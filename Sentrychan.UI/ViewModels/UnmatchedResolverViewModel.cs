@@ -203,25 +203,7 @@ public class UnmatchedResolverViewModel : ViewModelBase
     }
 
     /// <summary>Reveals the unmatched file in the system file explorer (selected).</summary>
-    private void Reveal(UnmatchedFileRowVm row)
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(row.FilePath)) return;
-            if (File.Exists(row.FilePath))
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "explorer.exe", Arguments = $"/select,\"{row.FilePath}\"", UseShellExecute = true
-                });
-            else
-            {
-                var dir = Path.GetDirectoryName(row.FilePath);
-                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = dir, UseShellExecute = true });
-            }
-        }
-        catch { /* Explorer refused */ }
-    }
+    private void Reveal(UnmatchedFileRowVm row) => Services.ShellLauncher.Reveal(row.FilePath);
 
     private async Task LoadAsync(CancellationToken ct)
     {

@@ -1090,8 +1090,7 @@ public class MainWindowViewModel : ViewModelBase,
         DismissUnmatchedBannerCommand = ReactiveCommand.Create(() => { ShowUnmatchedBanner = false; });
         OpenUnmatchedFolderCommand = ReactiveCommand.Create(() =>
         {
-            if (!string.IsNullOrEmpty(UnmatchedFolderPath) && Directory.Exists(UnmatchedFolderPath))
-                System.Diagnostics.Process.Start("explorer.exe", UnmatchedFolderPath);
+            Services.ShellLauncher.OpenFolder(UnmatchedFolderPath);
         });
         ShowAccountCommand      = ReactiveCommand.Create(() => { });
         ShowWatchPartyCommand  = ReactiveCommand.Create(() => { });
@@ -1195,8 +1194,7 @@ public class MainWindowViewModel : ViewModelBase,
         DismissUnmatchedBannerCommand = ReactiveCommand.Create(() => { ShowUnmatchedBanner = false; });
         OpenUnmatchedFolderCommand = ReactiveCommand.Create(() =>
         {
-            if (!string.IsNullOrEmpty(UnmatchedFolderPath) && Directory.Exists(UnmatchedFolderPath))
-                System.Diagnostics.Process.Start("explorer.exe", UnmatchedFolderPath);
+            Services.ShellLauncher.OpenFolder(UnmatchedFolderPath);
         });
         ShowAccountCommand    = ReactiveCommand.CreateFromTask(OpenAccountDialogAsync);
         ShowWatchPartyCommand  = ReactiveCommand.Create(ShowWatchParty);
