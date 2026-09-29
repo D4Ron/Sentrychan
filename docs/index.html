@@ -1004,7 +1004,9 @@
     // Intel build; without a reliable way to tell them apart from the browser, Apple Silicon
     // (every Mac sold since 2023) comes first and both stay on the releases page.
     var SYSTEMS = {
-      windows: { name: 'Windows', asset: /-win-Setup\.exe$/i },
+      // Stable's is Sentrychan-win-Setup.exe; a preview packed on its own channel is
+      // SentrychanPreview-preview-Setup.exe. Only Windows builds end in -Setup.exe.
+      windows: { name: 'Windows', asset: /-Setup\.exe$/i },
       mac:     { name: 'macOS',   asset: /osx.*arm64.*\.pkg$|osx.*\.pkg$/i },
       linux:   { name: 'Linux',   asset: /\.AppImage$/i }
     };
