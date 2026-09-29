@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<TitleAlias> TitleAliases => Set<TitleAlias>();
     public DbSet<UnmatchedFile> UnmatchedFiles => Set<UnmatchedFile>();
     public DbSet<SkippedDownload> SkippedDownloads => Set<SkippedDownload>();
+    public DbSet<LibraryFileOrigin> LibraryFileOrigins => Set<LibraryFileOrigin>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +34,16 @@ public class AppDbContext : DbContext
         });
 
         modelBuilder.Entity<Series>().Property(s => s.AutoDownload).HasDefaultValue(false);
+        modelBuilder.Entity<Series>().Ignore(s => s.IsMovie);
+
+        // LibraryFileOrigin — one row per renamed library file. NOCASE: Windows paths are
+        // case-insensitive, and a lookup must not miss because Explorer spelled it differently.
+        modelBuilder.Entity<LibraryFileOrigin>(e =>
+        {
+            e.HasKey(o => o.Id);
+            e.Property(o => o.Path).IsRequired().UseCollation("NOCASE");
+            e.HasIndex(o => o.Path).IsUnique();
+        });
 
         // Manga
         modelBuilder.Entity<Manga>(e =>
