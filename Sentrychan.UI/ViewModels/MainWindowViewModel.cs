@@ -1217,7 +1217,7 @@ public class MainWindowViewModel : ViewModelBase,
         }
 
         SetCurrentView(AppView.Library);
-        _ = InitializeAsync();
+        // InitializeAsync runs when the main window opens (MainWindow.OnOpened).
 
         // Silent startup scan (30s in, so the title resolver is warm): syncs
         // progress with what's actually on disk after out-of-app changes.
@@ -1391,8 +1391,14 @@ public class MainWindowViewModel : ViewModelBase,
             is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
             ? desktop.MainWindow : null;
 
+    private int _initStarted;
+
+    /// <summary>Startup work, once. Called when the main window opens — the dialogs need it.</summary>
     public async Task InitializeAsync()
     {
+        // This used to run twice (the constructor started it as well as the window), so a new
+        // user got every first-run dialog and the tutorial twice, stacked on top of each other.
+        if (System.Threading.Interlocked.Exchange(ref _initStarted, 1) == 1) return;
         await LoadSeriesAsync();
         await LoadAppearanceAsync();
         await CheckFirstRunAsync();
