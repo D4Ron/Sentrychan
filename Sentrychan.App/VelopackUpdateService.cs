@@ -47,13 +47,15 @@ public class VelopackUpdateService : IUpdateService
     public const string PreviewChannel = "preview";
 
     /// <summary>
-    /// A channel is one release feed, so each system's preview needs its own: Velopack's default
-    /// channels are already per system (win, osx, linux), and an explicit one isn't. Windows keeps
-    /// "preview", as documented for its packaging; macOS and Linux packs use these.
+    /// A channel is one release feed, so each build needs its own: Velopack's default channels
+    /// are already per system (win, osx, linux), and an explicit one isn't. Windows keeps
+    /// "preview", as documented for its packaging; Linux (x64 only) uses preview-linux; macOS
+    /// has an Apple Silicon and an Intel build, so one channel each.
     /// </summary>
     public static string PreviewChannelFor(AppPaths.Os os) => os switch
     {
-        AppPaths.Os.MacOS => PreviewChannel + "-osx",
+        AppPaths.Os.MacOS => PreviewChannel + "-osx-" +
+            (System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "x64"),
         AppPaths.Os.Linux => PreviewChannel + "-linux",
         _ => PreviewChannel,
     };

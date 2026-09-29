@@ -58,10 +58,10 @@ jobs:
             channel: preview-linux
           - rid: osx-arm64
             os: macos-15
-            channel: preview-osx
+            channel: preview-osx-arm64
           - rid: osx-x64
             os: macos-15-intel
-            channel: preview-osx
+            channel: preview-osx-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
