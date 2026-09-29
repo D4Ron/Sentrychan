@@ -209,6 +209,26 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — **Checked on Windows** (the preview is now the developer's everyday app; `preview` was
+  merged into `main` as PR #1). 200 tests pass on Windows (+3 opt-in).
+  - **Works:** the preview beside a running stable (banner, "Paused — other app running", RSS checks and
+    the download watcher skipped); copying a real library (11 series, a 1,190-item vault) with the
+    automatic restart and both migrations; the top bar and sidebar badge.
+  - **Fixed:** the copy dialog never closed after a successful copy (its busy guard cancelled its own
+    close), so the restart never happened; the sidebar "Preview" badge ran past the edge (now under the
+    name); startup ran twice (constructor + window) so first-run dialogs appeared twice — on `main` too;
+    a local-source test that tied on Windows.
+  - **Added:** "I'm replacing Sentrychan with the preview — bring everything" in the copy dialog
+    (`StableLibraryCopy.Stage(…, switchingForGood)`): vault key + pinned vault root + unfinished downloads
+    come along.
+  - **Website:** the merge put the macOS/Linux copy live before any release had those builds. The page
+    now says Windows and reveals macOS/Linux (copy, "Also for" links, install notes) only when stable or
+    the current preview carries their installers. Meta descriptions stay "Windows" until then — update
+    them by hand at that release.
+  - **Still to check on Windows:** the Mihon bridge end to end (download, java.exe firewall prompt, job
+    object), Tidy library on a copy of a real library, the Mihon-style screens with a big library,
+    Mihon backup import with a real phone backup, preview packaging and the preview update channel.
+
 - 2026-09-29 — **Phase 6 done** (macOS and Linux, plus the website section). 198 tests pass (+3 opt-in).
   **The app now starts and runs on Linux** (launched under Xvfb, both from the build output and from
   the packed AppImage: welcome screen, second launch hands over and exits). CI workflow ran on GitHub.
