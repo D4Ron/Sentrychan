@@ -17,10 +17,12 @@ obj/
 Sentrychan.App/Assets/frpc.exe
 # Internal working notes: monetization strategy, security posture, unfinished work.
 # Deliberately not published - see the note in the first commit's review.
-CLAUDE.md
+/CLAUDE.md
 
-# Local editor/agent scratch (dev-server launch config etc.)
-.claude/
+# Local editor/agent scratch (dev-server launch config etc.) — except the shared
+# work plan, which a cloud session has to be able to read from the repo.
+/.claude/*
+!/.claude/CLAUDE.md
 
 # Built source packs kept locally for testing / distribution.
 # These MUST NOT reach the public repo - the sources-as-plugins split is the
