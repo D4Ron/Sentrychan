@@ -4,7 +4,7 @@ namespace Sentrychan.UI.Services;
 public static class AppLinks
 {
     public const string Website = "https://d4ron.github.io/Sentrychan/";
-    public const string Discord = "https://discord.gg/zbeeCZJy4";
+    public const string Discord = "https://discord.gg/c4hqjm9HBw";
     public const string Issues = "https://github.com/D4Ron/Sentrychan/issues";
 
     public static void Open(string url)
