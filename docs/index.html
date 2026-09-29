@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sentrychan — self-driving anime &amp; manga library</title>
-<meta name="description" content="Sentrychan tracks the anime, manga and novels you follow, then finds, downloads, names and files every new episode and chapter for you. Free and open source, for Windows.">
+<meta name="description" content="Sentrychan tracks the anime, manga and novels you follow, then finds, downloads, names and files every new episode and chapter for you. Free and open source, for Windows, macOS and Linux.">
 <link rel="icon" href="favicon.ico">
 <link rel="canonical" href="https://d4ron.github.io/Sentrychan/">
 <!-- Social cards need ABSOLUTE urls; a relative og:image silently shows nothing. -->
 <meta property="og:title" content="Sentrychan — self-driving anime &amp; manga library">
-<meta property="og:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows.">
+<meta property="og:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows, macOS and Linux.">
 <meta property="og:image" content="https://d4ron.github.io/Sentrychan/logo.png">
 <meta property="og:url" content="https://d4ron.github.io/Sentrychan/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Sentrychan">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Sentrychan — self-driving anime &amp; manga library">
-<meta name="twitter:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows.">
+<meta name="twitter:description" content="Your self-driving library for anime, manga and novels. Free and open source, for Windows, macOS and Linux.">
 <meta name="twitter:image" content="https://d4ron.github.io/Sentrychan/logo.png">
 <meta name="theme-color" content="#0d0d1a">
 
@@ -202,6 +202,11 @@
   .release-card.preview{border-style:dashed}
   .release-card.preview .label{color:var(--c-brand-1)}
   .release-card[hidden],.notice[hidden]{display:none}
+  .other-os{margin:14px 0 0;font-size:14px;color:var(--c-text-3);display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+  @media(min-width:960px){.other-os{justify-content:flex-start}}
+  .other-os a[hidden]{display:none}
+  .other-os a{color:var(--c-text-2);text-decoration:underline;text-underline-offset:3px}
+  .other-os a:hover{color:var(--c-brand-1)}
 
   .hero-figure{display:flex;align-items:center;justify-content:center;position:relative;margin-top:48px}
   @media(min-width:960px){.hero-figure{margin-top:0}}
@@ -475,20 +480,27 @@
       <p class="tagline rise-in d3">
         Tell it what you follow. It watches the feeds you choose, then names, sorts and
         files what turns up — so your library stays tidy on its own. Anime, manga and
-        novels, on Windows.
+        novels, on Windows, macOS and Linux.
       </p>
       <div class="hero-actions rise-in d4">
-        <a class="btn btn-brand btn-lg" href="https://github.com/D4Ron/Sentrychan/releases/latest/download/Sentrychan-win-Setup.exe">
+        <!-- Points at the visitor's system once the script has looked; Windows without it. -->
+        <a class="btn btn-brand btn-lg" id="dlPrimary" href="https://github.com/D4Ron/Sentrychan/releases/latest/download/Sentrychan-win-Setup.exe">
           <svg viewBox="0 0 16 16"><path d="M7.2 2h1.6v6.6l2.8-2.8 1.1 1.1L8 11.6 3.3 6.9l1.1-1.1 2.8 2.8V2zM3 12.6h10v1.6H3z"/></svg>
-          Download for Windows
+          <span id="dlPrimaryText">Download for Windows</span>
         </a>
         <a class="btn btn-alt btn-lg" href="#how">How it works</a>
       </div>
+      <p class="other-os rise-in d4">
+        <span>Also for</span>
+        <a id="dlWindows" href="https://github.com/D4Ron/Sentrychan/releases/latest/download/Sentrychan-win-Setup.exe">Windows</a>
+        <a id="dlMac" href="#install-mac">macOS</a>
+        <a id="dlLinux" href="#install-linux">Linux</a>
+      </p>
       <div class="release-row rise-in d5">
         <a class="release-card" href="https://github.com/D4Ron/Sentrychan/releases/latest">
           <div>
             <div class="label">Stable</div>
-            <div class="title" id="relTitle">Sentrychan for Windows</div>
+            <div class="title" id="relTitle">Sentrychan</div>
             <div class="meta" id="relMeta">Windows 10/11 · 64-bit · updates itself</div>
           </div>
           <span class="btn btn-brand">Download</span>
@@ -674,7 +686,7 @@
     <div class="section-head reveal">
       <h2>Installing</h2>
       <p>One download, no account, no .NET to install — everything's bundled, and it updates
-         itself from then on.</p>
+         itself from then on. Windows, macOS and Linux.</p>
     </div>
 
     <div class="notice reveal">
@@ -684,6 +696,35 @@
          first launch.</p>
       <p>That's expected. Click <code>More info</code> → <code>Run anyway</code>. The warning
          fades as more people install it.</p>
+    </div>
+
+    <div class="notice reveal" id="install-mac">
+      <h3>On a Mac: allow it once</h3>
+      <p>The Mac version works, but it isn't signed or notarised by Apple, so the first time you
+         open it macOS says it can't check it for malicious software and won't open it. To
+         allow it:</p>
+      <p>Try to open Sentrychan once, then go to <code>System Settings</code> →
+         <code>Privacy &amp; Security</code>, scroll down to the message about Sentrychan and click
+         <code>Open Anyway</code>, then confirm with your password. You only do this once; after
+         that it opens normally and updates itself. Apple Silicon and Intel Macs each have their
+         own download.</p>
+      <p>Signing and notarising the Mac app takes a paid Apple developer membership, and that
+         needs further funding. Funding is the only thing standing between the Mac build and an
+         install without this warning —
+         <a href="#" class="js-fund">funding the project</a> is what makes it go away.</p>
+    </div>
+
+    <div class="notice reveal" id="install-linux">
+      <h3>On Linux: an AppImage</h3>
+      <p>Linux gets a single <code>.AppImage</code> file (64-bit), which runs on most
+         distributions without installing anything. Make it executable once — right-click →
+         <code>Properties</code> → <code>Allow executing file as program</code>, or
+         <code>chmod +x Sentrychan*.AppImage</code> — then open it.</p>
+      <p>Video plays through VLC's library, which the AppImage uses from your system: install
+         VLC if you haven't (<code>sudo apt install vlc</code>, <code>sudo dnf install vlc</code>
+         from RPM Fusion, or <code>sudo pacman -S vlc</code>); the player says so if it's missing.
+         Saved sign-ins and the private vault's key are kept in your system keyring (GNOME
+         Keyring, KWallet or KeePassXC through libsecret), which most desktops already run.</p>
     </div>
 
     <div class="notice reveal" id="previewNotice" hidden>
@@ -946,18 +987,63 @@
 
   // ── Live release info ───────────────────────────────────────────
   // Progressive enhancement only: if this fails (offline, rate-limited, no release
-  // published yet) the static copy already in the card stands unchanged, and the
-  // preview card stays hidden. One request covers both channels.
+  // published yet) the static copy already in the page stands unchanged — Windows download,
+  // links to the macOS and Linux notes — and the preview card stays hidden. One request
+  // covers both channels.
   (function () {
     var title = document.getElementById('relTitle');
     var meta = document.getElementById('relMeta');
-    if (!title || !meta || !window.fetch) return;
+    if (!title || !meta) return;
+
+    // Each system's installer, as Velopack names them. macOS has an Apple Silicon and an
+    // Intel build; without a reliable way to tell them apart from the browser, Apple Silicon
+    // (every Mac sold since 2023) comes first and both stay on the releases page.
+    var SYSTEMS = {
+      windows: { name: 'Windows', asset: /-win-Setup\.exe$/i },
+      mac:     { name: 'macOS',   asset: /osx.*arm64.*\.pkg$|osx.*\.pkg$/i },
+      linux:   { name: 'Linux',   asset: /\.AppImage$/i }
+    };
+
+    function detect() {
+      var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '') +
+              ' ' + navigator.userAgent;
+      if (/Android|iPhone|iPad/i.test(p)) return 'windows'; // no phone build: show the default
+      if (/Mac/i.test(p)) return 'mac';
+      if (/Linux|X11|CrOS/i.test(p)) return 'linux';
+      return 'windows';
+    }
+
+    function assetFor(release, os) {
+      if (!release) return null;
+      return (release.assets || []).filter(function (a) { return SYSTEMS[os].asset.test(a.name); })
+        .sort(function (a, b) { return /arm64/i.test(b.name) - /arm64/i.test(a.name); })[0] || null;
+    }
+
+    function systemsIn(release) {
+      return ['windows', 'mac', 'linux'].filter(function (os) { return assetFor(release, os); })
+        .map(function (os) { return SYSTEMS[os].name; });
+    }
 
     function day(iso) {
       return iso ? new Date(iso).toLocaleDateString(undefined,
         { year: 'numeric', month: 'short', day: 'numeric' }) : null;
     }
 
+    var visitor = detect();
+    // "Also for" lists the other two systems.
+    var own = document.getElementById({ windows: 'dlWindows', mac: 'dlMac', linux: 'dlLinux' }[visitor]);
+    if (own) own.hidden = true;
+    var primary = document.getElementById('dlPrimary');
+    var primaryText = document.getElementById('dlPrimaryText');
+    function setPrimary(href, text) {
+      if (!primary || !primaryText) return;
+      primary.href = href;
+      primaryText.textContent = text;
+    }
+    // Before anything is known: a Mac or Linux visitor is sent to their notes, not to a .exe.
+    if (visitor !== 'windows') setPrimary('#install-' + visitor, 'Sentrychan for ' + SYSTEMS[visitor].name);
+
+    if (!window.fetch) return;
     fetch('https://api.github.com/repos/D4Ron/Sentrychan/releases?per_page=20', {
       headers: { 'Accept': 'application/vnd.github+json' }
     })
@@ -965,26 +1051,47 @@
       .then(function (list) {
         if (!Array.isArray(list)) return;
         var live = list.filter(function (r) { return !r.draft; });
-        // GitHub's own "latest" (which the Download button uses) is the newest release not
+        // GitHub's own "latest" (which the Windows button uses) is the newest release not
         // marked pre-release, so the card reads the same one.
         var stable = live.filter(function (r) { return !r.prerelease; })[0];
         var preview = live.filter(function (r) { return r.prerelease; })[0];
+        // A preview older than the current stable has been superseded — don't offer it.
+        if (preview && stable && new Date(preview.published_at) <= new Date(stable.published_at)) preview = null;
 
         if (stable) {
           title.textContent = 'Sentrychan ' + stable.tag_name;
           var when = day(stable.published_at);
-          meta.textContent = 'Windows 10/11 · 64-bit' + (when ? ' · released ' + when : '');
+          var systems = systemsIn(stable);
+          meta.textContent = (systems.length ? systems.join(' · ') : 'Windows 10/11 · 64-bit') +
+            (when ? ' · released ' + when : '');
         }
 
-        // A preview older than the current stable has been superseded — don't offer it.
-        if (!preview || (stable && new Date(preview.published_at) <= new Date(stable.published_at))) return;
+        // The "Also for" links: stable's installer where it has one, otherwise the notes.
+        ['mac', 'linux'].forEach(function (os) {
+          var a = assetFor(stable, os);
+          var link = document.getElementById(os === 'mac' ? 'dlMac' : 'dlLinux');
+          if (a && link) link.href = a.browser_download_url;
+        });
+
+        // The big button: stable for the visitor's system. Stable only has Windows until a
+        // stable release carries the others; until then a Mac or Linux visitor is pointed at
+        // the preview when it has their build, and at the notes when it doesn't.
+        if (visitor !== 'windows') {
+          var mine = assetFor(stable, visitor);
+          var early = assetFor(preview, visitor);
+          if (mine) setPrimary(mine.browser_download_url, 'Download for ' + SYSTEMS[visitor].name);
+          else if (early) setPrimary(early.browser_download_url, 'Try the ' + SYSTEMS[visitor].name + ' preview');
+        }
+
+        if (!preview) return;
         var card = document.getElementById('previewCard');
-        var setup = (preview.assets || []).filter(function (a) { return /-Setup\.exe$/i.test(a.name); })[0];
+        var setup = assetFor(preview, visitor) || assetFor(preview, 'windows');
         card.href = setup ? setup.browser_download_url : preview.html_url;
         document.getElementById('prevTitle').textContent = 'Sentrychan Preview ' + preview.tag_name;
         var pwhen = day(preview.published_at);
+        var psystems = systemsIn(preview);
         document.getElementById('prevMeta').textContent =
-          'New features first · installs separately' + (pwhen ? ' · ' + pwhen : '');
+          (psystems.length ? psystems.join(' · ') + ' · ' : '') + 'installs separately' + (pwhen ? ' · ' + pwhen : '');
         card.hidden = false;
         var notice = document.getElementById('previewNotice');
         if (notice) notice.hidden = false;
