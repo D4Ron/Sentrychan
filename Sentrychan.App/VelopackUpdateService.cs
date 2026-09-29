@@ -40,11 +40,23 @@ public class VelopackUpdateService : IUpdateService
     /// </summary>
     private static UpdateManager CreateManager(bool isPreview) => isPreview
         ? new UpdateManager(new GithubSource(RepoUrl, null, prerelease: true),
-                            new UpdateOptions { ExplicitChannel = PreviewChannel })
+                            new UpdateOptions { ExplicitChannel = PreviewChannelFor(AppPaths.CurrentOs) })
         : new UpdateManager(new GithubSource(RepoUrl, null, prerelease: false));
 
-    /// <summary>The Velopack channel preview packages are built with (<c>vpk pack --channel preview</c>).</summary>
+    /// <summary>The Velopack channel Windows preview packages are built with (<c>vpk pack --channel preview</c>).</summary>
     public const string PreviewChannel = "preview";
+
+    /// <summary>
+    /// A channel is one release feed, so each system's preview needs its own: Velopack's default
+    /// channels are already per system (win, osx, linux), and an explicit one isn't. Windows keeps
+    /// "preview", as documented for its packaging; macOS and Linux packs use these.
+    /// </summary>
+    public static string PreviewChannelFor(AppPaths.Os os) => os switch
+    {
+        AppPaths.Os.MacOS => PreviewChannel + "-osx",
+        AppPaths.Os.Linux => PreviewChannel + "-linux",
+        _ => PreviewChannel,
+    };
 
     public bool IsSupported => _manager.IsInstalled;
 
