@@ -372,8 +372,24 @@ public class SettingsViewModel : ViewModelBase
         ApplyUpdateCommand = ReactiveCommand.CreateFromTask(ApplyUpdateAsync);
 
         RssFeedsVm = new RssFeedsViewModel(dbFactory, themeService, rssMonitor);
+        if (App.Services?.GetService(typeof(Sentrychan.Core.MihonBridge.MihonBridgeService)) is Sentrychan.Core.MihonBridge.MihonBridgeService bridge
+            && App.Services.GetService(typeof(IConfigService)) is IConfigService config)
+        {
+            MihonExtensions = new MihonExtensionsViewModel(bridge, config,
+                App.Services.GetService(typeof(ISecretModeService)) as ISecretModeService)
+            {
+                ShowPreferences = async prefs =>
+                {
+                    var dialog = new Views.Dialogs.SourcePreferencesDialog { DataContext = prefs };
+                    await dialog.ShowDialog(owner);
+                },
+            };
+        }
         InitPageBehaviour();
     }
+
+    /// <summary>Settings → Sources → Mihon extensions. Acts immediately; not part of Save.</summary>
+    public MihonExtensionsViewModel? MihonExtensions { get; }
 
     // ── Page behaviour ─────────────────────────────────────────────
     // Settings is a page, not a modal dialog, so nothing forces a Save/Cancel decision:
@@ -442,6 +458,7 @@ public class SettingsViewModel : ViewModelBase
     public async Task LoadAsync(CancellationToken ct = default)
     {
         if (_dbFactory == null) return;
+        _ = MihonExtensions?.LoadAsync();
         _loading = true;
         try { await LoadCoreAsync(ct); }
         finally

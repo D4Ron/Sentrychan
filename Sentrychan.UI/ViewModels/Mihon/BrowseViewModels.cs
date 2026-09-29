@@ -278,7 +278,7 @@ public sealed class SourceBrowseViewModel : ViewModelBase
     {
         _source = source;
         _host = host;
-        FilterSheet = new FilterSheetVm(SafeFilters(source));
+        _filterSheet = new FilterSheetVm(SafeFilters(source));
         BackCommand = ReactiveCommand.Create(back);
         PopularCommand = ReactiveCommand.CreateFromTask(ShowPopularAsync);
         LatestCommand = ReactiveCommand.CreateFromTask(ShowLatestAsync);
@@ -294,10 +294,38 @@ public sealed class SourceBrowseViewModel : ViewModelBase
         try { return source.GetFilterList(); } catch { return FilterList.Empty; }
     }
 
+    private bool _filtersLoaded;
+
+    /// <summary>
+    /// Some sources (bridged Mihon ones) have to fetch their filters. Done once, before the first
+    /// listing; a failure leaves the page usable without filters.
+    /// </summary>
+    private async Task LoadFiltersAsync()
+    {
+        if (_filtersLoaded) return;
+        _filtersLoaded = true;
+        try
+        {
+            var filters = await _source.GetFilterListAsync();
+            if (filters.Count > 0 && FilterSheet.IsEmpty) FilterSheet = new FilterSheetVm(filters);
+        }
+        catch { /* no filters, then */ }
+    }
+
     public string SourceName => _source.Info.Name;
     public bool SupportsLatest => _source.Info.SupportsLatest;
     public bool HasFilters => !FilterSheet.IsEmpty;
-    public FilterSheetVm FilterSheet { get; }
+
+    private FilterSheetVm _filterSheet;
+    public FilterSheetVm FilterSheet
+    {
+        get => _filterSheet;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _filterSheet, value);
+            this.RaisePropertyChanged(nameof(HasFilters));
+        }
+    }
 
     public ObservableCollection<MangaResultVm> Results { get; } = new();
 
@@ -340,6 +368,7 @@ public sealed class SourceBrowseViewModel : ViewModelBase
         Results.Clear();
         HasNextPage = false;
         _library = (await _host.MangaService.GetAllAsync()).Select(m => (m.Source, m.SourceId)).ToHashSet();
+        await LoadFiltersAsync();
         await LoadMoreAsync();
     }
 

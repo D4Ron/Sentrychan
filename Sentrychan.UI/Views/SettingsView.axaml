@@ -386,6 +386,25 @@
                                 </StackPanel>
                             </ctrls:SettingsSection>
 
+                            <ctrls:SettingsSection Title="Danger zone"
+                                                   Description="Erase the library database: series, history and settings. Your files stay on disk.">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button Content="Reset library database" Classes="ghost pill" IsVisible="{Binding !ConfirmingReset}"
+                                            Foreground="{DynamicResource StatusRedBrush}" BorderBrush="{DynamicResource StatusRedBrush}"
+                                            Command="{Binding ResetLibraryCommand}"/>
+                                    <Button Content="Yes, erase everything" Classes="pill" IsVisible="{Binding ConfirmingReset}"
+                                            Background="{DynamicResource StatusRedBrush}" Foreground="White"
+                                            Command="{Binding ResetLibraryCommand}"/>
+                                    <Button Content="Keep my library" Classes="ghost pill" IsVisible="{Binding ConfirmingReset}"
+                                            Command="{Binding CancelResetCommand}"/>
+                                </StackPanel>
+                            </ctrls:SettingsSection>
+                        </StackPanel>
+                    </TabItem>
+
+                    <!-- ═══════════════ Sources ═══════════════ -->
+                    <TabItem Header="Sources">
+                        <StackPanel Margin="0,12,0,0">
                             <ctrls:SettingsSection Title="Local manga"
                                                    Description="Read manga you already have on disk with the Local source.">
                                 <StackPanel>
@@ -404,18 +423,10 @@
                                 </StackPanel>
                             </ctrls:SettingsSection>
 
-                            <ctrls:SettingsSection Title="Danger zone"
-                                                   Description="Erase the library database: series, history and settings. Your files stay on disk.">
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <Button Content="Reset library database" Classes="ghost pill" IsVisible="{Binding !ConfirmingReset}"
-                                            Foreground="{DynamicResource StatusRedBrush}" BorderBrush="{DynamicResource StatusRedBrush}"
-                                            Command="{Binding ResetLibraryCommand}"/>
-                                    <Button Content="Yes, erase everything" Classes="pill" IsVisible="{Binding ConfirmingReset}"
-                                            Background="{DynamicResource StatusRedBrush}" Foreground="White"
-                                            Command="{Binding ResetLibraryCommand}"/>
-                                    <Button Content="Keep my library" Classes="ghost pill" IsVisible="{Binding ConfirmingReset}"
-                                            Command="{Binding CancelResetCommand}"/>
-                                </StackPanel>
+                            <ctrls:SettingsSection Title="Mihon extensions"
+                                                   IsVisible="{Binding MihonExtensions, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                   Description="Use Mihon extensions as sources. Sentrychan runs a small helper server on this computer that runs them. Changes here apply at once.">
+                                <views:MihonExtensionsView DataContext="{Binding MihonExtensions}"/>
                             </ctrls:SettingsSection>
                         </StackPanel>
                     </TabItem>

@@ -157,6 +157,10 @@ public static class Program
                 services.AddSingleton<IMangaSourceService>(sp => sp.GetRequiredService<LocalMangaSourceService>());
                 services.AddSingleton<IMangaSourceRegistry, MangaSourceRegistry>();
                 services.AddSingleton<IMangaDownloadService, MangaDownloadService>();
+                // Opt-in Mihon extension bridge. Idle (no process, no network) until the user
+                // turns it on; stopped with the host.
+                services.AddSingleton<Sentrychan.Core.MihonBridge.MihonBridgeService>();
+                services.AddHostedService(sp => sp.GetRequiredService<Sentrychan.Core.MihonBridge.MihonBridgeService>());
                 services.AddSingleton<MangaUpdateService>();
                 services.AddSingleton<Sentrychan.UI.Interfaces.IUpdateService, VelopackUpdateService>();
                 services.AddSingleton<ITitleAliasService, TitleAliasService>();
@@ -374,6 +378,13 @@ public static class Program
             }
             catch (Exception ex) { Console.WriteLine($"Source plugin load failed: {ex.Message}"); }
 
+            // Bridged Mihon sources the user installed last time, from the saved list — the
+            // server itself only starts when one of them is used.
+            var mihonBridge = host.Services.GetRequiredService<Sentrychan.Core.MihonBridge.MihonBridgeService>();
+            try { mihonBridge.InitializeAsync().GetAwaiter().GetResult(); }
+            catch (Exception ex) { Console.WriteLine($"Mihon bridge init failed: {ex.Message}"); }
+            Sentrychan.UI.Controls.AsyncImage.UrlResolver = url => mihonBridge.ResolveImageUrlAsync(url);
+
             // Teach AsyncImage which manga sources need a Referer for their image CDN, and
             // which are adult sources whose images must never reach the disk cache.
             foreach (var src in mangaRegistry.Sources)
@@ -383,6 +394,12 @@ public static class Program
                 if (src.IsAdultSource)
                     Sentrychan.UI.Controls.AsyncImage.RegisterPrivateSource(src.SourceName);
             }
+            // Extensions installed later join while the app runs.
+            mihonBridge.SourcesChanged += sources =>
+            {
+                foreach (var src in sources.Where(s => s.IsAdultSource))
+                    Sentrychan.UI.Controls.AsyncImage.RegisterPrivateSource(src.SourceName);
+            };
 
             // Vault images (downloaded adult chapters) are decrypted in memory on display.
             var vaultService = host.Services.GetRequiredService<Sentrychan.Core.Vault.VaultService>();

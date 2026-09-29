@@ -1,0 +1,139 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             x:Class="Sentrychan.UI.Views.MihonExtensionsView"
+             x:DataType="vm:MihonExtensionsViewModel">
+    <!-- Settings → Sources → Mihon extensions. Picks up the settings page's label/hint styles. -->
+    <StackPanel Classes="fields">
+        <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding !IsSupported}"
+                   Text="The helper server has no build for this system, so Mihon extensions aren't available here."/>
+
+        <!-- Off: one button, then a plain explanation before anything is downloaded -->
+        <StackPanel Spacing="10" IsVisible="{Binding IsSupported}">
+            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsOff}">
+                <Button Content="Turn on Mihon extensions…" Classes="ghost pill" Command="{Binding BeginEnableCommand}"
+                        IsVisible="{Binding !ConfirmingEnable}"/>
+            </StackPanel>
+            <Border IsVisible="{Binding ConfirmingEnable}" Background="{DynamicResource CardBackgroundBrush}"
+                    CornerRadius="10" Padding="16,14">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Before you turn this on" FontWeight="SemiBold"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="Sentrychan will download Suwayomi-Server (about 330 MB, with its own Java runtime) from the Suwayomi project's releases on GitHub, check it against a pinned checksum, and keep it in Sentrychan's data folder. It runs only on this computer (127.0.0.1), starts when you use one of its sources, and stops when Sentrychan closes."/>
+                    <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="No extensions or repositories come with it. You add the repositories you want yourself; Sentrychan doesn't suggest any."/>
+                    <TextBlock Text="{Binding Version, StringFormat='Server version: {0}'}" FontSize="12"
+                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Download and turn on" Classes="accent pill" Command="{Binding EnableCommand}"/>
+                        <Button Content="Not now" Classes="ghost pill" Command="{Binding CancelEnableCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Installing -->
+            <StackPanel Spacing="6" IsVisible="{Binding IsInstalling}">
+                <TextBlock Text="{Binding ProgressText}" FontSize="13"/>
+                <ProgressBar Value="{Binding Progress}" Maximum="100" IsIndeterminate="{Binding !ProgressKnown}"
+                             Height="6" MaxWidth="420" HorizontalAlignment="Left"/>
+                <Button Content="Cancel" Classes="ghost pill" Command="{Binding CancelInstallCommand}"/>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding NeedsInstall}">
+                <Button Content="Try the download again" Classes="ghost pill" Command="{Binding EnableCommand}"/>
+                <Button Content="Turn off" Classes="ghost pill" Command="{Binding DisableCommand}"/>
+            </StackPanel>
+
+            <!-- On -->
+            <StackPanel Spacing="14" IsVisible="{Binding IsReady}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                    <Border Classes="chip" Classes.good="{Binding IsRunning}" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StateText}"/>
+                    </Border>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                        <Button Content="Start" Classes="ghost pill" Command="{Binding StartCommand}" IsVisible="{Binding CanStart}"/>
+                        <Button Content="Stop" Classes="ghost pill" Command="{Binding StopCommand}" IsVisible="{Binding IsRunning}"/>
+                        <Button Content="Turn off" Classes="ghost pill" Command="{Binding DisableCommand}"/>
+                    </StackPanel>
+                </Grid>
+                <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding !IsRunning}"
+                           Text="Start the server to manage repositories and extensions. It also starts by itself when you browse or read one of its sources."/>
+
+                <ToggleSwitch IsChecked="{Binding AllowWebChecks}"
+                              OnContent="Allow web checks" OffContent="Allow web checks"/>
+                <TextBlock Classes="hint" TextWrapping="Wrap"
+                           Text="Some sites put a browser check in front of their pages. With this on, the server sets up its built-in browser to pass them — a further download the first time."/>
+
+                <!-- Repositories: only what the user adds -->
+                <StackPanel Spacing="8" IsVisible="{Binding IsRunning}">
+                    <TextBlock Text="Repositories" Classes="label"/>
+                    <ItemsControl ItemsSource="{Binding Repos}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RepoRowVm">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding Url}" FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Remove" Classes="ghost pill" Command="{Binding RemoveCommand}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Classes="hint" IsVisible="{Binding !HasRepos}" TextWrapping="Wrap"
+                               Text="No repositories yet. Paste the address of a repository you trust."/>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBox Text="{Binding NewRepoUrl}" Watermark="Repository address (https://…)"/>
+                        <Button Grid.Column="1" Content="Add" Classes="ghost field" Command="{Binding AddRepoCommand}"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Extensions -->
+                <StackPanel Spacing="8" IsVisible="{Binding IsRunning}">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBox Text="{Binding ExtensionFilter}" Watermark="Filter extensions by name or language code"/>
+                        <Button Grid.Column="1" Content="Check for updates" Classes="ghost field" Command="{Binding RefreshCommand}"/>
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Extensions}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ExtensionRowVm">
+                                <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <StackPanel Spacing="3">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13.5" VerticalAlignment="Center"/>
+                                                <Border Classes="chip bad" IsVisible="{Binding IsNsfw}"><TextBlock Text="18+"/></Border>
+                                                <Border Classes="chip good" IsVisible="{Binding IsInstalled}"><TextBlock Text="Installed"/></Border>
+                                                <Border Classes="chip" IsVisible="{Binding HasUpdate}"><TextBlock Text="Update available"/></Border>
+                                                <Border Classes="chip bad" IsVisible="{Binding IsObsolete}"><TextBlock Text="Obsolete"/></Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Details}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <ProgressBar IsIndeterminate="True" Width="60" Height="4" IsVisible="{Binding IsWorking}"/>
+                                            <Button Content="Settings" Classes="ghost pill" Command="{Binding SettingsCommand}" IsVisible="{Binding CanConfigure}"/>
+                                            <Button Content="Update" Classes="accent pill" Command="{Binding UpdateCommand}" IsVisible="{Binding HasUpdate}"/>
+                                            <Button Content="Install" Classes="ghost pill" Command="{Binding InstallCommand}" IsVisible="{Binding IsNotInstalled}"/>
+                                            <Button Content="Uninstall" Classes="ghost pill" Command="{Binding UninstallCommand}" IsVisible="{Binding IsInstalled}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Classes="hint" IsVisible="{Binding !HasExtensions}" TextWrapping="Wrap"
+                               Text="No extensions to show. Add a repository, or clear the filter."/>
+                </StackPanel>
+            </StackPanel>
+
+            <ProgressBar IsIndeterminate="True" Height="3" MaxWidth="420" HorizontalAlignment="Left" IsVisible="{Binding IsBusy}"/>
+            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="13"
+                       IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBlock Text="{Binding LastError}" TextWrapping="Wrap" FontSize="13"
+                       IsVisible="{Binding LastError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Foreground="{DynamicResource StatusRedBrush}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>
