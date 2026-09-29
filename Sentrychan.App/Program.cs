@@ -187,7 +187,7 @@ public static class Program
                 services.AddSingleton<AiringScheduleRouter>();
                 services.AddSingleton<IAiringScheduleService>(sp => sp.GetRequiredService<AiringScheduleRouter>());
                 services.AddSingleton<IAiringScheduleRegistry>(sp => sp.GetRequiredService<AiringScheduleRouter>());
-                services.AddSingleton<INotificationService, WindowsNotificationService>();
+                services.AddSingleton<INotificationService>(_ => DesktopNotifications.ForCurrentOs());
                 services.AddSingleton<QuoteService>();
                 services.AddSingleton<IAccountService, SupabaseAccountService>();
                 services.AddSingleton<IHyperbeamService, HyperbeamService>();

@@ -259,7 +259,11 @@ public partial class MainWindow : Window
         if (e.CloseReason == WindowCloseReason.WindowClosing)
         {
             e.Cancel = true;
-            Hide();
+            // The tray icon is the way back from a hidden window. On Linux it needs a
+            // StatusNotifier host, which many desktops don't have, so minimise instead: the window
+            // stays in the task bar. (macOS brings it back from the Dock — see App.)
+            if (OperatingSystem.IsLinux()) WindowState = WindowState.Minimized;
+            else Hide();
         }
     }
 }
