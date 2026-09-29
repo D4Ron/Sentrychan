@@ -209,6 +209,66 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — **Phase 6 done** (macOS and Linux, plus the website section). 198 tests pass (+3 opt-in).
+  **The app now starts and runs on Linux** (launched under Xvfb, both from the build output and from
+  the packed AppImage: welcome screen, second launch hands over and exits). CI workflow ran on GitHub.
+  - **Startup blocker fixed:** the show-window listener created a named `EventWaitHandle` (Windows-only)
+    on a background thread → crash elsewhere. `Core/ShowWindowSignal`: Windows keeps the event (same
+    names); macOS/Linux use a per-user named pipe, next instance created before the current one is
+    released (back-to-back launches aren't lost; stale socket file from a crash is fine).
+  - **Paths:** `AppPaths.PlatformRoot` — Windows `%AppData%` (unchanged), macOS
+    `~/Library/Application Support`, Linux `$XDG_DATA_HOME` (absolute only) or `~/.local/share`.
+  - **Secrets:** `Core/Secrets` — `ISecretStore`, `SecretStores.Current`. Windows: `DpapiSecretStore`
+    (same entropy → existing vault key, session and `enc:v1:` values open unchanged). macOS/Linux:
+    `KeyWrappingSecretStore` (AES-256-GCM, "SCS1" | nonce | tag | cipher, entropy as AAD) under a
+    per-app master key in the Keychain (`KeychainVault`, Security.framework P/Invoke, service = app
+    name, account "master-key") or the Secret Service (`LibSecretVault`, libsecret `*v_sync` via
+    runtime-bound delegates, schema `app.sentrychan.MasterKey`). No store → `UnavailableSecretStore`
+    throws `SecretStoreUnavailableException` with install instructions — the old plaintext fallback
+    in `SecretProtector` is gone. Callers: vault key, Supabase session (not remembered, logged),
+    qBittorrent password (Settings shows the message; router logs and uses none). libsecret tested
+    against a real gnome-keyring (`SENTRYCHAN_KEYRING_TEST=1` under `dbus-run-session`, "session"
+    collection). The vault opens at startup, so the first start touches the keyring (on a bare
+    session gnome-keyring asks to create a default keyring; normal desktops have one unlocked).
+  - **Video:** `UI/Services/VideoSupport` — Linux probes `libvlc.so.5`; missing → the player shows how
+    to install VLC per distro. `VideoLAN.LibVLC.Mac` for `osx-*` RIDs, `.Windows` otherwise except
+    `linux-*`/`osx-*` (a no-RID build is unchanged).
+  - **Notifications/tray:** `App/DesktopNotificationServices.cs` — macOS `osascript` (texts as argv),
+    Linux `notify-send`; secret mode respected. Closing the window: Linux minimises (tray needs a
+    StatusNotifier host many desktops lack), macOS hides and the Dock icon reopens it
+    (`IActivatableLifetime` Reopen).
+  - **Other edges:** `UI/Services/ShellLauncher` (Explorer / `open -R` / `xdg-open`) replaces five
+    `explorer.exe` calls (Windows keeps `/select,"path"`). Tunnel helper: `frpc` per OS, and a plain
+    "not available on this system yet" off Windows (only the Windows package carries it). External
+    players already fall back to the internal one. Vault hidden attribute: already guarded; dot-folder.
+  - **Found on the way (all OSes):** the download-backend router read AppConfigs before migrations —
+    every first run logged errors; now initialised after them.
+  - **Updates:** preview channels per build: `preview` (Windows, unchanged), `preview-linux`,
+    `preview-osx-arm64`, `preview-osx-x64` (`VelopackUpdateService.PreviewChannelFor`). Pack id
+    `SentrychanPreview`, version `<Version>-preview.<run>`.
+  - **CI:** `.github/workflows/preview-desktop.yml` (push to `preview` + manual): build both flavours
+    and test on ubuntu, then publish self-contained source-less (`-p:IncludeSources=false`) and pack
+    with vpk 1.2.0 (needs .NET 10 to run; AppImage needs `squashfs-tools`): linux-x64 AppImage
+    (ubuntu-22.04), osx-arm64 (macos-15), osx-x64 (macos-15-intel) via `vpk bundle` → ad-hoc
+    `codesign -s -` → `vpk pack`. Uploaded as workflow artifacts (30 days) only — no Releases.
+    Both runs green on GitHub: tests, linux-x64, osx-arm64 and osx-x64 packs (Linux also run locally).
+  - **Website (`docs/index.html`, live when preview merges):** "Windows, macOS and Linux" in tagline and
+    meta; main button follows the visitor's OS (stable asset → preview asset → install notes), "Also
+    for" the other two; release cards list their systems; Installing has a macOS notice (unsigned,
+    Open Anyway steps, funding link `js-fund`, funding is what stands between it and a clean install)
+    and a Linux notice (AppImage, chmod +x, VLC, keyring). Rendered in headless Chromium.
+  - **Needs checking on a Mac:** first launch + Open Anyway on both architectures, Keychain key creation
+    (no prompt expected for the app's own item), notifications permission, Dock reopen, menu-bar tray,
+    VLC playback from the bundled library, Finder reveal, the Mihon bridge's macOS bundle.
+  - **Needs checking on Linux desktops:** GNOME (no tray without the AppIndicator extension → minimise
+    path) and KDE (tray), KWallet via libsecret, notify-send, a real window manager, playback with
+    system VLC, AppImage on an older distro.
+  - **Needs checking on Windows:** nothing should change — DPAPI data opens, show-window event, toasts,
+    Explorer select; the router-after-migrations reorder on a first run.
+  - **Known limits:** the tunnel helper (internet watch parties) and PotPlayer are Windows-only; stable
+    Mac/Linux packages need a release pipeline decision (the workflow only makes previews); no
+    Developer ID signing/notarisation (unfunded); the AppImage uses system VLC.
+
 - 2026-09-29 — **Phase 5 done** (Mihon backup import). 180 tests pass (+2 opt-in real-server tests, both pass here).
   - **Reader:** `Core/MihonBackup/TachibkReader` — gzip (or raw) protobuf, hand-rolled wire reader, no new
     dependency. Field numbers from Mihon's `data/backup/models` (listed in the class doc). Reads manga
