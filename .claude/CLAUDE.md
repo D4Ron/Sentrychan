@@ -209,6 +209,34 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-29 — **Phase 1 done** (Tidy library). 94 tests pass; both flavours build.
+  - **Core (`Sentrychan.Core/Library/`):** `NamingTemplate` (presets + tokens; empty tokens vanish with
+    their brackets; Windows-illegal chars dropped like the old folder names), `ReleaseNameParser`
+    (AnitomySharp + bare "05" + strict SxxEyy), `FolderNameCleaner`, `EpisodeNumbering` (continued counts →
+    season-relative only when every earlier season's total is known; otherwise *unsure*), `LibraryShows`
+    (seasons sharing a base title share a folder; folder keys match "Show", "Show (2020)", tagged names),
+    `TidyPlanner`, `TidyExecutor` (journal in `AppPaths/tidy-journals`, each move recorded *before* it
+    happens; undo reverses only what it can see happened), `TidyRecords`, `LibraryFiling`,
+    `LibraryMetadata`, `LibraryTidyService`.
+  - **Data:** migration `AddLibraryTidy` — `Series.Year/MediaType/TidyExcluded/KeepFileNames`, table
+    `LibraryFileOrigins` (current path → name it downloaded as; path NOCASE unique).
+  - **App behaviour changes:** new downloads are filed by the template (default Jellyfin/Plex), season
+    from the RSS title or the series title; uncertain numbers keep the release name in the template's
+    folders; "Don't tidy" keeps the old layout. Repair/fill-gaps use the original name (cached-torrent
+    lookup *and* re-staging). Locator/library scan understand both layouts and original names.
+    `ITitleResolverService.GetByMalId` (default `null`) gives year/type from the offline DB.
+  - **UI:** Settings → Library → File naming (preset, custom template, live example, "Tidy library…");
+    `TidyLibraryDialog` (before → after list, problems first, ticks, counts, Move, Undo last tidy;
+    playback positions follow); series page → "Library Files" (Don't tidy / Keep full file names).
+  - **Needs checking on Windows:** the dialog and settings visually; a real tidy + undo on a copy of a
+    library (incl. a case-only rename, which goes via a temp name); the open-file check (`FileShare.None`)
+    against a file playing in the internal player and in an external one; repair of a renamed episode
+    end to end.
+  - **Heads-up:** stable (main) doesn't know the new layout — its locator won't find episodes the
+    preview filed as "Show (2023)/Season 01/Show S01E05.mkv", so a stable run on the same library could
+    re-download them (Minimal's bare "05" isn't recognised by stable either). While both are used on one
+    library, either set "Don't tidy" on the series or port the locator/normaliser change to stable.
+
 - 2026-09-29 — **Phase 0 done** (branch `preview`). Both flavours build (`dotnet build Sentrychan.sln`,
   add `-p:Flavor=Preview`; also with `-p:IncludeSources=false`); `dotnet test Sentrychan.Tests` → 27 pass.
   Warning count unchanged from `main` (26).
