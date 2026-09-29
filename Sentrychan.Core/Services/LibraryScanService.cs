@@ -55,17 +55,22 @@ public class LibraryScanService : ILibraryScanService
             .Where(d => !ReservedFolders.Contains(d.Name) && !d.Name.StartsWith('.'))
             .ToList();
 
-        // ── Pass 1: claim folders by the app's own naming convention ──
-        var claimed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase); // folder name → series idx
-        var folderBySeries = new Dictionary<int, DirectoryInfo>();                    // series idx → folder
+        // ── Pass 1: claim folders by the app's own naming ──────────────
+        // "Show", the naming template's "Show (2023)", or a release-tagged folder all name the
+        // show "Show". Every season of a show shares its folder, and a half-tidied library can
+        // hold both an old and a new folder — so a series may claim several, and a folder
+        // may belong to several series.
+        var claimed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase); // folder name → first series idx
+        var foldersBySeries = new Dictionary<int, List<DirectoryInfo>>();            // series idx → folders
 
         for (int i = 0; i < allSeries.Count; i++)
         {
-            var expected = SanitizeFolderName(SeasonDetector.ExtractBaseTitle(allSeries[i].Title));
-            var dir = topLevelDirs.FirstOrDefault(d =>
-                string.Equals(d.Name, expected, StringComparison.OrdinalIgnoreCase));
-            if (dir != null && claimed.TryAdd(dir.Name, i))
-                folderBySeries[i] = dir;
+            var key = Library.LibraryShows.Key(SeasonDetector.ExtractBaseTitle(allSeries[i].Title));
+            foreach (var dir in topLevelDirs.Where(d => Library.LibraryShows.FolderKeys(d.Name).Contains(key)))
+            {
+                claimed.TryAdd(dir.Name, i);
+                (foldersBySeries.TryGetValue(i, out var list) ? list : foldersBySeries[i] = []).Add(dir);
+            }
         }
 
         // ── Pass 2: claim leftover folders via the title resolver ─────
@@ -82,10 +87,10 @@ public class LibraryScanService : ILibraryScanService
                 var resolved = _titleResolver.ResolveTitle(dir.Name);
                 if (resolved is { MalId: > 0 }
                     && byMalId.TryGetValue(resolved.MalId, out var idx)
-                    && !folderBySeries.ContainsKey(idx))
+                    && !foldersBySeries.ContainsKey(idx))
                 {
                     claimed[dir.Name] = idx;
-                    folderBySeries[idx] = dir;
+                    foldersBySeries[idx] = [dir];
                 }
             }
         }
@@ -96,10 +101,10 @@ public class LibraryScanService : ILibraryScanService
         {
             var series = allSeries[i];
             var expected = SanitizeFolderName(SeasonDetector.ExtractBaseTitle(series.Title));
-            folderBySeries.TryGetValue(i, out var dir);
+            var dirs = foldersBySeries.TryGetValue(i, out var found) ? found : [];
 
             var episodes = new List<int>();
-            if (dir != null)
+            foreach (var dir in dirs)
             {
                 try
                 {
@@ -110,7 +115,8 @@ public class LibraryScanService : ILibraryScanService
 
                         var name = Path.GetFileNameWithoutExtension(file);
                         var ep = (_titleResolver.IsReady ? _titleResolver.ParseRelease(name).Episode : null)
-                                 ?? _normalizer.ExtractEpisodeNumber(name);
+                                 ?? _normalizer.ExtractEpisodeNumber(name)
+                                 ?? Library.ReleaseNameParser.Parse(name).Episode; // the Minimal preset's bare "05"
                         if (ep.HasValue && !episodes.Contains(ep.Value))
                             episodes.Add(ep.Value);
                     }
@@ -126,7 +132,7 @@ public class LibraryScanService : ILibraryScanService
                 MalId: series.MalId,
                 Title: series.Title,
                 ExpectedFolder: expected,
-                FolderExists: dir != null,
+                FolderExists: dirs.Count > 0,
                 EpisodesOnDisk: episodes,
                 LastEpisodeNumber: series.LastEpisodeNumber));
         }

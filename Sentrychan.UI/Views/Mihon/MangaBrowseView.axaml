@@ -1,0 +1,235 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mihon="using:Sentrychan.UI.ViewModels.Mihon"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             x:Class="Sentrychan.UI.Views.Mihon.MangaBrowseView"
+             x:DataType="mihon:MangaBrowseViewModel">
+
+    <UserControl.Resources>
+        <!-- A result card, shared by a source page and global search. -->
+        <DataTemplate x:Key="ResultCard" x:DataType="vm:MangaResultVm">
+            <Border Width="140" Margin="6" CornerRadius="6" Background="{DynamicResource CardBackgroundBrush}">
+                <StackPanel>
+                    <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                            Command="{Binding OpenCommand}" ToolTip.Tip="Details">
+                        <Border Height="198" CornerRadius="6,6,0,0" ClipToBounds="True"
+                                Background="{DynamicResource SurfaceBackgroundBrush}">
+                            <Panel>
+                                <controls:AsyncImage Url="{Binding CoverUrl}" SourceName="{Binding SourceName}" Stretch="UniformToFill"/>
+                                <Border Classes="chip good" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                        IsVisible="{Binding IsInLibrary}">
+                                    <TextBlock Text="In library"/>
+                                </Border>
+                            </Panel>
+                        </Border>
+                    </Button>
+                    <StackPanel Margin="8,6,8,8" Spacing="6">
+                        <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                        <Button Classes="ghost" FontSize="11" Padding="8,3" Content="+ Add" HorizontalAlignment="Left"
+                                Command="{Binding AddCommand}" IsVisible="{Binding !IsInLibrary}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.DataTemplates>
+        <!-- Filter sheet rows, one template per Mihon filter kind. -->
+        <DataTemplate DataType="mihon:HeaderFilterVm">
+            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12.5" Margin="0,8,0,2"/>
+        </DataTemplate>
+        <DataTemplate DataType="mihon:SeparatorFilterVm">
+            <Separator Margin="0,6"/>
+        </DataTemplate>
+        <DataTemplate DataType="mihon:SelectFilterVm">
+            <StackPanel Spacing="3" Margin="0,4">
+                <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <ComboBox ItemsSource="{Binding Values}" SelectedIndex="{Binding SelectedIndex}" HorizontalAlignment="Stretch"/>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate DataType="mihon:TextFilterVm">
+            <StackPanel Spacing="3" Margin="0,4">
+                <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBox Text="{Binding Text}"/>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate DataType="mihon:CheckBoxFilterVm">
+            <CheckBox IsChecked="{Binding IsChecked}" Content="{Binding Name}" Margin="0,2"/>
+        </DataTemplate>
+        <DataTemplate DataType="mihon:TriStateFilterVm">
+            <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="6,3"
+                    Command="{Binding CycleCommand}" ToolTip.Tip="Include ✓ · exclude ✕ · any">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Border Width="16" Height="16" CornerRadius="3" BorderThickness="1"
+                            BorderBrush="{DynamicResource BorderEmphasisBrush}">
+                        <TextBlock Text="{Binding Glyph}" FontSize="11" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="{Binding Name}"/>
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+        <DataTemplate DataType="mihon:SortFilterVm">
+            <StackPanel Spacing="2" Margin="0,4">
+                <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <ItemsControl ItemsSource="{Binding Options}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="mihon:SortOptionVm">
+                            <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="6,3"
+                                    Command="{Binding PickCommand}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding Arrow}" Width="12" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding Label}"/>
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate DataType="mihon:GroupFilterVm">
+            <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" Margin="0,4">
+                <ItemsControl ItemsSource="{Binding Children}"/>
+            </Expander>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <DockPanel Margin="0,12,0,0">
+        <!-- Global search: always there, across every source -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+            <Button Classes="ghost" Content="‹ Sources" Command="{Binding BackCommand}" IsVisible="{Binding !ShowList}"/>
+            <TextBox Grid.Column="1" Text="{Binding GlobalQuery}" Watermark="Search every source" MaxWidth="480" HorizontalAlignment="Left" MinWidth="300">
+                <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding GlobalSearchCommand}"/>
+                </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="2" Classes="accent" Content="Global search" Command="{Binding GlobalSearchCommand}"/>
+        </Grid>
+
+        <Panel>
+            <!-- The sources list: pick one -->
+            <Panel IsVisible="{Binding ShowList}">
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding Sources}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="mihon:SourceRowVm">
+                                <Border Padding="12,8" CornerRadius="6" Margin="0,0,0,2" Background="{DynamicResource CardBackgroundBrush}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                        <Border Classes="chip" MinWidth="34" Margin="0,0,12,0">
+                                            <TextBlock Text="{Binding Language}" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <Button Grid.Column="1" Background="Transparent" BorderThickness="0" Padding="0"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding OpenCommand}">
+                                            <StackPanel Spacing="2">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                    <Border Classes="chip bad" IsVisible="{Binding IsNsfw}" Padding="6,0">
+                                                        <TextBlock Text="18+"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding LastUsedText}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="2" Classes="ghost" Content="{Binding PinGlyph}" FontSize="15" Padding="8,2"
+                                                ToolTip.Tip="Pin to the top" Command="{Binding TogglePinCommand}"/>
+                                        <Button Grid.Column="3" Classes="ghost" Content="Browse" Command="{Binding OpenCommand}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <TextBlock IsVisible="{Binding HasNoSources}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextWrapping="Wrap" MaxWidth="460" TextAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"
+                           Text="No sources yet. Sentrychan ships with none — add a source pack in Settings → Library, or set a Local manga folder."/>
+            </Panel>
+
+            <!-- Global search results: one row per source -->
+            <ScrollViewer IsVisible="{Binding ShowGlobal}">
+                <ItemsControl ItemsSource="{Binding GlobalResults}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="mihon:GlobalSearchGroupVm">
+                            <StackPanel Margin="0,0,0,14">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="2,0,0,4">
+                                    <TextBlock Text="{Binding SourceName}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="1" Classes="chip" Margin="8,0,0,0"><TextBlock Text="{Binding Language}"/></Border>
+                                    <TextBlock Grid.Column="2" Text="{Binding Status}" Margin="12,0,0,0" FontSize="12" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    <Button Grid.Column="3" Classes="ghost" Content="More ›" Command="{Binding OpenSourceCommand}"/>
+                                </Grid>
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource ResultCard}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- One source: Popular / Latest / search with filters -->
+            <ContentControl Content="{Binding CurrentSource}" IsVisible="{Binding CurrentSource, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate x:DataType="mihon:SourceBrowseViewModel">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+                                <TextBlock Text="{Binding SourceName}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="10,0,0,0">
+                                    <ToggleButton Content="Popular" IsChecked="{Binding IsPopular, Mode=OneWay}" Command="{Binding PopularCommand}"/>
+                                    <ToggleButton Content="Latest" IsChecked="{Binding IsLatest, Mode=OneWay}" Command="{Binding LatestCommand}"
+                                                  IsVisible="{Binding SupportsLatest}"/>
+                                    <ToggleButton Content="Filter" IsChecked="{Binding ShowFilters, Mode=OneWay}" Command="{Binding ToggleFiltersCommand}"
+                                                  IsVisible="{Binding HasFilters}"/>
+                                </StackPanel>
+                                <TextBox Grid.Column="2" Text="{Binding Query}" Watermark="Search this source" MinWidth="200">
+                                    <TextBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
+                                    </TextBox.KeyBindings>
+                                </TextBox>
+                                <Button Grid.Column="3" Classes="ghost" Content="Search" Command="{Binding SearchCommand}"/>
+                            </Grid>
+
+                            <!-- Filter sheet -->
+                            <Border DockPanel.Dock="Right" Width="280" Margin="12,0,0,0" IsVisible="{Binding ShowFilters}"
+                                    Background="{DynamicResource CardBackgroundBrush}" CornerRadius="8" Padding="12">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="6" Margin="0,10,0,0" HorizontalAlignment="Right">
+                                        <Button Classes="ghost" Content="Reset" Command="{Binding FilterSheet.ResetCommand}"/>
+                                        <Button Classes="accent" Content="Filter" Command="{Binding ApplyFiltersCommand}"/>
+                                    </StackPanel>
+                                    <ScrollViewer>
+                                        <ItemsControl ItemsSource="{Binding FilterSheet.Rows}"/>
+                                    </ScrollViewer>
+                                </DockPanel>
+                            </Border>
+
+                            <Panel>
+                                <ScrollViewer>
+                                    <StackPanel>
+                                        <ItemsControl ItemsSource="{Binding Results}" ItemTemplate="{StaticResource ResultCard}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                        <Button Classes="ghost" Content="Load more" HorizontalAlignment="Center" Margin="0,10"
+                                                Command="{Binding LoadMoreCommand}" IsVisible="{Binding HasNextPage}"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                                <TextBlock Text="{Binding Status}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" VerticalAlignment="Top"
+                                             Foreground="{DynamicResource AccentBrush}"/>
+                            </Panel>
+                        </DockPanel>
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
+        </Panel>
+    </DockPanel>
+</UserControl>

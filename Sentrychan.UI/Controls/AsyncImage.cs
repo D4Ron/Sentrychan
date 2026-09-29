@@ -13,6 +13,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.Controls;
 
@@ -80,9 +81,7 @@ public class AsyncImage : Image
     // from PosterPath, extended to manga covers/pages (and any remote image). Kept in
     // its OWN directory (not anime's ImageCache) so size-eviction here can never delete
     // a file an anime Series.PosterPath points at. Bounded by total size, oldest-first.
-    private static readonly string _diskCacheDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Sentrychan", "cache", "images");
+    private static readonly string _diskCacheDir = AppPaths.Combine("cache", "images");
     private const long MaxDiskBytes = 600L * 1024 * 1024; // ~600 MB ceiling
     private const long DiskTrimTo   = 450L * 1024 * 1024; // trim back down to this
     private static int _writesSinceTrim;
@@ -125,6 +124,13 @@ public class AsyncImage : Image
     public static Func<string, Task<byte[]?>>? VaultReader { get; set; }
 
     public const string VaultScheme = "vault:";
+
+    /// <summary>
+    /// Turns a url with an app-specific scheme into an http one when it's loaded, or null when it
+    /// can't be (the Mihon bridge's covers, which point at a local server whose port can change).
+    /// Set at startup.
+    /// </summary>
+    public static Func<string, Task<string?>>? UrlResolver { get; set; }
 
     /// <summary>Deletes every cached image on disk. Returns how many files were removed.</summary>
     public static int ClearDiskCache()
@@ -434,10 +440,13 @@ public class AsyncImage : Image
         if (File.Exists(normalizedUrl))
             return new ImageBytes(await File.ReadAllBytesAsync(normalizedUrl), FromDisk: false, FromNetwork: false);
 
-        if (!normalizedUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        // Anything else that isn't http is a scheme a service resolves at load time, or nothing.
+        var isHttp = normalizedUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+        if (!isHttp && UrlResolver == null)
             return null;
 
-        // Persistent disk hit → skip the network entirely.
+        // Persistent disk hit → skip the network entirely. Keyed on the url as given, so a
+        // resolved url that changes between runs (a local server's port) still hits.
         var diskPath = bypassDisk ? null : DiskPathFor(normalizedUrl);
         if (diskPath != null && File.Exists(diskPath))
         {
@@ -450,7 +459,11 @@ public class AsyncImage : Image
             catch { /* locked/unreadable cache file → fall through and re-download */ }
         }
 
-        using var req = new HttpRequestMessage(HttpMethod.Get, normalizedUrl);
+        var fetchUrl = isHttp ? normalizedUrl : await UrlResolver!(normalizedUrl);
+        if (fetchUrl == null || !fetchUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, fetchUrl);
         // Some source CDNs (MangaPill) hotlink-protect: send their Referer.
         if (!string.IsNullOrEmpty(sourceName) && _refererBySource.TryGetValue(sourceName, out var referer))
             req.Headers.Referrer = new Uri(referer);

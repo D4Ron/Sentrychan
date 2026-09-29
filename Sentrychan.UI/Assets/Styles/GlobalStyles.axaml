@@ -427,5 +427,14 @@
     <Style Selector="Border.chip.bad > TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource StatusRedBrush}"/>
     </Style>
+    <!-- The "Preview" badge beside the logo in preview builds. -->
+    <Style Selector="Border.chip.preview">
+        <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+        <Setter Property="Padding" Value="6,1"/>
+    </Style>
+    <Style Selector="Border.chip.preview > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentLightBrush}"/>
+        <Setter Property="FontSize" Value="10"/>
+    </Style>
 
 </Styles>

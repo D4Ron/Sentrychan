@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mihon="using:Sentrychan.UI.ViewModels.Mihon"
+        xmlns:controls="using:Sentrychan.UI.Controls"
+        x:Class="Sentrychan.UI.Views.Dialogs.MangaMigrateDialog"
+        x:DataType="mihon:MigrateViewModel"
+        Title="Migrate"
+        Width="640" Height="600" MinHeight="400"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="22">
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
+            <TextBlock Text="Move to another source" FontSize="19" FontWeight="Bold"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="Pick the same title on another source. Read chapters, bookmarks, history and categories come along, matched by chapter number."/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,10" IsVisible="{Binding HasSources}">
+            <ComboBox ItemsSource="{Binding SourceNames}" SelectedItem="{Binding SelectedSource}" MinWidth="150"/>
+            <TextBox Grid.Column="1" Text="{Binding Query}" Watermark="Title">
+                <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
+                </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="2" Content="Search" Classes="accent" Command="{Binding SearchCommand}"/>
+        </Grid>
+
+        <Panel Grid.Row="2">
+            <TextBlock IsVisible="{Binding !HasSources}" TextWrapping="Wrap" VerticalAlignment="Center" HorizontalAlignment="Center"
+                       Text="There's no other source to move this title to." Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <ListBox ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" Background="Transparent">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="mihon:MigrateCandidateVm">
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                            <Border Width="46" Height="66" CornerRadius="4" ClipToBounds="True"
+                                    Background="{DynamicResource SurfaceBackgroundBrush}">
+                                <controls:AsyncImage Url="{Binding CoverUrl}" SourceName="{Binding SourceName}" Stretch="UniformToFill"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="3">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Meta}" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+        </Panel>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Cancel" Classes="ghost" Click="OnCancel"/>
+            <Button Content="Migrate" Classes="accent" IsEnabled="{Binding CanConfirm}" Click="OnConfirm"/>
+        </StackPanel>
+    </Grid>
+</Window>

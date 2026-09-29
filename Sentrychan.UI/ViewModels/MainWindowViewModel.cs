@@ -21,6 +21,7 @@ using Sentrychan.UI.Interfaces;
 using System.Windows.Input;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.ViewModels;
  
@@ -180,7 +181,17 @@ public class MainWindowViewModel : ViewModelBase,
     }
 
     /// <summary>Sidebar label. Used to be the hardcoded literal "Monitoring Active".</summary>
-    public string MonitorStatusText => IsMonitoring ? "Monitoring active" : "Monitoring paused";
+    public string MonitorStatusText =>
+        IsMonitoring ? "Monitoring active"
+        : IsPausedForOtherInstance ? "Paused — other app running"
+        : "Monitoring paused";
+
+    /// <summary>
+    /// The other flavour (stable or preview) was already running when this one started, so
+    /// monitoring and downloads are paused here for the session. Shown as a banner.
+    /// </summary>
+    public bool IsPausedForOtherInstance => InstanceGuard.PausedForOtherInstance;
+    public string OtherInstanceMessage => InstanceGuard.PausedMessage;
 
     private bool _hasPendingEpisodes;
     public bool HasPendingEpisodes
@@ -456,6 +467,68 @@ public class MainWindowViewModel : ViewModelBase,
     {
         get => _mangaDetailVm;
         set => this.RaiseAndSetIfChanged(ref _mangaDetailVm, value);
+    }
+
+    // ── Manga screens style (Settings → Appearance) ────────────────
+    public const string MangaUiStyleKey = "MangaUiStyle";
+
+    private bool _isMihonMangaUi;
+    /// <summary>The Mihon-style manga screens instead of the classic ones. Opt-in for now.</summary>
+    public bool IsMihonMangaUi
+    {
+        get => _isMihonMangaUi;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isMihonMangaUi, value);
+            this.RaisePropertyChanged(nameof(IsClassicMangaUi));
+        }
+    }
+    public bool IsClassicMangaUi => !IsMihonMangaUi;
+
+    private Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? _mihonMangaVm;
+    public Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? MihonMangaVm
+    {
+        get => _mihonMangaVm;
+        set => this.RaiseAndSetIfChanged(ref _mihonMangaVm, value);
+    }
+
+    private Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? _mihonNovelVm;
+    public Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? MihonNovelVm
+    {
+        get => _mihonNovelVm;
+        set => this.RaiseAndSetIfChanged(ref _mihonNovelVm, value);
+    }
+
+    /// <summary>Re-reads the manga screens style — after Settings saves.</summary>
+    public async Task ReloadMangaUiStyleAsync()
+    {
+        if (_dbContextFactory == null) return;
+        try
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            IsMihonMangaUi = (await db.AppConfigs.AsNoTracking().FirstOrDefaultAsync(c => c.Key == MangaUiStyleKey))?.Value == "Mihon";
+        }
+        catch { /* keep the current style */ }
+    }
+
+    private Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel? CreateMihonVm(bool novels)
+    {
+        if (App.Services == null) return null;
+        if (App.Services.GetService(typeof(IMangaService)) is not IMangaService mangaService
+            || App.Services.GetService(typeof(IMangaSourceRegistry)) is not IMangaSourceRegistry registry
+            || App.Services.GetService(typeof(IMangaDownloadService)) is not IMangaDownloadService downloads
+            || App.Services.GetService(typeof(Sentrychan.Core.MangaLibrary.MangaLibraryService)) is not Sentrychan.Core.MangaLibrary.MangaLibraryService library)
+            return null;
+        var secret = App.Services.GetService(typeof(ISecretModeService)) as ISecretModeService;
+        var config = App.Services.GetService(typeof(IConfigService)) as IConfigService;
+        var updater = App.Services.GetService(typeof(Sentrychan.Core.Services.MangaUpdateService)) as Sentrychan.Core.Services.MangaUpdateService;
+
+        var vm = new Sentrychan.UI.ViewModels.Mihon.MihonMangaViewModel(library, mangaService, registry, downloads, secret, config, novels,
+            openTitle: m => _ = OpenMangaDetailAsync(m),
+            openReader: (m, chapterId) => _ = OpenReaderAsync(m, chapterId),
+            checkForUpdates: updater == null ? null : async () => (await updater.CheckForUpdatesAsync()).WithNewChapters);
+        vm.BrowseHost.ReadPreview = (result, source) => OpenPreviewReaderAsync(result, source);
+        return vm;
     }
 
     private bool _isShowingManga;
@@ -1017,8 +1090,7 @@ public class MainWindowViewModel : ViewModelBase,
         DismissUnmatchedBannerCommand = ReactiveCommand.Create(() => { ShowUnmatchedBanner = false; });
         OpenUnmatchedFolderCommand = ReactiveCommand.Create(() =>
         {
-            if (!string.IsNullOrEmpty(UnmatchedFolderPath) && Directory.Exists(UnmatchedFolderPath))
-                System.Diagnostics.Process.Start("explorer.exe", UnmatchedFolderPath);
+            Services.ShellLauncher.OpenFolder(UnmatchedFolderPath);
         });
         ShowAccountCommand      = ReactiveCommand.Create(() => { });
         ShowWatchPartyCommand  = ReactiveCommand.Create(() => { });
@@ -1122,8 +1194,7 @@ public class MainWindowViewModel : ViewModelBase,
         DismissUnmatchedBannerCommand = ReactiveCommand.Create(() => { ShowUnmatchedBanner = false; });
         OpenUnmatchedFolderCommand = ReactiveCommand.Create(() =>
         {
-            if (!string.IsNullOrEmpty(UnmatchedFolderPath) && Directory.Exists(UnmatchedFolderPath))
-                System.Diagnostics.Process.Start("explorer.exe", UnmatchedFolderPath);
+            Services.ShellLauncher.OpenFolder(UnmatchedFolderPath);
         });
         ShowAccountCommand    = ReactiveCommand.CreateFromTask(OpenAccountDialogAsync);
         ShowWatchPartyCommand  = ReactiveCommand.Create(ShowWatchParty);
@@ -1251,6 +1322,8 @@ public class MainWindowViewModel : ViewModelBase,
         var svc = App.Services?.GetService(typeof(Sentrychan.Core.Services.MangaUpdateService))
             as Sentrychan.Core.Services.MangaUpdateService;
         if (svc == null) return;
+        // The other app checks the same follows and would notify about every chapter too.
+        if (IsPausedForOtherInstance) return;
 
         var report = await svc.CheckForUpdatesAsync(CancellationToken.None);
         if (report.WithNewChapters == 0) return;
@@ -1370,7 +1443,11 @@ public class MainWindowViewModel : ViewModelBase,
                 OpenAccount = OpenAccountDialogAsync,
             };
             // Appearance settings that live on the main window follow a save.
-            vm.Saved += () => BackgroundImagePath = vm.BackgroundImagePath;
+            vm.Saved += () =>
+            {
+                BackgroundImagePath = vm.BackgroundImagePath;
+                _ = ReloadMangaUiStyleAsync();
+            };
             SettingsVm = vm;
         }
 
@@ -1401,6 +1478,7 @@ public class MainWindowViewModel : ViewModelBase,
         if (System.Threading.Interlocked.Exchange(ref _initStarted, 1) == 1) return;
         await LoadSeriesAsync();
         await LoadAppearanceAsync();
+        if (await MaybeOfferStableCopyAsync()) return; // restarting into the copied library
         await CheckFirstRunAsync();
         await MaybeShowTutorialAsync();
         await SyncMonitoringStateAsync();
@@ -1417,10 +1495,62 @@ public class MainWindowViewModel : ViewModelBase,
                 await using var db = await _dbContextFactory.CreateDbContextAsync();
                 paused = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == "MonitoringPaused"))?.Value == "true";
             }
-            IsMonitoring = !paused;
+            IsMonitoring = !paused && !IsPausedForOtherInstance;
             UpdateStatus(IsMonitoring ? "● Monitoring" : "● Idle", IsMonitoring ? "#00FF00" : "#808080");
         }
         catch { /* leave the default state */ }
+    }
+
+    /// <summary>
+    /// Preview only: on first run, offer to copy the library from stable (see StableLibraryCopy).
+    /// Asked once — "Start fresh" is remembered, closing the dialog asks again next launch — and
+    /// never once this preview has a library of its own. Returns true when the app is restarting
+    /// to open the copy.
+    /// </summary>
+    private async Task<bool> MaybeOfferStableCopyAsync()
+    {
+        if (!BuildInfo.IsPreview || _dbContextFactory == null) return false;
+        try
+        {
+            // Copied last session but not restarted since (the restart failed, or was interrupted).
+            if (StableLibraryCopy.IsStaged(AppPaths.DataDir))
+            {
+                ShowToast("Library copied", "Restart Sentrychan Preview to open the library copied from Sentrychan.");
+                return false;
+            }
+            if (!StableLibraryCopy.StableDataExists(AppPaths.StableDataDir)) return false;
+
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            if (await db.AppConfigs.AnyAsync(c => c.Key == StableLibraryCopy.OfferedKey)) return false;
+            if (await db.Series.AnyAsync() || await db.Manga.AnyAsync()) return false;
+
+            var owner = GetMainWindow();
+            if (owner == null) return false;
+
+            var copied = await new Sentrychan.UI.Views.Dialogs.CopyFromStableDialog().ShowDialog<bool?>(owner);
+            if (copied == null) return false;
+
+            if (copied == false)
+            {
+                db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = StableLibraryCopy.OfferedKey, Value = "true" });
+                await db.SaveChangesAsync();
+                return false;
+            }
+
+            // The copy is swapped in at startup, before the database is opened.
+            if (App.Restart == null)
+            {
+                ShowToast("Library copied", "Restart Sentrychan Preview to open it.");
+                return false;
+            }
+            App.Restart();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[StableCopy] {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>
@@ -1506,6 +1636,7 @@ public class MainWindowViewModel : ViewModelBase,
     private async Task LoadAppearanceAsync()
     {
         if (_dbContextFactory == null) return;
+        await ReloadMangaUiStyleAsync();
         try
         {
             await using var db = await _dbContextFactory.CreateDbContextAsync();
@@ -1718,6 +1849,12 @@ public class MainWindowViewModel : ViewModelBase,
     private async Task ToggleMonitoringAsync()
     {
         if (_rssMonitor == null) return;
+        // Resuming here would persist "not paused" without monitoring anything; say why instead.
+        if (IsPausedForOtherInstance)
+        {
+            ShowToast("Monitoring paused", OtherInstanceMessage);
+            return;
+        }
         if (IsMonitoring)
         {
             _rssMonitor.Pause();               // actually halt the background checks
@@ -1750,6 +1887,11 @@ public class MainWindowViewModel : ViewModelBase,
     private async Task ManualCheckAsync()
     {
         if (_rssMonitor == null) return;
+        if (IsPausedForOtherInstance)
+        {
+            ShowToast("Monitoring paused", OtherInstanceMessage);
+            return;
+        }
         UpdateStatus("● Checking...", "#FFA726");
         await _rssMonitor.ManualCheckAsync();
     }
@@ -2119,7 +2261,7 @@ public class MainWindowViewModel : ViewModelBase,
         var files = await GetMainWindow()!.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions { Title = $"Select Poster for {series.Title}", AllowMultiple = false, FileTypeFilter = new[] { Avalonia.Platform.Storage.FilePickerFileTypes.ImageAll } });
         if (files != null && files.Count > 0)
         {
-            var coversDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "Covers");
+            var coversDir = AppPaths.Combine("Covers");
             Directory.CreateDirectory(coversDir);
             var destPath = Path.Combine(coversDir, $"{series.Id}_{DateTime.Now.Ticks}{Path.GetExtension(files[0].Path.LocalPath)}");
             File.Copy(files[0].Path.LocalPath, destPath, true);
@@ -2207,6 +2349,13 @@ public class MainWindowViewModel : ViewModelBase,
 
     private void ShowManga()
     {
+        if (IsMihonMangaUi)
+        {
+            MihonMangaVm ??= CreateMihonVm(novels: false);
+            SetCurrentView(AppView.Manga);
+            _ = MihonMangaVm?.LoadTabAsync();
+            return;
+        }
         if (MangaLibraryVm == null && App.Services != null)
         {
             var mangaService = App.Services.GetService(typeof(IMangaService)) as IMangaService;
@@ -2225,6 +2374,13 @@ public class MainWindowViewModel : ViewModelBase,
 
     private void ShowNovels()
     {
+        if (IsMihonMangaUi)
+        {
+            MihonNovelVm ??= CreateMihonVm(novels: true);
+            SetCurrentView(AppView.Novels);
+            _ = MihonNovelVm?.LoadTabAsync();
+            return;
+        }
         if (NovelLibraryVm == null && App.Services != null)
         {
             var mangaService = App.Services.GetService(typeof(IMangaService)) as IMangaService;
@@ -2339,8 +2495,14 @@ public class MainWindowViewModel : ViewModelBase,
         // Back returns to whichever section this title lives in (Manga vs Novels).
         Action back = manga.IsNovel ? ShowNovels : ShowManga;
         MangaDetailVm?.Detach();
+        var library = App.Services.GetService(typeof(Sentrychan.Core.MangaLibrary.MangaLibraryService))
+            as Sentrychan.Core.MangaLibrary.MangaLibraryService;
         MangaDetailVm = new MangaDetailViewModel(manga, mangaService, source, downloader, back,
-            chapterId => _ = OpenReaderAsync(manga, chapterId));
+            chapterId => _ = OpenReaderAsync(manga, chapterId), library)
+        {
+            // After a migration the title lives on another source; open it there.
+            MigratedTo = migrated => _ = OpenMangaDetailAsync(migrated),
+        };
         SetCurrentView(AppView.MangaDetail);
         await MangaDetailVm.InitializeAsync();
     }

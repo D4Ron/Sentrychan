@@ -36,6 +36,23 @@ public class MangaResultVm : ViewModelBase
     public ReactiveCommand<Unit, Unit> AddCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenCommand { get; }
 
+    /// <summary>A library entry for this result, as it's stored when added.</summary>
+    public Sentrychan.Core.Models.Manga ToManga(IMangaSourceService source) => new()
+    {
+        Source                = source.SourceName,
+        SourceId              = Result.SourceId,
+        Title                 = Result.Title,
+        OriginalTitle         = Result.OriginalTitle,
+        AlternativeTitlesJson = System.Text.Json.JsonSerializer.Serialize(Result.AltTitles),
+        Description           = Result.Description,
+        CoverPath             = Result.CoverUrl,
+        Status                = Result.Status,
+        Year                  = Result.Year,
+        TotalChapters         = Result.LastChapter,
+        IsCensored            = Result.IsAdult,
+        IsNovel               = source.IsNovel,
+    };
+
     public MangaResultVm(MangaSearchResult result, string sourceName,
         Func<MangaResultVm, System.Threading.Tasks.Task> onAdd, Action<MangaResultVm> onOpen, bool inLibrary)
     {

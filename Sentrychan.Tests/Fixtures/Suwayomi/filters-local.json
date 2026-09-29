@@ -1,0 +1,21 @@
+{
+    "data": {
+        "source": {
+            "id": "0",
+            "filters": [
+                {
+                    "__typename": "SortFilter",
+                    "name": "Order by",
+                    "values": [
+                        "Title",
+                        "Date"
+                    ],
+                    "sortDefault": {
+                        "index": 0,
+                        "ascending": true
+                    }
+                }
+            ]
+        }
+    }
+}

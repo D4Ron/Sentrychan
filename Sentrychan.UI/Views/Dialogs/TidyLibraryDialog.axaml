@@ -1,0 +1,87 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        x:Class="Sentrychan.UI.Views.Dialogs.TidyLibraryDialog"
+        x:DataType="vm:TidyLibraryViewModel"
+        Title="Tidy library"
+        Width="980" Height="680" MinWidth="720" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="22">
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Tidy library" FontSize="20" FontWeight="Bold"/>
+                <TextBlock Grid.Column="1" Text="{Binding NamingText}" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+            </Grid>
+            <TextBlock Text="Nothing moves until you press Move. Each run can be undone. Files that are open, still downloading, or whose new name is taken are never touched."
+                       FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBlock Text="{Binding Summary}" FontSize="13" FontWeight="SemiBold" Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <!-- Whole folders left alone -->
+        <Border Grid.Row="1" IsVisible="{Binding HasNotes}" Background="{DynamicResource CardBackgroundBrush}"
+                CornerRadius="8" Padding="12,8" Margin="0,0,0,10">
+            <ItemsControl ItemsSource="{Binding Notes}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <!-- The plan: before → after, one row per video -->
+        <Panel Grid.Row="2">
+            <ListBox ItemsSource="{Binding Rows}" Background="Transparent" SelectionMode="Single">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TidyRowVm">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding Selected}" IsEnabled="{Binding CanSelect}"
+                                      VerticalAlignment="Top" Margin="0,2,8,0"/>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Text="{Binding Before}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" ToolTip.Tip="{Binding Before}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="→" FontSize="12.5" Foreground="{DynamicResource AccentLightBrush}"/>
+                                    <TextBlock Text="{Binding After}" FontSize="12.5" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding After}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding SidecarText}" FontSize="11" IsVisible="{Binding SidecarText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                <TextBlock Text="{Binding Note}" FontSize="11" IsVisible="{Binding HasNote}" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            </StackPanel>
+                            <Border Grid.Column="2" Classes="chip" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}"
+                                    VerticalAlignment="Top" Margin="10,0,0,0">
+                                <TextBlock Text="{Binding StatusText}"/>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock IsVisible="{Binding IsEmpty}" Text="Nothing to tidy — every file is already named the way the template says."
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" VerticalAlignment="Top"
+                         Foreground="{DynamicResource AccentBrush}"/>
+        </Panel>
+
+        <!-- Actions -->
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Button Content="Select all" Classes="ghost" Command="{Binding SelectAllCommand}"/>
+                <Button Content="Select none" Classes="ghost" Command="{Binding SelectNoneCommand}"/>
+                <Button Content="Refresh" Classes="ghost" Command="{Binding RefreshCommand}"/>
+            </StackPanel>
+            <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                       Margin="14,0" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <Button Content="Undo last tidy" Classes="ghost" Command="{Binding UndoCommand}"/>
+                <Button Content="{Binding ApplyText}" Classes="accent" Command="{Binding ApplyCommand}"/>
+                <Button Content="Close" Classes="ghost" Click="OnClose"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

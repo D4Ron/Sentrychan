@@ -36,6 +36,43 @@ public class SeriesDetailViewModel : ViewModelBase
         }
     }
 
+    // Per-series exceptions to the library naming template; saved as soon as they change.
+    public bool TidyExcluded
+    {
+        get => Series.TidyExcluded;
+        set
+        {
+            if (Series.TidyExcluded == value) return;
+            Series.TidyExcluded = value;
+            this.RaisePropertyChanged();
+            _ = SaveLibraryOptionsAsync();
+        }
+    }
+
+    public bool KeepFileNames
+    {
+        get => Series.KeepFileNames;
+        set
+        {
+            if (Series.KeepFileNames == value) return;
+            Series.KeepFileNames = value;
+            this.RaisePropertyChanged();
+            _ = SaveLibraryOptionsAsync();
+        }
+    }
+
+    private async Task SaveLibraryOptionsAsync()
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await db.Series.Where(s => s.Id == Series.Id).ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.TidyExcluded, Series.TidyExcluded)
+                .SetProperty(s => s.KeepFileNames, Series.KeepFileNames));
+        }
+        catch (Exception ex) { Console.WriteLine($"[SeriesDetail] library options not saved: {ex.Message}"); }
+    }
+
     public int CurrentEpisode => Series.LastEpisodeNumber;
     public string TotalEpisodesDisplay => Series?.TotalEpisodes?.ToString() ?? "?";
 

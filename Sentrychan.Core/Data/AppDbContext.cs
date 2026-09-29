@@ -21,6 +21,11 @@ public class AppDbContext : DbContext
     public DbSet<TitleAlias> TitleAliases => Set<TitleAlias>();
     public DbSet<UnmatchedFile> UnmatchedFiles => Set<UnmatchedFile>();
     public DbSet<SkippedDownload> SkippedDownloads => Set<SkippedDownload>();
+    public DbSet<LibraryFileOrigin> LibraryFileOrigins => Set<LibraryFileOrigin>();
+    public DbSet<MangaCategory> MangaCategories => Set<MangaCategory>();
+    public DbSet<MangaCategoryLink> MangaCategoryLinks => Set<MangaCategoryLink>();
+    public DbSet<MangaChapterBookmark> MangaChapterBookmarks => Set<MangaChapterBookmark>();
+    public DbSet<MangaReadingHistory> MangaReadingHistory => Set<MangaReadingHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +38,16 @@ public class AppDbContext : DbContext
         });
 
         modelBuilder.Entity<Series>().Property(s => s.AutoDownload).HasDefaultValue(false);
+        modelBuilder.Entity<Series>().Ignore(s => s.IsMovie);
+
+        // LibraryFileOrigin — one row per renamed library file. NOCASE: Windows paths are
+        // case-insensitive, and a lookup must not miss because Explorer spelled it differently.
+        modelBuilder.Entity<LibraryFileOrigin>(e =>
+        {
+            e.HasKey(o => o.Id);
+            e.Property(o => o.Path).IsRequired().UseCollation("NOCASE");
+            e.HasIndex(o => o.Path).IsUnique();
+        });
 
         // Manga
         modelBuilder.Entity<Manga>(e =>
@@ -51,6 +66,34 @@ public class AppDbContext : DbContext
         {
             e.HasKey(c => c.Id);
             e.HasIndex(c => new { c.MangaId, c.SourceId }).IsUnique();
+            e.HasIndex(c => c.FetchedAt);
+        });
+
+        // Manga library: categories, bookmarks, reading history. Everything cascades with the
+        // manga or chapter it hangs off, so removing a title leaves nothing behind.
+        modelBuilder.Entity<MangaCategory>(e =>
+        {
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Name).IsRequired();
+        });
+        modelBuilder.Entity<MangaCategoryLink>(e =>
+        {
+            e.HasKey(l => new { l.MangaId, l.CategoryId });
+            e.HasOne(l => l.Manga).WithMany().HasForeignKey(l => l.MangaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.Category).WithMany().HasForeignKey(l => l.CategoryId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<MangaChapterBookmark>(e =>
+        {
+            e.HasKey(b => b.ChapterId);
+            e.HasOne(b => b.Chapter).WithMany().HasForeignKey(b => b.ChapterId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<MangaReadingHistory>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.HasIndex(h => h.ChapterId).IsUnique();
+            e.HasIndex(h => h.ReadAt);
+            e.HasOne(h => h.Manga).WithMany().HasForeignKey(h => h.MangaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(h => h.Chapter).WithMany().HasForeignKey(h => h.ChapterId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // SkippedDownload

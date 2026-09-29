@@ -1,0 +1,28 @@
+{
+    "data": {
+        "chapters": {
+            "nodes": [
+                {
+                    "id": 3,
+                    "url": "Newly Restored Title/Chapter 1",
+                    "name": "Chapter 1",
+                    "chapterNumber": 1.0,
+                    "scanlator": null,
+                    "uploadDate": "0",
+                    "sourceOrder": 2,
+                    "realUrl": null
+                },
+                {
+                    "id": 4,
+                    "url": "Newly Restored Title/Chapter 2",
+                    "name": "Chapter 2",
+                    "chapterNumber": 2.0,
+                    "scanlator": null,
+                    "uploadDate": "0",
+                    "sourceOrder": 2,
+                    "realUrl": null
+                }
+            ]
+        }
+    }
+}

@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Sentrychan.UI.ViewModels;
 using Sentrychan.Core.Models;
+using Sentrychan.Core;
 using Sentrychan.UI.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -129,7 +130,8 @@ public partial class MainWindow : Window
 
         LogoText.Text = isSecret ? "Sentrykun" : "Sentrychan";
         TopLogoText.Text = LogoText.Text;
-        Title = LogoText.Text;
+        // The "Preview" badge sits beside the logo text; the title bar and taskbar need the words.
+        Title = BuildInfo.IsPreview ? LogoText.Text + " Preview" : LogoText.Text;
 
         // Taskbar icon follows the mode
         try
@@ -257,7 +259,11 @@ public partial class MainWindow : Window
         if (e.CloseReason == WindowCloseReason.WindowClosing)
         {
             e.Cancel = true;
-            Hide();
+            // The tray icon is the way back from a hidden window. On Linux it needs a
+            // StatusNotifier host, which many desktops don't have, so minimise instead: the window
+            // stays in the task bar. (macOS brings it back from the Dock — see App.)
+            if (OperatingSystem.IsLinux()) WindowState = WindowState.Minimized;
+            else Hide();
         }
     }
 }

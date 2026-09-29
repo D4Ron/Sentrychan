@@ -8,12 +8,14 @@
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="720"
         x:Class="Sentrychan.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Sentrychan"
+        Title="{x:Static core:BuildInfo.AppName}"
         Icon="avares://Sentrychan.UI/Assets/icon.ico"
         Background="{DynamicResource AppBackgroundBrush}"
         MinWidth="860" MinHeight="560"
         Width="1200" Height="720"
         xmlns:models="using:Sentrychan.Core.Models"
+        xmlns:core="using:Sentrychan.Core"
+        xmlns:mihonviews="using:Sentrychan.UI.Views.Mihon"
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
@@ -58,6 +60,13 @@
                                    VerticalAlignment="Center"/>
                         <TextBlock Text="v1" IsVisible="{Binding IsSidebarExpanded}"
                                    FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="2,5,0,0"/>
+                        <!-- Preview builds say so beside the name, so the two apps can't be mistaken
+                             for each other when both are installed. -->
+                        <Panel IsVisible="{Binding IsSidebarExpanded}">
+                            <Border Classes="chip preview" IsVisible="{x:Static core:BuildInfo.IsPreview}">
+                                <TextBlock Text="Preview"/>
+                            </Border>
+                        </Panel>
                     </StackPanel>
                 </Border>
 
@@ -126,7 +135,7 @@
         </Border>
 
         <!-- Main Content area 5.2 -->
-        <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+        <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*">
 
             <!-- Top Bar layout: horizontal navigation (alternative to the sidebar) -->
             <Border Grid.Row="0" Height="52" Background="{DynamicResource SurfaceBackgroundBrush}"
@@ -145,6 +154,9 @@
                         </Border>
                         <TextBlock x:Name="TopLogoText" Text="Sentrychan" FontSize="15" FontWeight="700"
                                    VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <Border Classes="chip preview" IsVisible="{x:Static core:BuildInfo.IsPreview}">
+                            <TextBlock Text="Preview"/>
+                        </Border>
                     </StackPanel>
                     <StackPanel x:Name="TopNav" Grid.Column="1" Orientation="Horizontal" Spacing="2"
                                 HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -210,8 +222,22 @@
                 </Grid>
             </Border>
 
+            <!-- Stable and preview both running: this one isn't monitoring or downloading.
+                 Stays up for the session — it's a state, not a notification. -->
+            <Border Grid.Row="2" IsVisible="{Binding IsPausedForOtherInstance}"
+                    Background="{DynamicResource AccentSubtleBrush}"
+                    BorderBrush="{DynamicResource BorderEmphasisBrush}" BorderThickness="0,0,0,1"
+                    Padding="16,9">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border Width="8" Height="8" CornerRadius="4" VerticalAlignment="Center"
+                            Background="{DynamicResource StatusAmberBrush}"/>
+                    <TextBlock Text="{Binding OtherInstanceMessage}" TextWrapping="Wrap" FontSize="12.5"
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </StackPanel>
+            </Border>
+
             <!-- 5.5 Content Area -->
-                <Grid Grid.Row="2" RowDefinitions="*">
+                <Grid Grid.Row="3" RowDefinitions="*">
                 <Panel Grid.Row="0">
                     <!-- Switchable Views -->
                     <ContentControl Content="{Binding WatchPartyVm}"
@@ -240,11 +266,23 @@
                     <Panel IsVisible="{Binding IsShowingSettings}">
                         <views:SettingsView DataContext="{Binding SettingsVm}"/>
                     </Panel>
+                    <!-- Manga and novels: the classic screens, or the Mihon-style ones (Settings → Appearance).
+                         The style panel wraps each view so IsVisible binds to this window, not the view's own context. -->
                     <Panel IsVisible="{Binding IsShowingManga}">
-                        <views:MangaLibraryView DataContext="{Binding MangaLibraryVm}"/>
+                        <Panel IsVisible="{Binding IsClassicMangaUi}">
+                            <views:MangaLibraryView DataContext="{Binding MangaLibraryVm}"/>
+                        </Panel>
+                        <Panel IsVisible="{Binding IsMihonMangaUi}">
+                            <mihonviews:MihonMangaView DataContext="{Binding MihonMangaVm}"/>
+                        </Panel>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingNovels}">
-                        <views:MangaLibraryView DataContext="{Binding NovelLibraryVm}"/>
+                        <Panel IsVisible="{Binding IsClassicMangaUi}">
+                            <views:MangaLibraryView DataContext="{Binding NovelLibraryVm}"/>
+                        </Panel>
+                        <Panel IsVisible="{Binding IsMihonMangaUi}">
+                            <mihonviews:MihonMangaView DataContext="{Binding MihonNovelVm}"/>
+                        </Panel>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingQuiz}">
                         <views:AnimeQuizView DataContext="{Binding AnimeQuizVm}"/>
@@ -253,7 +291,12 @@
                         <views:BattleRoyaleView DataContext="{Binding BattleRoyaleVm}"/>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingMangaDetail}">
-                        <views:MangaDetailView DataContext="{Binding MangaDetailVm}"/>
+                        <Panel IsVisible="{Binding IsClassicMangaUi}">
+                            <views:MangaDetailView DataContext="{Binding MangaDetailVm}"/>
+                        </Panel>
+                        <Panel IsVisible="{Binding IsMihonMangaUi}">
+                            <mihonviews:MihonTitleView DataContext="{Binding MangaDetailVm}"/>
+                        </Panel>
                     </Panel>
                     <Panel IsVisible="{Binding IsShowingDownloadHub}">
                         <views:DownloadHubView DataContext="{Binding DownloadHubVm}"/>

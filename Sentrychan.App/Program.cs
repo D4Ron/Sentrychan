@@ -18,6 +18,7 @@ using Sentrychan.UI;
 using Sentrychan.UI.ViewModels;
 using Sentrychan.UI.Interfaces;
 using Sentrychan.UI.Services;
+using Sentrychan.Core;
 
 namespace Sentrychan.App;
 
@@ -25,10 +26,15 @@ public static class Program
 {
     private static string _logDir = string.Empty;
 
-    // Single-instance plumbing. Kept alive for the process lifetime.
+    // Single-instance plumbing. Kept alive for the process lifetime. Per flavour: a preview
+    // launch must not just surface a running stable window and exit. Stable keeps the names
+    // older builds used, so an updated and a not-yet-updated stable still see each other.
     private static System.Threading.Mutex? _instanceMutex;
-    private const string MutexName = @"Global\Sentrychan_SingleInstance";
-    private const string ShowEventName = @"Global\Sentrychan_ShowWindow";
+    private static readonly string MutexName = InstanceGuard.OwnInstanceMutex;
+    private static IDisposable? _showWindowListener;
+
+    // Passed to the new process by RestartApp, which starts it before this one has exited.
+    private const string RestartedArg = "--restarted";
 
     [System.STAThread]
     public static void Main(string[] args)
@@ -45,26 +51,41 @@ public static class Program
         // monitors firing their own notifications. That's the real cause of "too many
         // notifications". Second launches signal the running copy to show, then exit.
         _instanceMutex = new System.Threading.Mutex(true, MutexName, out var isFirst);
+        if (!isFirst && args.Contains(RestartedArg))
+        {
+            // Started by RestartApp while the old instance is still shutting down: wait for it to
+            // let go instead of asking it to show its window. Once we hold the mutex it has exited,
+            // so its database handles are closed too.
+            try { isFirst = _instanceMutex.WaitOne(TimeSpan.FromSeconds(30)); }
+            catch (System.Threading.AbandonedMutexException) { isFirst = true; }
+        }
         if (!isFirst)
         {
-            try
-            {
-                using var ev = System.Threading.EventWaitHandle.OpenExisting(ShowEventName);
-                ev.Set(); // ask the running instance to surface its window
-            }
-            catch { /* running instance may be mid-startup — just exit quietly */ }
+            // Ask the running instance to surface its window. It may be mid-startup and not
+            // listening yet — then just exit quietly.
+            ShowWindowSignal.Send(BuildInfo.IsPreview);
             return;
         }
         StartShowWindowListener();
 
-        var appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Sentrychan");
-        Directory.CreateDirectory(appDataPath);
-        var dbPath = Path.Combine(appDataPath, "sentrychan.db");
+        // Stable and preview may run side by side, but only one of them works the library.
+        InstanceGuard.CheckOtherInstance();
 
-        _logDir = Path.Combine(appDataPath, "logs");
+        AppPaths.EnsureDataDir();
+        var dbPath = AppPaths.Database;
+
+        _logDir = AppPaths.Logs;
         Directory.CreateDirectory(_logDir);
+
+        // A library copied from stable on the preview's first run is swapped in here, before
+        // anything opens the database (see StableLibraryCopy). If it fails the app starts on
+        // what it had; the staged copy stays for the next attempt.
+        try
+        {
+            if (StableLibraryCopy.ApplyStaged(AppPaths.DataDir))
+                Console.WriteLine("[Program] Library copied from Sentrychan is now in place");
+        }
+        catch (Exception ex) { LogCrash("Applying the library copied from Sentrychan", ex); }
 
         // ── Global crash handling ──────────────────────────────────
         // Without a console (WinExe), an unhandled exception would vanish.
@@ -124,6 +145,7 @@ public static class Program
                 services.AddSingleton<IAnimeApiService, AnimeApiService>();
                 services.AddSingleton<ISeriesService, SeriesService>();
                 services.AddSingleton<IMangaService, MangaService>();
+                services.AddSingleton<Sentrychan.Core.MangaLibrary.MangaLibraryService>();
                 // Manga/novel sources: only the built-in Local source is compiled in. Every
                 // online source is a source-pack plugin loaded at runtime (PluginSourceLoader),
                 // so the shipped app carries no online sources of its own.
@@ -131,6 +153,11 @@ public static class Program
                 services.AddSingleton<IMangaSourceService>(sp => sp.GetRequiredService<LocalMangaSourceService>());
                 services.AddSingleton<IMangaSourceRegistry, MangaSourceRegistry>();
                 services.AddSingleton<IMangaDownloadService, MangaDownloadService>();
+                // Opt-in Mihon extension bridge. Idle (no process, no network) until the user
+                // turns it on; stopped with the host.
+                services.AddSingleton<Sentrychan.Core.MihonBridge.MihonBridgeService>();
+                services.AddHostedService(sp => sp.GetRequiredService<Sentrychan.Core.MihonBridge.MihonBridgeService>());
+                services.AddTransient<Sentrychan.Core.MihonBackup.MihonBackupImporter>();
                 services.AddSingleton<MangaUpdateService>();
                 services.AddSingleton<Sentrychan.UI.Interfaces.IUpdateService, VelopackUpdateService>();
                 services.AddSingleton<ITitleAliasService, TitleAliasService>();
@@ -160,7 +187,7 @@ public static class Program
                 services.AddSingleton<AiringScheduleRouter>();
                 services.AddSingleton<IAiringScheduleService>(sp => sp.GetRequiredService<AiringScheduleRouter>());
                 services.AddSingleton<IAiringScheduleRegistry>(sp => sp.GetRequiredService<AiringScheduleRouter>());
-                services.AddSingleton<INotificationService, WindowsNotificationService>();
+                services.AddSingleton<INotificationService>(_ => DesktopNotifications.ForCurrentOs());
                 services.AddSingleton<QuoteService>();
                 services.AddSingleton<IAccountService, SupabaseAccountService>();
                 services.AddSingleton<IHyperbeamService, HyperbeamService>();
@@ -184,6 +211,7 @@ public static class Program
                 services.AddSingleton<IReleaseProviders, ReleaseProviders>();
                 services.AddSingleton<IFillGapsService, FillGapsService>();
                 services.AddSingleton<EpisodeRepairService>();
+                services.AddSingleton<Sentrychan.Core.Library.LibraryTidyService>();
                 services.AddSingleton<Sentrychan.Core.Vault.VaultService>();
                 services.AddSingleton<IDownloadPickerService,Sentrychan.UI.Services.DownloadPickerService>();
 
@@ -246,7 +274,7 @@ public static class Program
                 {
                     logging.AddConsole();
 
-                    // Daily rolling file logs in %APPDATA%/Sentrychan/logs — survive
+                    // Daily rolling file logs in <AppPaths.DataDir>/logs — survive
                     // the WinExe (no-console) build so user reports are debuggable.
                     // Uses the maintained Serilog.Sinks.File directly; the old
                     // Serilog.Extensions.Logging.File wrapper is abandoned and dragged
@@ -266,13 +294,6 @@ public static class Program
             });
 
         var host = hostBuilder.Build();
-
-        // Initialize download backend router
-        using (var scope = host.Services.CreateScope())
-        {
-            var router = scope.ServiceProvider.GetRequiredService<IDownloadBackendRouter>();
-            router.InitializeAsync().GetAwaiter().GetResult();
-        }
 
         // Apply migrations
         using (var scope = host.Services.CreateScope())
@@ -322,8 +343,17 @@ public static class Program
             // if any, come from a loaded source pack (see SeedProviderDefaults).
         }
 
+        // Initialize download backend router — after the migrations: it reads its settings, and on
+        // a first run there's no settings table before them.
+        using (var scope = host.Services.CreateScope())
+        {
+            var router = scope.ServiceProvider.GetRequiredService<IDownloadBackendRouter>();
+            router.InitializeAsync().GetAwaiter().GetResult();
+        }
+
         // Hand service provider to Avalonia
         Sentrychan.UI.App.SetServiceProvider(host.Services);
+        Sentrychan.UI.App.Restart = RestartApp;
 
         // Logs and Windows notifications ask this before naming anything.
         var secretModeService = host.Services.GetRequiredService<ISecretModeService>();
@@ -346,6 +376,13 @@ public static class Program
             }
             catch (Exception ex) { Console.WriteLine($"Source plugin load failed: {ex.Message}"); }
 
+            // Bridged Mihon sources the user installed last time, from the saved list — the
+            // server itself only starts when one of them is used.
+            var mihonBridge = host.Services.GetRequiredService<Sentrychan.Core.MihonBridge.MihonBridgeService>();
+            try { mihonBridge.InitializeAsync().GetAwaiter().GetResult(); }
+            catch (Exception ex) { Console.WriteLine($"Mihon bridge init failed: {ex.Message}"); }
+            Sentrychan.UI.Controls.AsyncImage.UrlResolver = url => mihonBridge.ResolveImageUrlAsync(url);
+
             // Teach AsyncImage which manga sources need a Referer for their image CDN, and
             // which are adult sources whose images must never reach the disk cache.
             foreach (var src in mangaRegistry.Sources)
@@ -355,6 +392,12 @@ public static class Program
                 if (src.IsAdultSource)
                     Sentrychan.UI.Controls.AsyncImage.RegisterPrivateSource(src.SourceName);
             }
+            // Extensions installed later join while the app runs.
+            mihonBridge.SourcesChanged += sources =>
+            {
+                foreach (var src in sources.Where(s => s.IsAdultSource))
+                    Sentrychan.UI.Controls.AsyncImage.RegisterPrivateSource(src.SourceName);
+            };
 
             // Vault images (downloaded adult chapters) are decrypted in memory on display.
             var vaultService = host.Services.GetRequiredService<Sentrychan.Core.Vault.VaultService>();
@@ -409,6 +452,9 @@ public static class Program
                 // resumed torrent can finish, or a private one would be filed in the library.
                 try { await host.Services.GetRequiredService<Sentrychan.Core.Vault.VaultService>().EnsureReadyAsync(); }
                 catch (Exception ex) { Console.WriteLine($"Vault open failed: {ex.Message}"); }
+                // The other flavour is running and resuming its own copy of these jobs; two
+                // engines writing the same files would corrupt them.
+                if (InstanceGuard.PausedForOtherInstance) return;
                 try { await monoTorrent.RestoreAsync(CancellationToken.None); }
                 catch (Exception ex) { Console.WriteLine($"Torrent restore failed: {ex.Message}"); }
                 await host.Services.GetRequiredService<Sentrychan.Core.Services.DownloadQueueManager>()
@@ -515,38 +561,42 @@ public static class Program
     }
 
     /// <summary>
-    /// Waits (on a background thread) for a second launch to signal the show-window
-    /// event, then brings this instance's main window to the front instead of letting
-    /// a duplicate start.
+    /// Waits for a second launch to ask for the window, then brings this instance's main window
+    /// to the front instead of letting a duplicate start.
     /// </summary>
     private static void StartShowWindowListener()
     {
-        var thread = new System.Threading.Thread(() =>
-        {
-            using var ev = new System.Threading.EventWaitHandle(
-                false, System.Threading.EventResetMode.AutoReset, ShowEventName);
-            while (true)
+        _showWindowListener = ShowWindowSignal.Listen(BuildInfo.IsPreview, () =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                ev.WaitOne();
-                try
+                if (Avalonia.Application.Current?.ApplicationLifetime
+                        is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d
+                    && d.MainWindow is { } w)
                 {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        if (Avalonia.Application.Current?.ApplicationLifetime
-                                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d
-                            && d.MainWindow is { } w)
-                        {
-                            w.Show();
-                            w.WindowState = Avalonia.Controls.WindowState.Normal;
-                            w.Activate();
-                        }
-                    });
+                    w.Show();
+                    w.WindowState = Avalonia.Controls.WindowState.Normal;
+                    w.Activate();
                 }
-                catch { /* app may be shutting down */ }
-            }
-        })
-        { IsBackground = true, Name = "ShowWindowListener" };
-        thread.Start();
+            }));
+    }
+
+    /// <summary>
+    /// Starts a new instance and shuts this one down. The new one waits for this one's
+    /// single-instance mutex (see <see cref="RestartedArg"/>), so the two never run together.
+    /// </summary>
+    private static void RestartApp()
+    {
+        // Relaunch the way this process was launched: the installed exe, or `dotnet <dll>` in development.
+        var exe = Environment.ProcessPath!;
+        var psi = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+        if (Path.GetFileNameWithoutExtension(exe).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            psi.ArgumentList.Add(typeof(Program).Assembly.Location);
+        psi.ArgumentList.Add(RestartedArg);
+        System.Diagnostics.Process.Start(psi);
+
+        if (Avalonia.Application.Current?.ApplicationLifetime
+                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d)
+            d.Shutdown();
     }
 
     private static void LogCrash(string source, Exception? ex)

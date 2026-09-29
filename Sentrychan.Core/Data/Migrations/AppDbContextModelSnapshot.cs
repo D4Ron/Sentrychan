@@ -103,6 +103,32 @@ namespace Sentrychan.Core.Data.Migrations
                     b.ToTable("DownloadJobs");
                 });
 
+            modelBuilder.Entity("Sentrychan.Core.Models.LibraryFileOrigin", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OriginalName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Path")
+                        .IsUnique();
+
+                    b.ToTable("LibraryFileOrigins");
+                });
+
             modelBuilder.Entity("Sentrychan.Core.Models.Manga", b =>
                 {
                     b.Property<int>("Id")
@@ -167,6 +193,39 @@ namespace Sentrychan.Core.Data.Migrations
                     b.ToTable("Manga");
                 });
 
+            modelBuilder.Entity("Sentrychan.Core.Models.MangaCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MangaCategories");
+                });
+
+            modelBuilder.Entity("Sentrychan.Core.Models.MangaCategoryLink", b =>
+                {
+                    b.Property<int>("MangaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("MangaId", "CategoryId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.ToTable("MangaCategoryLinks");
+                });
+
             modelBuilder.Entity("Sentrychan.Core.Models.MangaChapter", b =>
                 {
                     b.Property<int>("Id")
@@ -181,6 +240,9 @@ namespace Sentrychan.Core.Data.Migrations
                         .HasColumnType("REAL");
 
                     b.Property<string>("DownloadedPath")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FetchedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsRead")
@@ -209,6 +271,9 @@ namespace Sentrychan.Core.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("SourceOrder")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Title")
                         .HasColumnType("TEXT");
 
@@ -217,10 +282,55 @@ namespace Sentrychan.Core.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("FetchedAt");
+
                     b.HasIndex("MangaId", "SourceId")
                         .IsUnique();
 
                     b.ToTable("MangaChapters");
+                });
+
+            modelBuilder.Entity("Sentrychan.Core.Models.MangaChapterBookmark", b =>
+                {
+                    b.Property<int>("ChapterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("BookmarkedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ChapterId");
+
+                    b.ToTable("MangaChapterBookmarks");
+                });
+
+            modelBuilder.Entity("Sentrychan.Core.Models.MangaReadingHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ChapterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LastPage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MangaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ReadAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChapterId")
+                        .IsUnique();
+
+                    b.HasIndex("MangaId");
+
+                    b.HasIndex("ReadAt");
+
+                    b.ToTable("MangaReadingHistory");
                 });
 
             modelBuilder.Entity("Sentrychan.Core.Models.RssFeed", b =>
@@ -293,6 +403,9 @@ namespace Sentrychan.Core.Data.Migrations
                     b.Property<bool>("IsCensored")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("KeepFileNames")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime?>("LastCheckedAt")
                         .HasColumnType("TEXT");
 
@@ -301,6 +414,9 @@ namespace Sentrychan.Core.Data.Migrations
 
                     b.Property<int>("MalId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("MediaType")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("MonitoringState")
                         .HasColumnType("INTEGER");
@@ -319,6 +435,9 @@ namespace Sentrychan.Core.Data.Migrations
                     b.Property<int>("SeasonNumber")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("TidyExcluded")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -328,6 +447,9 @@ namespace Sentrychan.Core.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("TotalEpisodes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Year")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -552,6 +674,25 @@ namespace Sentrychan.Core.Data.Migrations
                     b.Navigation("Series");
                 });
 
+            modelBuilder.Entity("Sentrychan.Core.Models.MangaCategoryLink", b =>
+                {
+                    b.HasOne("Sentrychan.Core.Models.MangaCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Sentrychan.Core.Models.Manga", "Manga")
+                        .WithMany()
+                        .HasForeignKey("MangaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Manga");
+                });
+
             modelBuilder.Entity("Sentrychan.Core.Models.MangaChapter", b =>
                 {
                     b.HasOne("Sentrychan.Core.Models.Manga", "Manga")
@@ -559,6 +700,36 @@ namespace Sentrychan.Core.Data.Migrations
                         .HasForeignKey("MangaId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Manga");
+                });
+
+            modelBuilder.Entity("Sentrychan.Core.Models.MangaChapterBookmark", b =>
+                {
+                    b.HasOne("Sentrychan.Core.Models.MangaChapter", "Chapter")
+                        .WithMany()
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Chapter");
+                });
+
+            modelBuilder.Entity("Sentrychan.Core.Models.MangaReadingHistory", b =>
+                {
+                    b.HasOne("Sentrychan.Core.Models.MangaChapter", "Chapter")
+                        .WithMany()
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Sentrychan.Core.Models.Manga", "Manga")
+                        .WithMany()
+                        .HasForeignKey("MangaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Chapter");
 
                     b.Navigation("Manga");
                 });

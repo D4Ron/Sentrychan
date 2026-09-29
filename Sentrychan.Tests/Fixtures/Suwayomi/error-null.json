@@ -1,0 +1,19 @@
+{
+    "data": {
+        "fetchSourceManga": null
+    },
+    "errors": [
+        {
+            "message": "Exception while fetching data (/fetchSourceManga) : null\r\n\r\njava.lang.NullPointerException\n\tat suwayomi.tachidesk.graphql.mutations.SourceMutation$fetchSourceManga$1.invokeSuspend(SourceMutation.kt:259)",
+            "locations": [
+                {
+                    "line": 1,
+                    "column": 29
+                }
+            ],
+            "path": [
+                "fetchSourceManga"
+            ]
+        }
+    ]
+}

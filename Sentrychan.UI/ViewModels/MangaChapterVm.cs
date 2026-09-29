@@ -40,6 +40,20 @@ public class MangaChapterVm : ViewModelBase
     private bool _isRead;
     public bool IsRead { get => _isRead; set => this.RaiseAndSetIfChanged(ref _isRead, value); }
 
+    // Mihon-style title page: bookmarks and multi-select. The classic list ignores both.
+    private bool _isBookmarked;
+    public bool IsBookmarked { get => _isBookmarked; set => this.RaiseAndSetIfChanged(ref _isBookmarked, value); }
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set { this.RaiseAndSetIfChanged(ref _isSelected, value); SelectionChanged?.Invoke(); }
+    }
+
+    /// <summary>Set by the title page to hear about ticks.</summary>
+    public Action? SelectionChanged { get; set; }
+
     // ── Download state ─────────────────────────────────────────────────
     // One of: not downloaded · queued · starting · downloading n/total · downloaded · failed.
     // Every state has its own visible control, so a row never looks idle while work is going on.

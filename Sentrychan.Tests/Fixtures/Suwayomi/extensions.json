@@ -1,0 +1,57 @@
+{
+    "data": {
+        "extensions": {
+            "nodes": [
+                {
+                    "pkgName": "test.example.reader",
+                    "name": "Example Reader",
+                    "lang": "all",
+                    "versionName": "1.4.12",
+                    "isInstalled": true,
+                    "hasUpdate": true,
+                    "isObsolete": false,
+                    "contentWarning": "SAFE",
+                    "storeIndexUrl": "https://example.test/index.min.json",
+                    "source": {
+                        "nodes": [
+                            {
+                                "id": "1234567890123456789"
+                            },
+                            {
+                                "id": "-4611686018427387904"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "pkgName": "test.example.grownups",
+                    "name": "Grown-ups Only",
+                    "lang": "all",
+                    "versionName": "1.4.2",
+                    "isInstalled": false,
+                    "hasUpdate": false,
+                    "isObsolete": false,
+                    "contentWarning": "NSFW",
+                    "storeIndexUrl": "https://example.test/index.min.json",
+                    "source": {
+                        "nodes": []
+                    }
+                },
+                {
+                    "pkgName": "test.example.mixed",
+                    "name": "Mixed Bag",
+                    "lang": "en",
+                    "versionName": "1.4.1",
+                    "isInstalled": false,
+                    "hasUpdate": false,
+                    "isObsolete": true,
+                    "contentWarning": "MIXED",
+                    "storeIndexUrl": null,
+                    "source": {
+                        "nodes": []
+                    }
+                }
+            ]
+        }
+    }
+}

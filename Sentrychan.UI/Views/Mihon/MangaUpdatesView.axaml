@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mihon="using:Sentrychan.UI.ViewModels.Mihon"
+             xmlns:controls="using:Sentrychan.UI.Controls"
+             x:Class="Sentrychan.UI.Views.Mihon.MangaUpdatesView"
+             x:DataType="mihon:MangaUpdatesViewModel">
+
+    <DockPanel Margin="0,12,0,0">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <Button Classes="accent" Content="Check for new chapters" Command="{Binding CheckCommand}"
+                        IsEnabled="{Binding !IsChecking}"/>
+                <Button Classes="ghost" Content="Refresh" Command="{Binding RefreshCommand}"/>
+            </StackPanel>
+        </Grid>
+
+        <Panel>
+            <ScrollViewer>
+                <ItemsControl ItemsSource="{Binding Days}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="mihon:UpdateDayVm">
+                            <StackPanel Margin="0,0,0,14">
+                                <TextBlock Text="{Binding Label}" FontSize="13" FontWeight="Bold" Margin="4,0,0,6"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <ItemsControl ItemsSource="{Binding Rows}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="mihon:UpdateRowVm">
+                                            <Border Padding="8,6" CornerRadius="6" Margin="0,0,0,2"
+                                                    Background="{DynamicResource CardBackgroundBrush}">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <Button Padding="0" Background="Transparent" BorderThickness="0"
+                                                            Command="{Binding OpenTitleCommand}" ToolTip.Tip="Open title">
+                                                        <Border Width="40" Height="56" CornerRadius="4" ClipToBounds="True"
+                                                                Background="{DynamicResource SurfaceBackgroundBrush}">
+                                                            <controls:AsyncImage Url="{Binding CoverPath}" SourceName="{Binding Source}" Stretch="UniformToFill"/>
+                                                        </Border>
+                                                    </Button>
+                                                    <Button Grid.Column="1" Margin="10,0" Padding="0" Background="Transparent" BorderThickness="0"
+                                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                                            Command="{Binding ReadCommand}" ToolTip.Tip="Read">
+                                                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                            <TextBlock Text="{Binding Chapter}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                       Opacity="{Binding IsRead, Converter={x:Static mihon:ReadOpacity.Instance}}"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Time}" FontSize="11" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                                        <Border Classes="chip good" IsVisible="{Binding IsDownloaded}">
+                                                            <TextBlock Text="Downloaded"/>
+                                                        </Border>
+                                                        <Border Classes="chip" IsVisible="{Binding IsDownloading}">
+                                                            <TextBlock Text="Queued"/>
+                                                        </Border>
+                                                        <Button Classes="ghost" FontSize="11" Padding="10,4" Content="↓ Download"
+                                                                Command="{Binding DownloadCommand}">
+                                                            <Button.IsVisible>
+                                                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                    <Binding Path="!IsDownloaded"/>
+                                                                    <Binding Path="!IsDownloading"/>
+                                                                </MultiBinding>
+                                                            </Button.IsVisible>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <TextBlock IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                       MaxWidth="440" TextAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"
+                       Text="No new chapters yet. Chapters that appear on titles in your library show here, newest first."/>
+        </Panel>
+    </DockPanel>
+</UserControl>

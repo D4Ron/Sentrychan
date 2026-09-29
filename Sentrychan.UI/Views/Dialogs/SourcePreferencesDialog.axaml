@@ -1,0 +1,67 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        x:Class="Sentrychan.UI.Views.Dialogs.SourcePreferencesDialog"
+        x:DataType="vm:SourcePreferencesViewModel"
+        Title="{Binding Title}"
+        Width="620" Height="620" MinWidth="460" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="22">
+        <StackPanel Spacing="4" Margin="0,0,0,12">
+            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold"/>
+            <TextBlock Text="Each change is saved as you make it." FontSize="12.5"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Spacing="4">
+                <TextBlock Text="This source has no settings." IsVisible="{Binding IsEmpty}"
+                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PreferenceRowVm">
+                            <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="0,10"
+                                    IsEnabled="{Binding IsEnabled}">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13.5" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Summary}" IsVisible="{Binding HasSummary}" FontSize="12" TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        </StackPanel>
+                                        <ToggleSwitch Grid.Column="1" IsVisible="{Binding IsToggle}" IsChecked="{Binding BoolValue}"
+                                                      OnContent="" OffContent="" VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <ComboBox IsVisible="{Binding IsList}" ItemsSource="{Binding Entries}" SelectedItem="{Binding SelectedEntry}"
+                                              MinWidth="260" HorizontalAlignment="Left"/>
+
+                                    <Grid IsVisible="{Binding IsText}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox Text="{Binding Text}"/>
+                                        <Button Grid.Column="1" Content="Save" Classes="ghost field" Command="{Binding SaveTextCommand}"/>
+                                    </Grid>
+
+                                    <ItemsControl IsVisible="{Binding IsMulti}" ItemsSource="{Binding Choices}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PreferenceRowVm+ChoiceVm">
+                                                <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" VerticalAlignment="Center"
+                       Foreground="{DynamicResource StatusRedBrush}"/>
+            <Button Grid.Column="1" Content="Done" Classes="accent pill" Click="OnClose"/>
+        </Grid>
+    </Grid>
+</Window>

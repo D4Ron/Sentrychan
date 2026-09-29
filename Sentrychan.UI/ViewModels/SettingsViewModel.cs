@@ -15,6 +15,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using Sentrychan.UI.Services;
 using Sentrychan.UI.Interfaces;
+using Sentrychan.Core;
 
 namespace Sentrychan.UI.ViewModels;
 
@@ -228,16 +229,12 @@ public class SettingsViewModel : ViewModelBase
         "v" + (System.Reflection.Assembly.GetEntryAssembly()?
             .GetName().Version?.ToString(3) ?? "1.0.0");
 
-    public string LogFolderPath => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "logs");
+    public string LogFolderPath => AppPaths.Logs;
 
     public ReactiveCommand<Unit, Unit> OpenLogsCommand { get; } =
         ReactiveCommand.Create(() =>
         {
-            var dir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "logs");
-            if (System.IO.Directory.Exists(dir))
-                System.Diagnostics.Process.Start("explorer.exe", dir);
+            Services.ShellLauncher.OpenFolder(AppPaths.Logs);
         });
 
     public ReactiveCommand<string, Unit> OpenLinkCommand { get; } =
@@ -373,8 +370,24 @@ public class SettingsViewModel : ViewModelBase
         ApplyUpdateCommand = ReactiveCommand.CreateFromTask(ApplyUpdateAsync);
 
         RssFeedsVm = new RssFeedsViewModel(dbFactory, themeService, rssMonitor);
+        if (App.Services?.GetService(typeof(Sentrychan.Core.MihonBridge.MihonBridgeService)) is Sentrychan.Core.MihonBridge.MihonBridgeService bridge
+            && App.Services.GetService(typeof(IConfigService)) is IConfigService config)
+        {
+            MihonExtensions = new MihonExtensionsViewModel(bridge, config,
+                App.Services.GetService(typeof(ISecretModeService)) as ISecretModeService)
+            {
+                ShowPreferences = async prefs =>
+                {
+                    var dialog = new Views.Dialogs.SourcePreferencesDialog { DataContext = prefs };
+                    await dialog.ShowDialog(owner);
+                },
+            };
+        }
         InitPageBehaviour();
     }
+
+    /// <summary>Settings → Sources → Mihon extensions. Acts immediately; not part of Save.</summary>
+    public MihonExtensionsViewModel? MihonExtensions { get; }
 
     // ── Page behaviour ─────────────────────────────────────────────
     // Settings is a page, not a modal dialog, so nothing forces a Save/Cancel decision:
@@ -385,7 +398,7 @@ public class SettingsViewModel : ViewModelBase
     [
         nameof(StatusMessage), nameof(IsStatusError), nameof(IsDirty), nameof(QBitTestResult),
         nameof(MalImportResult), nameof(UpdateStatus), nameof(IsCheckingUpdate), nameof(UpdateAvailable),
-        nameof(ConfirmingReset), nameof(ShowSaveBar),
+        nameof(ConfirmingReset), nameof(ShowSaveBar), nameof(NamingExample), nameof(IsCustomNaming),
     ];
 
     private bool _loading;
@@ -443,6 +456,7 @@ public class SettingsViewModel : ViewModelBase
     public async Task LoadAsync(CancellationToken ct = default)
     {
         if (_dbFactory == null) return;
+        _ = MihonExtensions?.LoadAsync();
         _loading = true;
         try { await LoadCoreAsync(ct); }
         finally
@@ -477,6 +491,14 @@ public class SettingsViewModel : ViewModelBase
         LocalMangaPath = await GetConfig(db,
             Sentrychan.Core.Services.LocalMangaSourceService.RootConfigKey, "", ct);
 
+        var naming = Sentrychan.Core.Library.NamingTemplate.FromConfig(
+            await GetConfig(db, Sentrychan.Core.Library.NamingTemplate.PresetKey, "", ct),
+            await GetConfig(db, Sentrychan.Core.Library.NamingTemplate.TemplateKey, "", ct));
+        NamingPreset = LabelFromPreset(naming.Preset);
+        var storedTemplate = await GetConfig(db, Sentrychan.Core.Library.NamingTemplate.TemplateKey, "", ct);
+        CustomNamingTemplate = string.IsNullOrWhiteSpace(storedTemplate)
+            ? Sentrychan.Core.Library.NamingTemplate.JellyfinTemplate : storedTemplate;
+
         NotificationLevel = await GetConfig(db, Sentrychan.Core.Services.NotificationSettings.LevelKey, "Important", ct);
         WindowsNotifications = await GetConfig(db, Sentrychan.Core.Services.NotificationSettings.WindowsKey, "true", ct) == "true";
         WatchFolderMode = await GetConfig(db, "DownloadOrganizeMode", "Own", ct) == "Watch";
@@ -490,8 +512,16 @@ public class SettingsViewModel : ViewModelBase
         QBitUsername = await GetConfig(db, "QBitUsername",  "admin",        ct);
         // Decrypt for editing; legacy plaintext values pass through untouched and get
         // re-written encrypted on the next save.
-        QBitPassword = Sentrychan.Core.Services.SecretProtector.Unprotect(
-            await GetConfig(db, "QBitPassword", "adminadmin", ct));
+        try
+        {
+            QBitPassword = Sentrychan.Core.Services.SecretProtector.Unprotect(
+                await GetConfig(db, "QBitPassword", "adminadmin", ct));
+        }
+        catch (Sentrychan.Core.Secrets.SecretStoreUnavailableException ex)
+        {
+            QBitPassword = string.Empty;
+            StatusMessage = ex.Message;
+        }
         SelectedDownloadBackend = await GetConfig(db, "SelectedDownloadBackend", "SystemDefault", ct);
 
         // Appearance
@@ -500,6 +530,15 @@ public class SettingsViewModel : ViewModelBase
         this.RaisePropertyChanged(nameof(LayoutMode));
         this.RaisePropertyChanged(nameof(SelectedTheme));
         BackgroundImagePath = await GetConfig(db, "BackgroundImagePath", "", ct);
+        MangaUiStyle = await GetConfig(db, MainWindowViewModel.MangaUiStyleKey, "Classic", ct) == "Mihon" ? "Mihon" : "Classic";
+    }
+
+    // Manga screens: the classic pages, or the Mihon-style ones (opt-in while they settle in).
+    private string _mangaUiStyle = "Classic";
+    public string MangaUiStyle
+    {
+        get => _mangaUiStyle;
+        set => this.RaiseAndSetIfChanged(ref _mangaUiStyle, value);
     }
 
     // ── Speed limits (integrated downloader) ───────────────────────
@@ -534,6 +573,109 @@ public class SettingsViewModel : ViewModelBase
         get => _autoRemoveCompleted;
         set => this.RaiseAndSetIfChanged(ref _autoRemoveCompleted, value);
     }
+
+    // ── Library naming ─────────────────────────────────────────────
+    // How finished downloads are named, and what Tidy library renames existing files to.
+    public string[] NamingPresets { get; } = ["Jellyfin/Plex", "Minimal", "Custom"];
+
+    private static Sentrychan.Core.Library.NamingPreset PresetFromLabel(string? label) => label switch
+    {
+        "Minimal" => Sentrychan.Core.Library.NamingPreset.Minimal,
+        "Custom"  => Sentrychan.Core.Library.NamingPreset.Custom,
+        _         => Sentrychan.Core.Library.NamingPreset.JellyfinPlex,
+    };
+
+    private static string LabelFromPreset(Sentrychan.Core.Library.NamingPreset preset) => preset switch
+    {
+        Sentrychan.Core.Library.NamingPreset.Minimal => "Minimal",
+        Sentrychan.Core.Library.NamingPreset.Custom  => "Custom",
+        _                                            => "Jellyfin/Plex",
+    };
+
+    private string _namingPreset = "Jellyfin/Plex";
+    public string NamingPreset
+    {
+        get => _namingPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _namingPreset, value);
+            this.RaisePropertyChanged(nameof(IsCustomNaming));
+            RaiseNamingExample();
+        }
+    }
+
+    private string _customNamingTemplate = Sentrychan.Core.Library.NamingTemplate.JellyfinTemplate;
+    public string CustomNamingTemplate
+    {
+        get => _customNamingTemplate;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _customNamingTemplate, value);
+            RaiseNamingExample();
+        }
+    }
+
+    public bool IsCustomNaming => NamingPreset == "Custom";
+
+    /// <summary>What the chosen naming produces for a sample episode — updates as the template is typed.</summary>
+    public string NamingExample
+    {
+        get
+        {
+            var preset = PresetFromLabel(NamingPreset);
+            if (preset == Sentrychan.Core.Library.NamingPreset.Custom
+                && Sentrychan.Core.Library.NamingTemplate.Validate(CustomNamingTemplate) is { } error)
+                return error;
+            var t = Sentrychan.Core.Library.NamingTemplate.For(preset, CustomNamingTemplate);
+            var episode = t.Render(new Sentrychan.Core.Library.EpisodeNaming("Sousou no Frieren", 2023, 1, 5, ".mkv", "Group", "1080p"));
+            var special = t.Render(new Sentrychan.Core.Library.EpisodeNaming("Sousou no Frieren", 2023, 0, 1, ".mkv", "Group", "1080p"));
+            return $"{episode.Replace('\\', '/')}\n{special.Replace('\\', '/')}   (a special)";
+        }
+    }
+
+    private void RaiseNamingExample() => this.RaisePropertyChanged(nameof(NamingExample));
+
+    public ReactiveCommand<Unit, Unit> OpenTidyLibraryCommand { get; } =
+        ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                    is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime { MainWindow: { } owner }
+                || App.Services?.GetService(typeof(Sentrychan.Core.Library.LibraryTidyService))
+                    is not Sentrychan.Core.Library.LibraryTidyService tidy)
+                return;
+            var vm = new TidyLibraryViewModel(tidy);
+            var dialog = new Views.Dialogs.TidyLibraryDialog { DataContext = vm };
+            _ = vm.RefreshAsync();
+            await dialog.ShowDialog(owner);
+        });
+
+    public ReactiveCommand<Unit, Unit> ImportMihonBackupCommand { get; } =
+        ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                    is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime { MainWindow: { } owner }
+                || App.Services?.GetService(typeof(Sentrychan.Core.MihonBackup.MihonBackupImporter))
+                    is not Sentrychan.Core.MihonBackup.MihonBackupImporter importer)
+                return;
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Import Mihon backup",
+                AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("Mihon backup") { Patterns = ["*.tachibk", "*.proto.gz"] }, FilePickerFileTypes.All],
+            });
+            if (files.Count == 0) return;
+            byte[] bytes;
+            await using (var stream = await files[0].OpenReadAsync())
+            using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                bytes = ms.ToArray();
+            }
+            var vm = new MihonImportViewModel(importer, bytes, files[0].Name);
+            var dialog = new Views.Dialogs.MihonImportDialog { DataContext = vm };
+            _ = vm.PlanAsync();
+            await dialog.ShowDialog(owner);
+        });
 
     // Folder the "Local" manga source reads (manga you already have on disk).
     private string _localMangaPath = string.Empty;
@@ -595,6 +737,12 @@ public class SettingsViewModel : ViewModelBase
             return;
         }
 
+        if (IsCustomNaming && Sentrychan.Core.Library.NamingTemplate.Validate(CustomNamingTemplate) is { } namingError)
+        {
+            Fail($"{namingError} — see the Library tab");
+            return;
+        }
+
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -631,11 +779,14 @@ public class SettingsViewModel : ViewModelBase
             await SetConfig(db, Sentrychan.Core.Services.NotificationSettings.WindowsKey,
                 WindowsNotifications ? "true" : "false", ct);
             await SetConfig(db, "DownloadOrganizeMode", WatchFolderMode ? "Watch" : "Own", ct);
+            await SetConfig(db, Sentrychan.Core.Library.NamingTemplate.PresetKey, PresetFromLabel(NamingPreset).ToString(), ct);
+            await SetConfig(db, Sentrychan.Core.Library.NamingTemplate.TemplateKey, CustomNamingTemplate?.Trim() ?? string.Empty, ct);
 
             // Appearance
             await SetConfig(db, "SelectedTheme",       SelectedTheme,       ct);
             await SetConfig(db, "LayoutMode",          LayoutMode,          ct);
             await SetConfig(db, "BackgroundImagePath", BackgroundImagePath, ct);
+            await SetConfig(db, MainWindowViewModel.MangaUiStyleKey, MangaUiStyle, ct);
 
             await db.SaveChangesAsync(ct);
             
@@ -751,8 +902,7 @@ public class SettingsViewModel : ViewModelBase
     }
 
     // ── Source packs (Mihon-style installable sources) ──────────────
-    private static string SourcesDir => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan", "sources");
+    private static string SourcesDir => AppPaths.Sources;
 
     private async Task ImportSourcePackAsync()
     {
@@ -840,7 +990,9 @@ public class SettingsViewModel : ViewModelBase
                     LastEpisodeNumber = 0,
                     AddedAt = DateTime.UtcNow,
                     AiringStatus = Sentrychan.Core.Services.AiringStatusNormalizer.Normalize(anime.Status),
-                    TotalEpisodes = anime.Episodes
+                    TotalEpisodes = anime.Episodes,
+                    Year = anime.Year ?? Sentrychan.Core.Library.LibraryMetadata.YearOf(anime.Aired?.From),
+                    MediaType = Sentrychan.Core.Library.LibraryMetadata.NormalizeType(anime.Type),
                 };
                 
                 if (await _seriesService.AddAsync(series, anime.LargeImageUrl, ct) != null)

@@ -141,12 +141,24 @@ public sealed class VideoPlayerViewModel : ViewModelBase, IDisposable
 
     public async Task InitializeAsync()
     {
+        if (Sentrychan.UI.Services.VideoSupport.Problem is { } problem) { Status = problem; return; }
+
         // Constructing LibVLC on the UI thread freezes the app for seconds — always off-thread.
-        var (libVlc, player) = await Task.Run(() =>
+        LibVLC libVlc;
+        MediaPlayer player;
+        try
         {
-            var lib = new LibVLC("--no-video-title-show", "--quiet");
-            return (lib, new MediaPlayer(lib) { EnableHardwareDecoding = true });
-        });
+            (libVlc, player) = await Task.Run(() =>
+            {
+                var lib = new LibVLC("--no-video-title-show", "--quiet");
+                return (lib, new MediaPlayer(lib) { EnableHardwareDecoding = true });
+            });
+        }
+        catch (Exception ex) when (ex is VLCException or DllNotFoundException or TypeInitializationException)
+        {
+            Status = Sentrychan.UI.Services.VideoSupport.Explain(Sentrychan.Core.AppPaths.CurrentOs);
+            return;
+        }
         if (_disposed) { player.Dispose(); libVlc.Dispose(); return; }
 
         _libVlc = libVlc;

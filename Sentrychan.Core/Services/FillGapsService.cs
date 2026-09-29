@@ -16,14 +16,17 @@ public class FillGapsService : IFillGapsService
     private readonly ISecretModeService _secretMode;
     private readonly IConfigService _config;
     private readonly ILogger<FillGapsService> _logger;
+    private readonly Microsoft.EntityFrameworkCore.IDbContextFactory<Data.AppDbContext>? _dbFactory;
 
     public FillGapsService(
         IVideoFileLocator fileLocator,
         IReleaseProviders releases,
         ISecretModeService secretMode,
         IConfigService config,
-        ILogger<FillGapsService> logger)
+        ILogger<FillGapsService> logger,
+        Microsoft.EntityFrameworkCore.IDbContextFactory<Data.AppDbContext>? dbFactory = null)
     {
+        _dbFactory = dbFactory;
         _fileLocator = fileLocator;
         _releases = releases;
         _secretMode = secretMode;
@@ -72,7 +75,19 @@ public class FillGapsService : IFillGapsService
                 _logger.LogInformation("Gap found: {Title} Ep {Ep}", series.Title, i);
             }
 
-            var repairTorrent = damaged != null && cachedTorrents.TryGetValue(Path.GetFileName(damaged), out var t) ? t : null;
+            // Cached torrents are indexed by the names inside them — the name the file downloaded as,
+            // which a renamed library file only has on record.
+            string? repairTorrent = null;
+            if (damaged != null)
+            {
+                var original = Path.GetFileName(damaged);
+                if (_dbFactory != null)
+                {
+                    await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                    original = await Library.TidyRecords.OriginalNameAsync(db, damaged, ct);
+                }
+                repairTorrent = cachedTorrents.TryGetValue(original, out var t) ? t : null;
+            }
 
             // In-place repair needs no search: it re-fetches the very torrent the file came from.
             ReleaseResult? best = null;

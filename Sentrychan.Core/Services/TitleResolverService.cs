@@ -36,6 +36,7 @@ public class TitleResolverService : ITitleResolverService
     private Dictionary<string, int> _exactIndex = new();
     // parallel arrays for fuzzy scan
     private List<OfflineAnimeEntry> _entries = [];
+    private Dictionary<int, int> _byMalId = new();
     private List<(string Key, int EntryIdx, HashSet<string> Tokens)> _fuzzyKeys = [];
 
     // per-session resolution memo (positive AND negative results)
@@ -49,9 +50,7 @@ public class TitleResolverService : ITitleResolverService
         _http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("Sentrychan/2.0");
 
-        var appData = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sentrychan");
-        Directory.CreateDirectory(appData);
+        var appData = AppPaths.EnsureDataDir();
         _dbFilePath = Path.Combine(appData, "anime-offline-database-min.json");
     }
 
@@ -176,7 +175,12 @@ public class TitleResolverService : ITitleResolverService
             }
         }
 
+        var byMal = new Dictionary<int, int>(root.Data.Count);
+        for (int i = 0; i < root.Data.Count; i++)
+            if (root.Data[i].MalId > 0) byMal.TryAdd(root.Data[i].MalId, i);
+
         _entries = root.Data;
+        _byMalId = byMal;
         _exactIndex = exact;
         _fuzzyKeys = fuzzy;
     }
@@ -343,6 +347,9 @@ public class TitleResolverService : ITitleResolverService
         });
     }
 
+    public ResolvedAnime? GetByMalId(int malId) =>
+        IsReady && _byMalId.TryGetValue(malId, out var idx) ? ToResolved(_entries[idx]) : null;
+
     public ResolvedAnime? ResolveTitle(string title, int season = 1)
     {
         if (!IsReady || string.IsNullOrWhiteSpace(title)) return null;
@@ -481,7 +488,8 @@ public class TitleResolverService : ITitleResolverService
         ThumbnailUrl: e.Thumbnail,
         Year: e.AnimeSeason?.Year,
         AnimeSeason: e.AnimeSeason?.Season,
-        Status: e.Status);
+        Status: e.Status,
+        Type: e.Type);
 
     // ── Normalization ─────────────────────────────────────────────
 

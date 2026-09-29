@@ -1,0 +1,17 @@
+{
+    "data": {
+        "sources": {
+            "nodes": [
+                {
+                    "id": "0",
+                    "name": "Local source",
+                    "lang": "localsourcelang",
+                    "displayName": "Local source",
+                    "isNsfw": false,
+                    "supportsLatest": true,
+                    "isConfigurable": false
+                }
+            ]
+        }
+    }
+}

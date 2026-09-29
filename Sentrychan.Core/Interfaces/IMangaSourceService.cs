@@ -26,18 +26,51 @@ public record MangaChapterInfo(
     DateTime? PublishedAt);
 
 /// <summary>
+/// What the app needs to know about a source to list it: a stable id, its language, whether
+/// it's adult, and whether it can list the latest updates.
+/// </summary>
+/// <param name="Id">
+/// Never changes once shipped — library entries and reading history point at it. A bridged
+/// Mihon source uses its numeric source id as a string.
+/// </param>
+/// <param name="Name">Shown to the user; may change between versions.</param>
+/// <param name="Language">ISO 639-1 code ("en", "ja"), or "all" for a multi-language source.</param>
+/// <param name="IsNsfw">Adult content; only listed while secret mode is on.</param>
+/// <param name="SupportsLatest">Can list recently updated titles (<see cref="IMangaSourceService.GetLatestAsync"/>).</param>
+public sealed record MangaSourceInfo(string Id, string Name, string Language, bool IsNsfw, bool SupportsLatest);
+
+/// <summary>One page of results, and whether asking for the next page is worth it.</summary>
+public sealed record MangaPage(IReadOnlyList<MangaSearchResult> Items, bool HasNextPage)
+{
+    public static MangaPage Empty { get; } = new([], false);
+}
+
+/// <summary>
 /// A manga source. Kept behind an interface so sources can live in loadable source packs,
 /// the same way the anime side's release providers do (see IReleaseProvider).
+///
+/// <para><b>Compatibility.</b> Packs are built outside this repository against this interface.
+/// Every member added after the first version has a default implementation, so a pack built
+/// against an older version keeps loading; a pack only overrides what it can do better.</para>
+///
+/// <para><b>Contract v2</b> (browse pages and filters) — implement these to take part in the
+/// Browse screens and global search:</para>
+/// <list type="bullet">
+/// <item><see cref="Info"/> — stable id, language, adult flag, whether Latest works.</item>
+/// <item><see cref="GetPopularAsync"/> and <see cref="GetLatestAsync"/> — paged listings.</item>
+/// <item><see cref="GetFilterList"/> and <see cref="SearchAsync(string, int, FilterList, CancellationToken)"/>
+/// — filtered, paged search (<see cref="GetFilterListAsync"/> when the filters have to be fetched).</item>
+/// </list>
+/// The defaults fall back to the version 1 members (<see cref="BrowseAsync"/> and the
+/// query-only <see cref="SearchAsync(string, int, int, CancellationToken)"/>), so a v1 source
+/// still shows up, with no filters.
 /// </summary>
 public interface IMangaSourceService
 {
-    /// <summary>Human name shown in the UI, e.g. "MangaDex".</summary>
+    /// <summary>Human name shown in the UI. Also what a tracked Manga stores as its Source.</summary>
     string SourceName { get; }
 
-    /// <summary>
-    /// Referer header this source's image CDN requires (hotlink protection), or null.
-    /// MangaPill's CDN 403s every cover/page without it.
-    /// </summary>
+    /// <summary>Referer header this source's image CDN requires (hotlink protection), or null.</summary>
     string? ImageReferer => null;
 
     /// <summary>Adult source — only exposed while secret mode is active.</summary>
@@ -85,4 +118,51 @@ public interface IMangaSourceService
 
     /// <summary>A canonical web URL for a chapter, for the "open externally" fallback.</summary>
     string GetChapterWebUrl(string chapterSourceId);
+
+    // ── Contract v2 ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Identity and capabilities. The default derives it from the v1 members: the id is
+    /// <see cref="SourceName"/>, the language "all", Latest follows <see cref="SupportsBrowse"/>.
+    /// Override it — at least to give a real language.
+    /// </summary>
+    MangaSourceInfo Info => new(SourceName, SourceName, "all", IsAdultSource, SupportsBrowse);
+
+    /// <summary>Titles the source ranks as popular. <paramref name="page"/> is 1-based.</summary>
+    Task<MangaPage> GetPopularAsync(int page, CancellationToken ct = default) =>
+        SupportsBrowse ? PageOf(BrowseAsync("Popular", DefaultPageSize, page, ct)) : Task.FromResult(MangaPage.Empty);
+
+    /// <summary>Recently updated titles, newest first. Only called when <see cref="MangaSourceInfo.SupportsLatest"/>.</summary>
+    Task<MangaPage> GetLatestAsync(int page, CancellationToken ct = default) =>
+        SupportsBrowse ? PageOf(BrowseAsync("Latest", DefaultPageSize, page, ct)) : Task.FromResult(MangaPage.Empty);
+
+    /// <summary>
+    /// The filters this source understands, in display order, in their initial state. The app
+    /// clones the list before the user edits it. Empty when the source has none (the default).
+    /// </summary>
+    FilterList GetFilterList() => FilterList.Empty;
+
+    /// <summary>
+    /// <see cref="GetFilterList"/> for a source that has to ask something else for its filters
+    /// (a server, a site's genre list). The app calls this one; the default returns
+    /// <see cref="GetFilterList"/>, so a source with a fixed list only implements that.
+    /// </summary>
+    Task<FilterList> GetFilterListAsync(CancellationToken ct = default) => Task.FromResult(GetFilterList());
+
+    /// <summary>
+    /// Search with filters. <paramref name="query"/> may be empty (browse by filters alone);
+    /// <paramref name="filters"/> is a clone of <see cref="GetFilterList"/> with the user's
+    /// choices. The default ignores filters and runs the v1 query search.
+    /// </summary>
+    Task<MangaPage> SearchAsync(string query, int page, FilterList filters, CancellationToken ct = default) =>
+        PageOf(SearchAsync(query, DefaultPageSize, page, ct));
+
+    /// <summary>Page size the v2 defaults ask the v1 members for; a full page implies there may be another.</summary>
+    const int DefaultPageSize = 24;
+
+    private static async Task<MangaPage> PageOf(Task<List<MangaSearchResult>> results)
+    {
+        var items = await results;
+        return new MangaPage(items, items.Count >= DefaultPageSize);
+    }
 }

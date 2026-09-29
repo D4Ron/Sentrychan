@@ -1,0 +1,30 @@
+{
+    "data": {
+        "fetchChapters": {
+            "chapters": [
+                {
+                    "id": 1,
+                    "name": "Chapter 1",
+                    "chapterNumber": 1.0,
+                    "scanlator": null,
+                    "uploadDate": "1790696751087",
+                    "sourceOrder": 1,
+                    "pageCount": -1,
+                    "url": "Invented Title/Chapter 1",
+                    "realUrl": null
+                },
+                {
+                    "id": 2,
+                    "name": "Chapter 2",
+                    "chapterNumber": 2.0,
+                    "scanlator": null,
+                    "uploadDate": "1790696751087",
+                    "sourceOrder": 2,
+                    "pageCount": -1,
+                    "url": "Invented Title/Chapter 2",
+                    "realUrl": null
+                }
+            ]
+        }
+    }
+}
