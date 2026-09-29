@@ -91,12 +91,15 @@ public sealed class TidyDialogSmokeTests : IDisposable
         }
 
         vm.ApplyCommand.Execute().Subscribe();
-        for (var i = 0; i < 50 && !File.Exists(Path.Combine(_root, "Library", "Frieren (2023)", "Season 01", "Frieren S01E01.mkv")); i++)
+        // The subtitle moves after its video, so wait for it: it's the last thing to happen.
+        var sidecar = Path.Combine(_root, "Library", "Frieren (2023)", "Season 01", "Frieren S01E01.en.ass");
+        for (var i = 0; i < 250 && !File.Exists(sidecar); i++)
         {
             await Task.Delay(20);
             Dispatcher.UIThread.RunJobs();
         }
-        Assert.True(File.Exists(Path.Combine(_root, "Library", "Frieren (2023)", "Season 01", "Frieren S01E01.en.ass")));
+        Assert.True(File.Exists(Path.Combine(_root, "Library", "Frieren (2023)", "Season 01", "Frieren S01E01.mkv")));
+        Assert.True(File.Exists(sidecar));
         dialog.Close();
     }
 }
