@@ -126,6 +126,21 @@ public class ReleaseNameParserTests
         Assert.True(ReleaseNameParser.Parse("[Grp] Show - 01-12 [Batch].mkv").IsEpisodeRange);
         Assert.True(ReleaseNameParser.Parse("[Grp] Show Movie [BD 1080p].mkv").IsMovie);
     }
+
+    [Theory]
+    [InlineData("(Hi10)_Ladies_versus_Butlers!_-_ED2_(BD_1080p)_(THORA)_(B2AB774E).mkv")]
+    [InlineData("[Grp] Show - NCOP1 [1080p].mkv")]
+    [InlineData("[Grp] Show - Preview 03 [1080p].mkv")]
+    public void Openings_endings_and_previews_are_extras(string name)
+    {
+        Assert.True(ReleaseNameParser.Parse(name).IsExtra);
+    }
+
+    [Fact]
+    public void An_ordinary_episode_is_not_an_extra()
+    {
+        Assert.False(ReleaseNameParser.Parse("[Grp] Show - 02 [1080p].mkv").IsExtra);
+    }
 }
 
 public class FolderNameCleanerTests
@@ -135,6 +150,18 @@ public class FolderNameCleanerTests
     [InlineData("Show Name", "Show Name", null)]
     [InlineData("Show.Name.1080p.WEB-DL", "Show Name", null)]
     [InlineData("Show Name - Complete Series [Dual Audio]", "Show Name", null)]
+    // Scene names, including what a first tidy made of them before they were understood.
+    [InlineData("Arcane.S02.COMPLETE.REPACK.1080p.NF.WEB-DL.DDP5.1.Atmos.H.264-FLUX[TGx]", "Arcane", null)]
+    [InlineData("Arcane.S02. .REPACK. .NF. .DDP5.1.Atmos. -FLUX", "Arcane", null)]
+    [InlineData("Nukitashi.the.Animation.S01.1080p.BluRay.Dual-Audio.Opus.2.0.x265-StaFer", "Nukitashi the Animation", null)]
+    [InlineData("The.All.devouring.Whale.S01.1080p.ADN.WEB-DL.AAC2.0.H.264-VARYG", "The All devouring Whale", null)]
+    [InlineData("Nukitashi the Animation S01 2 0 -StaFer", "Nukitashi the Animation", null)]
+    [InlineData("The All devouring Whale S01 ADN AAC2 0 H 264-VARYG", "The All devouring Whale", null)]
+    [InlineData("Show Name S01 1080p WEB-DL", "Show Name", null)]
+    [InlineData("Show.Name.2021.1080p.WEB-DL", "Show Name", 2021)]
+    [InlineData("Ladies_versus_Butlers!", "Ladies versus Butlers!", null)]
+    [InlineData("Dr. Stone", "Dr. Stone", null)]
+    [InlineData("Mushoku Tensei S2", "Mushoku Tensei S2", null)]
     public void Release_tags_resolution_ranges_and_versions_go(string folder, string title, int? year)
     {
         Assert.Equal((title, year), FolderNameCleaner.Clean(folder));

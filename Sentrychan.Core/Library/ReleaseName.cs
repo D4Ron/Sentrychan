@@ -23,6 +23,17 @@ public sealed record ReleaseName(
          t.StartsWith("Special", StringComparison.OrdinalIgnoreCase));
 
     public bool IsMovie => AnimeType is { } t && t.Equals("Movie", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Openings, endings, previews and the like. Their number counts the extra ("ED2" is the second
+    /// ending), not an episode, so they must never be filed as one.
+    /// </summary>
+    public bool IsExtra => AnimeType is { } t && ExtraTypes.Contains(t);
+
+    private static readonly HashSet<string> ExtraTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "OP", "ED", "NCOP", "NCED", "Opening", "Ending", "PV", "Preview", "CM", "Menu", "Trailer", "Teaser", "Commercial",
+    };
 }
 
 /// <summary>

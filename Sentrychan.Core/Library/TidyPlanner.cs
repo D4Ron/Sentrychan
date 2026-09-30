@@ -127,6 +127,11 @@ public sealed class TidyPlanner
         }
 
         var parsed = ReleaseNameParser.Parse(Path.GetFileName(video));
+        if (parsed.IsExtra)
+        {
+            plan.Items.Add(Unsure(video, folder.Name, null, "bonus material (an opening, ending or preview)"));
+            return;
+        }
 
         int? dirSeason = null;
         foreach (var d in dirs.Reverse())

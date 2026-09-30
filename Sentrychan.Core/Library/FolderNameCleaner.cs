@@ -19,7 +19,17 @@ public static class FolderNameCleaner
         @"Batch|Complete(?:\s+Series)?|Uncensored|Remux)(?![A-Za-z0-9])",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex Separators   = new(@"[._]+", RegexOptions.Compiled);
+    private static readonly Regex InnerSeparator = new(@"(?<=\S)[._]+(?=\S)", RegexOptions.Compiled);
     private static readonly Regex Spaces       = new(@"\s{2,}", RegexOptions.Compiled);
+
+    // Scene names put the title first and everything after it is release detail:
+    // "Show.Name.2021.S02.1080p.NF.WEB-DL.DDP5.1.H.264-GRP". The title ends at the first of these.
+    private static readonly Regex SceneTitleEnd = new(
+        @"(?<=\s)(?:S\d{1,2}(?:E\d{1,4})?|E\d{1,4}|(?:19|20)\d{2}|\d{3,4}p|REPACK|PROPER|COMPLETE|" +
+        @"NF|AMZN|DSNP|CR|ADN|HMAX|HULU|ATVP|WEB(?:-?DL|-?Rip)?|Blu-?Ray|BD(?:-?Rip)?|HDTV|x26[45]|H\s26[45])(?![A-Za-z0-9])",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex SpacedSeasonTag = new(@"(?<=\S\s+)S\d{2}(?:E\d{1,4})?\s+\S", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static (string Title, int? Year) Clean(string folderName)
     {
@@ -30,10 +40,28 @@ public static class FolderNameCleaner
 
         s = Brackets.Replace(s, " ");
         s = YearParen.Replace(s, " ");
-        s = OtherParen.Replace(s, " ");
+        s = OtherParen.Replace(s, " ").Trim();
+
         // Dots and underscores as word separators ("Show.Name.S01") — but keep a title's own
-        // punctuation elsewhere intact.
-        if (!s.Contains(' ')) s = Separators.Replace(s, " ");
+        // punctuation elsewhere intact ("Dr. Stone", "D.Gray-man"). Several joins mean a scene name,
+        // even after a bracketed tag left a space behind.
+        if (!s.Contains(' ') || InnerSeparator.Matches(s).Count >= 2)
+        {
+            s = Separators.Replace(s, " ");
+            var end = SceneTitleEnd.Match(s);
+            if (end.Success)
+            {
+                if (year == null && Regex.IsMatch(end.Value, @"^(19|20)\d{2}$")) year = int.Parse(end.Value);
+                s = s[..end.Index];
+            }
+        }
+        else
+        {
+            // The same shape with spaces ("Show Name S01 1080p WEB-DL-GRP"): a two-digit season tag
+            // with more after it ends the title. A bare trailing "Show S2" is left for the season logic.
+            var tag = SpacedSeasonTag.Match(s);
+            if (tag.Success) s = s[..tag.Index];
+        }
         s = Range.Replace(s, " ");
         s = Version.Replace(s, " ");
         s = Noise.Replace(s, " ");
