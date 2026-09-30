@@ -37,7 +37,9 @@ public class TitleResolverService : ITitleResolverService
     // parallel arrays for fuzzy scan
     private List<OfflineAnimeEntry> _entries = [];
     private Dictionary<int, int> _byMalId = new();
-    private List<(string Key, int EntryIdx, HashSet<string> Tokens)> _fuzzyKeys = [];
+    // Tokens are small distinct arrays of shared strings: a HashSet per key cost ~40 MB for
+    // sets of three or four words.
+    private List<(string Key, int EntryIdx, string[] Tokens)> _fuzzyKeys = [];
 
     // per-session resolution memo (positive AND negative results)
     private readonly ConcurrentDictionary<string, ResolvedAnime?> _resolveCache = new(StringComparer.OrdinalIgnoreCase);
@@ -141,7 +143,11 @@ public class TitleResolverService : ITitleResolverService
 
         var exact = new Dictionary<string, int>(root.Data.Count * 3);
         var keyRank = new Dictionary<string, int>(root.Data.Count * 3);
-        var fuzzy = new List<(string, int, HashSet<string>)>(root.Data.Count * 3);
+        var fuzzy = new List<(string, int, string[])>(root.Data.Count * 3);
+        var words = new Dictionary<string, string>(StringComparer.Ordinal);
+        var labels = new Dictionary<string, string>(StringComparer.Ordinal);
+        string Shared(Dictionary<string, string> pool, string s) =>
+            pool.TryGetValue(s, out var existing) ? existing : pool[s] = s;
 
         for (int i = 0; i < root.Data.Count; i++)
         {
@@ -164,8 +170,9 @@ public class TitleResolverService : ITitleResolverService
                 {
                     exact[key] = i;
                     keyRank[key] = rank;
-                    var tokens = key.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
-                    if (tokens.Count > 0) fuzzy.Add((key, i, tokens));
+                    var tokens = key.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                        .Distinct().Select(t => Shared(words, t)).ToArray();
+                    if (tokens.Length > 0) fuzzy.Add((key, i, tokens));
                 }
                 else if (rank > keyRank[key])
                 {
@@ -173,6 +180,13 @@ public class TitleResolverService : ITitleResolverService
                     keyRank[key] = rank;
                 }
             }
+
+            // Only indexing reads these; together they were most of the strings the app held.
+            entry.Sources = null;
+            entry.Synonyms = null;
+            if (entry.Type != null) entry.Type = Shared(labels, entry.Type);
+            if (entry.Status != null) entry.Status = Shared(labels, entry.Status);
+            if (entry.AnimeSeason?.Season != null) entry.AnimeSeason.Season = Shared(labels, entry.AnimeSeason.Season);
         }
 
         var byMal = new Dictionary<int, int>(root.Data.Count);
@@ -374,9 +388,11 @@ public class TitleResolverService : ITitleResolverService
             else if (key.Contains(q, StringComparison.Ordinal)) score = 200 + q.Length;
             else
             {
-                int common = qTokens.Count(t => tokens.Contains(t));
+                int common = 0;
+                foreach (var t in tokens)
+                    if (qTokens.Contains(t)) common++;
                 if (common == 0) continue;
-                score = 100.0 * common / Math.Max(tokens.Count, qTokens.Count);
+                score = 100.0 * common / Math.Max(tokens.Length, qTokens.Count);
             }
 
             if (!bestByEntry.TryGetValue(entryIdx, out var prev) || score > prev)
@@ -418,15 +434,15 @@ public class TitleResolverService : ITitleResolverService
         foreach (var (key, entryIdx, tokens) in _fuzzyKeys)
         {
             // Cheap rejects before set math
-            if (tokens.Count > queryTokens.Count + 3 || queryTokens.Count > tokens.Count + 3) continue;
+            if (tokens.Length > queryTokens.Count + 3 || queryTokens.Count > tokens.Length + 3) continue;
 
             int common = 0;
-            foreach (var t in queryTokens)
-                if (tokens.Contains(t)) common++;
+            foreach (var t in tokens)
+                if (queryTokens.Contains(t)) common++;
             if (common == 0) continue;
 
             // Dice coefficient over token sets
-            double dice = 2.0 * common / (tokens.Count + queryTokens.Count);
+            double dice = 2.0 * common / (tokens.Length + queryTokens.Count);
             if (dice > bestScore)
             {
                 bestScore = dice;

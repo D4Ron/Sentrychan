@@ -105,8 +105,9 @@
         </ResourceDictionary>
     </Styles.Resources>
 
-    <!-- Breathing dot animation -->
-    <Style Selector="Border.breathing">
+    <!-- Breathing dot animation. Endless animations keep the renderer drawing every frame, so
+         both breathers stop while their window is hidden or minimised (MainWindow sets .idle). -->
+    <Style Selector="Window:not(.idle) Border.breathing">
         <Style.Animations>
             <Animation Duration="0:0:2" IterationCount="INFINITE" Easing="SineEaseInOut">
                 <KeyFrame Cue="0%">  <Setter Property="Opacity" Value="1.0"/></KeyFrame>
@@ -126,7 +127,7 @@
     </Style>
 
     <!-- Logo breathing animation -->
-    <Style Selector="Border.logo-breathing">
+    <Style Selector="Window:not(.idle) Border.logo-breathing">
         <Style.Animations>
             <Animation Duration="0:0:3.5" IterationCount="INFINITE" Easing="SineEaseInOut">
                 <KeyFrame Cue="0%">  <Setter Property="Opacity" Value="1.0"/></KeyFrame>

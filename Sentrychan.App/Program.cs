@@ -272,7 +272,9 @@ public static class Program
                 // ── Logging ───────────────────────────────────────────────
                 services.AddLogging(logging =>
                 {
-                    logging.AddConsole();
+                    // The app has no console window, so the console logger only burned a
+                    // thread formatting lines nobody saw. Kept for a debugger's output pane.
+                    if (System.Diagnostics.Debugger.IsAttached) logging.AddConsole();
 
                     // Daily rolling file logs in <AppPaths.DataDir>/logs — survive
                     // the WinExe (no-console) build so user reports are debuggable.

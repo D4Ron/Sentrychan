@@ -87,6 +87,20 @@ public partial class MainWindow : Window
         }
     }
 
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property != IsVisibleProperty && change.Property != WindowStateProperty) return;
+
+        // Out of sight (tray or minimised): stop the endless animations — they keep the renderer
+        // drawing every frame — and give back memory after a while.
+        var idle = !IsVisible || WindowState == WindowState.Minimized;
+        if (idle == Classes.Contains("idle")) return;
+        Classes.Set("idle", idle);
+        if (idle) BackgroundTrim.WindowHidden();
+        else BackgroundTrim.WindowShown();
+    }
+
     private bool _topNavLabels = true;
     private double _topNavFullWidth;
 
