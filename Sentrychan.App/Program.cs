@@ -510,6 +510,11 @@ public static class Program
         {
             AppBuilder.Configure<Sentrychan.UI.App>()
                 .UsePlatformDetect()
+                // Avalonia's default Windows compositor (WinUI) wakes every display frame for as
+                // long as a window exists, hidden or not: ~2-3% of a core around the clock for an
+                // app that lives in the tray. The redirection surface only draws when something
+                // changes (~0.2-0.6% measured). It can't do Mica/acrylic, which nothing here shows.
+                .With(new Win32PlatformOptions { CompositionMode = [Win32CompositionMode.RedirectionSurface] })
                 .WithInterFont()
                 .UseReactiveUI()
                 .LogToTrace()
