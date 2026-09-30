@@ -22,23 +22,43 @@
         </StackPanel>
 
         <!-- Whole folders left alone -->
-        <Border Grid.Row="1" IsVisible="{Binding HasNotes}" Background="{DynamicResource CardBackgroundBrush}"
-                CornerRadius="8" Padding="12,8" Margin="0,0,0,10">
-            <ItemsControl ItemsSource="{Binding Notes}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="x:String">
-                        <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </Border>
+        <StackPanel Grid.Row="1">
+            <Border IsVisible="{Binding HasNotes}" Background="{DynamicResource CardBackgroundBrush}"
+                    CornerRadius="8" Padding="12,8" Margin="0,0,0,10">
+                <ItemsControl ItemsSource="{Binding Notes}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+            <Border IsVisible="{Binding HasLeftAlone}" Background="{DynamicResource CardBackgroundBrush}"
+                    CornerRadius="8" Padding="12,8" Margin="0,0,0,10">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Left alone at your request" FontSize="12" FontWeight="SemiBold"/>
+                    <ItemsControl ItemsSource="{Binding LeftAlone}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LeftAloneFolderVm">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                                    <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <Button Grid.Column="1" Content="Include again" Classes="ghost" FontSize="11.5"
+                                            Padding="10,3" Command="{Binding IncludeAgainCommand}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
 
         <!-- The plan: before → after, one row per video -->
         <Panel Grid.Row="2">
             <ListBox ItemsSource="{Binding Rows}" Background="Transparent" SelectionMode="Single">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:TidyRowVm">
-                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,2">
                             <CheckBox Grid.Column="0" IsChecked="{Binding Selected}" IsEnabled="{Binding CanSelect}"
                                       VerticalAlignment="Top" Margin="0,2,8,0"/>
                             <StackPanel Grid.Column="1" Spacing="2">
@@ -58,6 +78,14 @@
                                     VerticalAlignment="Top" Margin="10,0,0,0">
                                 <TextBlock Text="{Binding StatusText}"/>
                             </Border>
+                            <Button Grid.Column="3" Content="⋯" Classes="ghost" Padding="8,0" Height="24"
+                                    VerticalAlignment="Top" Margin="6,0,0,0" ToolTip.Tip="More for this folder">
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuItem Header="{Binding LeaveFolderAloneText}" Command="{Binding LeaveFolderAloneCommand}"/>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

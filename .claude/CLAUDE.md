@@ -209,6 +209,20 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-09-30 — **More Windows checks**, on a placeholder copy of a real library (own data dir).
+  - **Tidy library:** a real first run mangled scene-named folders (`Show.S02.COMPLETE.1080p…-GRP[tag]`)
+    and filed a creditless `ED2` as episode 2. Fixed (`FolderNameCleaner` scene rule, `ReleaseName.IsExtra`);
+    a second run repairs the folders. Move + Undo round-trip files, sidecars and records. New:
+    **per-folder "leave alone"** (row ⋯ menu → AppConfig `TidyLeaveAlone`; "Include again" in the dialog) for
+    folders with no series record, where "Don't tidy" isn't available.
+  - **Mihon bridge:** download (≈330 MB, pinned hash), unpack, start in ~6 s, listens on 127.0.0.1 only, no
+    firewall prompt, and the job object ends java when the app is killed. Extension install not tried (needs a
+    repository the user adds).
+  - **Mihon-style screens:** Library, Updates, History, Browse, Downloads and the title page all render with a
+    real library. History starts empty (nothing back-filled from older reading progress).
+  - **Tray footprint:** endless animations now pause while hidden, `BackgroundTrim` frees memory, and Windows
+    renders through the redirection surface (the WinUI compositor woke every frame while hidden).
+
 - 2026-09-29 — **Checked on Windows** (the preview is now the developer's everyday app; `preview` was
   merged into `main` as PR #1). 200 tests pass on Windows (+3 opt-in).
   - **Works:** the preview beside a running stable (banner, "Paused — other app running", RSS checks and

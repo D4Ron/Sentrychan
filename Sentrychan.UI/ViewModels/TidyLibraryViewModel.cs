@@ -15,13 +15,17 @@ public sealed class TidyRowVm : ReactiveObject
 {
     private readonly Action _selectionChanged;
 
-    public TidyRowVm(TidyItem item, string library, Action selectionChanged)
+    public TidyRowVm(TidyItem item, string library, Action selectionChanged, Func<string, Task> leaveFolderAlone)
     {
         Item = item;
         _selectionChanged = selectionChanged;
         Before = Path.GetRelativePath(library, item.Source);
         After  = item.Destination is { } d ? Path.GetRelativePath(library, d) : "—  stays where it is";
+        LeaveFolderAloneCommand = ReactiveCommand.CreateFromTask(() => leaveFolderAlone(item.ShowFolder));
     }
+
+    public ReactiveCommand<Unit, Unit> LeaveFolderAloneCommand { get; }
+    public string LeaveFolderAloneText => $"Always leave “{ShowFolder}” alone";
 
     public TidyItem Item { get; }
     public string Before { get; }
@@ -62,6 +66,19 @@ public sealed class TidyRowVm : ReactiveObject
     }
 }
 
+/// <summary>A library folder the user told tidying to skip, with the way back.</summary>
+public sealed class LeftAloneFolderVm
+{
+    public LeftAloneFolderVm(string name, Func<string, Task> includeAgain)
+    {
+        Name = name;
+        IncludeAgainCommand = ReactiveCommand.CreateFromTask(() => includeAgain(name));
+    }
+
+    public string Name { get; }
+    public ReactiveCommand<Unit, Unit> IncludeAgainCommand { get; }
+}
+
 /// <summary>
 /// The Tidy library dialog: builds the plan, lists every file before → after with a tick box,
 /// moves only what's ticked, and can undo the last run.
@@ -86,6 +103,8 @@ public sealed class TidyLibraryViewModel : ViewModelBase
 
     public ObservableCollection<TidyRowVm> Rows { get; } = new();
     public ObservableCollection<string> Notes { get; } = new();
+    public ObservableCollection<LeftAloneFolderVm> LeftAlone { get; } = new();
+    public bool HasLeftAlone => LeftAlone.Count > 0;
 
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyCommand { get; }
@@ -132,6 +151,7 @@ public sealed class TidyLibraryViewModel : ViewModelBase
             _plan = await _tidy.PlanAsync();
             Rows.Clear();
             Notes.Clear();
+            LeftAlone.Clear();
             if (_plan == null)
             {
                 Summary = "Set a library folder in Settings → General first.";
@@ -146,13 +166,14 @@ public sealed class TidyLibraryViewModel : ViewModelBase
                 _                         => $"Naming: {_plan.Naming.Template}",
             };
             foreach (var note in _plan.Notes) Notes.Add(note);
+            foreach (var folder in _plan.LeftAlone) LeftAlone.Add(new LeftAloneFolderVm(folder, f => SetLeftAloneAsync(f, false)));
 
             // Problems first, so what won't move is seen before anything is applied.
             foreach (var item in _plan.Items
                          .OrderBy(i => i.Status == TidyItemStatus.Ready ? 1 : 0)
                          .ThenBy(i => i.ShowFolder, StringComparer.OrdinalIgnoreCase)
                          .ThenBy(i => i.Source, StringComparer.OrdinalIgnoreCase))
-                Rows.Add(new TidyRowVm(item, _plan.LibraryPath, UpdateCounts));
+                Rows.Add(new TidyRowVm(item, _plan.LibraryPath, UpdateCounts, f => SetLeftAloneAsync(f, true)));
 
             Summary =
                 $"{_plan.Count(TidyItemStatus.Ready)} to move · {_plan.Count(TidyItemStatus.Collision)} collisions · " +
@@ -168,6 +189,7 @@ public sealed class TidyLibraryViewModel : ViewModelBase
         {
             IsBusy = false;
             this.RaisePropertyChanged(nameof(HasNotes));
+            this.RaisePropertyChanged(nameof(HasLeftAlone));
             this.RaisePropertyChanged(nameof(IsEmpty));
         }
     }
@@ -207,6 +229,19 @@ public sealed class TidyLibraryViewModel : ViewModelBase
         }
         catch (Exception ex) { Status = ex.Message; }
         finally { IsBusy = false; }
+        await RefreshAsync();
+    }
+
+    private async Task SetLeftAloneAsync(string folder, bool leaveAlone)
+    {
+        try
+        {
+            await _tidy.SetLeftAloneAsync(folder, leaveAlone);
+            Status = leaveAlone
+                ? $"“{folder}” will be left alone from now on."
+                : $"“{folder}” is included in tidying again.";
+        }
+        catch (Exception ex) { Status = ex.Message; }
         await RefreshAsync();
     }
 

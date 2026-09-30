@@ -201,6 +201,11 @@
     <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="#14FFFFFF"/>
     </Style>
+    <!-- A ghost button given its own colour (red "Cancel all") kept it when disabled and looked
+         clickable; dim the whole button instead. -->
+    <Style Selector="Button.ghost:disabled">
+        <Setter Property="Opacity" Value="0.45"/>
+    </Style>
     <Style Selector="Button.ghost:pressed /template/ ContentPresenter">
         <Setter Property="Background" Value="#20FFFFFF"/>
     </Style>

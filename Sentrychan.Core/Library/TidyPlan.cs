@@ -46,6 +46,9 @@ public sealed class TidyPlan
     /// <summary>Whole folders left alone, and why ("Show — Don't tidy").</summary>
     public List<string> Notes { get; } = [];
 
+    /// <summary>Folders skipped because the user chose to leave them alone.</summary>
+    public List<string> LeftAlone { get; } = [];
+
     public int Count(TidyItemStatus status) => Items.Count(i => i.Status == status);
 }
 

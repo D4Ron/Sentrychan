@@ -23,14 +23,21 @@ public sealed class TidyPlanner
     private readonly NamingTemplate _naming;
     private readonly Func<string, string?> _skipReason;
     private readonly Func<string, int?>? _resolveMalId;
+    private readonly HashSet<string> _leaveAlone;
 
     /// <param name="skipReason">Why a file must not move now (open, downloading…), or null.</param>
     /// <param name="resolveMalId">Optional: a MAL id for a folder name the titles don't match.</param>
-    public TidyPlanner(NamingTemplate naming, Func<string, string?>? skipReason = null, Func<string, int?>? resolveMalId = null)
+    /// <param name="leaveAlone">
+    /// Top-level folder names the user asked tidying to skip. "Don't tidy" needs a series record;
+    /// this covers folders the app doesn't track, and whatever the naming rules get wrong.
+    /// </param>
+    public TidyPlanner(NamingTemplate naming, Func<string, string?>? skipReason = null, Func<string, int?>? resolveMalId = null,
+        IEnumerable<string>? leaveAlone = null)
     {
         _naming = naming;
         _skipReason = skipReason ?? (_ => null);
         _resolveMalId = resolveMalId;
+        _leaveAlone = new HashSet<string>(leaveAlone ?? [], StringComparer.OrdinalIgnoreCase);
     }
 
     public TidyPlan Build(string libraryPath, IReadOnlyList<TidySeries> series)
@@ -49,6 +56,11 @@ public sealed class TidyPlanner
 
         foreach (var folder in folders)
         {
+            if (_leaveAlone.Contains(folder.Name))
+            {
+                plan.LeftAlone.Add(folder.Name);
+                continue;
+            }
             var show = FindShow(folder.Name, byKey, shows);
             PlanFolder(plan, folder, show, claimedTargets);
         }

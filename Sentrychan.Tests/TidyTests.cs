@@ -48,6 +48,20 @@ public sealed class TidyPlannerTests : IDisposable
     }
 
     [Fact]
+    public void Folders_the_user_left_alone_are_skipped_whole_and_listed()
+    {
+        Touch("One Pace/[One Pace][1000] Wano 55 [1080p][En Sub][AB264EB4].mp4");
+        Touch("[Grp] Other Show (2019) [BD 1080p]/[Grp] Other Show - 03 [BD 1080p].mkv");
+
+        var plan = new TidyPlanner(NamingTemplate.Default, leaveAlone: ["one pace"]).Build(_lib, []);
+
+        var item = Assert.Single(plan.Items);
+        Assert.StartsWith(L("[Grp] Other Show"), item.Source);
+        Assert.Equal(["One Pace"], plan.LeftAlone);
+        Assert.Equal(0, plan.AlreadyTidy);
+    }
+
+    [Fact]
     public void Tidy_files_are_left_alone_and_counted()
     {
         Touch("Frieren (2023)/Season 01/Frieren S01E05.mkv");

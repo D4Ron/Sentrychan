@@ -47,6 +47,32 @@ public sealed class LibraryTidyService
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>AppConfig key: library folders tidying skips, one name per line.</summary>
+    public const string LeaveAloneKey = "TidyLeaveAlone";
+
+    public async Task<IReadOnlyList<string>> GetLeftAloneAsync(CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await ReadLeftAloneAsync(db, ct);
+    }
+
+    /// <summary>Adds a top-level library folder to, or removes it from, the folders tidying skips.</summary>
+    public async Task SetLeftAloneAsync(string folderName, bool leaveAlone, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var folders = (await ReadLeftAloneAsync(db, ct)).ToList();
+        folders.RemoveAll(f => string.Equals(f, folderName, StringComparison.OrdinalIgnoreCase));
+        if (leaveAlone) folders.Add(folderName);
+        await SetAsync(db, LeaveAloneKey, string.Join('\n', folders.OrderBy(f => f, StringComparer.OrdinalIgnoreCase)), ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task<List<string>> ReadLeftAloneAsync(AppDbContext db, CancellationToken ct)
+    {
+        var value = (await db.AppConfigs.AsNoTracking().FirstOrDefaultAsync(c => c.Key == LeaveAloneKey, ct))?.Value;
+        return (value ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
     /// <summary>The plan for the current library, or null when no library folder is set.</summary>
     public async Task<TidyPlan?> PlanAsync(CancellationToken ct = default)
     {
@@ -61,7 +87,8 @@ public sealed class LibraryTidyService
 
         var skip = await SkipCheckAsync(db, ct);
         var planner = new TidyPlanner(naming, skip,
-            _resolver.IsReady ? name => _resolver.ResolveTitle(name)?.MalId : null);
+            _resolver.IsReady ? name => _resolver.ResolveTitle(name)?.MalId : null,
+            await ReadLeftAloneAsync(db, ct));
 
         var plan = await Task.Run(() => planner.Build(library, series.Select(TidySeries.From).ToList()), ct);
         if (InstanceGuard.PausedForOtherInstance)
