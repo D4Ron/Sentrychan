@@ -212,6 +212,7 @@ public static class Program
                 services.AddSingleton<IFillGapsService, FillGapsService>();
                 services.AddSingleton<EpisodeRepairService>();
                 services.AddSingleton<Sentrychan.Core.Library.LibraryTidyService>();
+                services.AddSingleton<Sentrychan.Core.Sources.SourcesTransferService>();
                 services.AddSingleton<Sentrychan.Core.Vault.VaultService>();
                 services.AddSingleton<IDownloadPickerService,Sentrychan.UI.Services.DownloadPickerService>();
 

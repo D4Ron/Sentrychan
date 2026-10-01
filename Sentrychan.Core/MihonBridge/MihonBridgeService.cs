@@ -225,7 +225,66 @@ public sealed class MihonBridgeService : IMihonBridge, IHostedService, IDisposab
 
         _client = client;
         SetState(BridgeState.Running);
+        try { _reposAddedAtStart = await AddPendingRepositoriesAsync(client, ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning("Mihon bridge: queued repositories weren't added: {Message}", ex.Message);
+        }
         return client;
+    }
+
+    // ── Repositories from a sources file ────────────────────────────
+
+    /// <summary>
+    /// Repository addresses waiting for the server: a sources file can be imported while the bridge
+    /// is off or not installed yet, and the repositories live in the server's own database.
+    /// </summary>
+    public const string PendingReposKey = "MihonBridge.PendingRepositories";
+
+    public async Task<IReadOnlyList<string>> GetPendingRepositoriesAsync(CancellationToken ct = default) =>
+        (await _config.GetValueAsync(PendingReposKey, string.Empty, ct))
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    public async Task QueueRepositoriesAsync(IEnumerable<string> urls, CancellationToken ct = default)
+    {
+        var all = (await GetPendingRepositoriesAsync(ct)).Concat(urls)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        await _config.SetValueAsync(PendingReposKey, string.Join('\n', all), ct);
+    }
+
+    /// <summary>
+    /// Adds the waiting repositories now if the bridge is on and installed (starting the server),
+    /// otherwise leaves them for its next start. Returns how many were added.
+    /// </summary>
+    public async Task<int> ApplyPendingRepositoriesAsync(CancellationToken ct = default)
+    {
+        if ((await GetPendingRepositoriesAsync(ct)).Count == 0 || !await IsEnabledAsync(ct) || !IsInstalled) return 0;
+        var wasRunning = _state == BridgeState.Running;
+        _reposAddedAtStart = 0;
+        var client = await ClientAsync(ct);
+        // A server started just now added them itself as it came up.
+        return wasRunning ? await AddPendingRepositoriesAsync(client, ct) : _reposAddedAtStart;
+    }
+
+    private int _reposAddedAtStart;
+
+    private async Task<int> AddPendingRepositoriesAsync(SuwayomiClient client, CancellationToken ct)
+    {
+        var pending = await GetPendingRepositoriesAsync(ct);
+        if (pending.Count == 0) return 0;
+        var known = (await client.GetReposAsync(ct)).Select(r => r.IndexUrl).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var added = 0;
+        foreach (var url in pending.Where(u => !known.Contains(u)))
+        {
+            try { await client.AddRepoAsync(url, ct); added++; }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogWarning("Mihon bridge: couldn't add a repository from a sources file: {Message}", ex.Message);
+            }
+        }
+        // Dropped either way: one that failed would fail on every start, and it's still in the file.
+        await _config.SetValueAsync(PendingReposKey, string.Empty, ct);
+        return added;
     }
 
     private static string LastLines(string text, int n) =>

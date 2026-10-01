@@ -1441,6 +1441,7 @@ public class MainWindowViewModel : ViewModelBase,
                 App.Services.GetRequiredService<IDownloadFolderWatcher>())
             {
                 OpenAccount = OpenAccountDialogAsync,
+                OpenSourcesGuide = ShowSourcesGuideAsync,
             };
             // Appearance settings that live on the main window follow a save.
             vm.Saved += () =>
@@ -1481,7 +1482,44 @@ public class MainWindowViewModel : ViewModelBase,
         if (await MaybeOfferStableCopyAsync()) return; // restarting into the copied library
         await CheckFirstRunAsync();
         await MaybeShowTutorialAsync();
+        await MaybeShowSourcesGuideAsync();
         await SyncMonitoringStateAsync();
+    }
+
+    /// <summary>
+    /// The app ships with no sources, so a new user would otherwise meet an app that silently finds
+    /// nothing. While there are none, the guide opens at every launch until the user opts out.
+    /// </summary>
+    private async Task MaybeShowSourcesGuideAsync()
+    {
+        if (_dbContextFactory == null) return;
+        try
+        {
+            if (await SourcesGuideViewModel.HasAnySourcesAsync(_dbContextFactory)) return;
+            if (await SourcesGuideViewModel.IsDismissedAsync(_dbContextFactory)) return;
+            await ShowSourcesGuideAsync();
+        }
+        catch (Exception ex) { Console.WriteLine($"[SourcesGuide] {ex.Message}"); }
+    }
+
+    /// <summary>Opens the sources guide (at launch, or from Settings → Sources).</summary>
+    public async Task ShowSourcesGuideAsync()
+    {
+        var owner = GetMainWindow();
+        if (owner == null || _dbContextFactory == null) return;
+        var vm = new SourcesGuideViewModel(_dbContextFactory, GetMainWindow);
+        await vm.RefreshAsync();
+        var exit = await new Sentrychan.UI.Views.Dialogs.SourcesGuideDialog { DataContext = vm }
+            .ShowDialog<SourcesGuideExit?>(owner);
+        if (exit == SourcesGuideExit.FeedSettings) await OpenSettingsAtAsync(SettingsViewModel.DownloadsTab);
+        else if (exit == SourcesGuideExit.SourceSettings) await OpenSettingsAtAsync(SettingsViewModel.SourcesTab);
+        else if (IsShowingSettings) SettingsVm?.RssFeedsVm?.LoadFeedsCommand.Execute().Subscribe();
+    }
+
+    private async Task OpenSettingsAtAsync(int tab)
+    {
+        await OpenSettingsAsync();
+        if (SettingsVm != null) SettingsVm.SelectedTab = tab;
     }
 
     /// <summary>Reflect the real monitor state at startup so the button/label are honest.</summary>

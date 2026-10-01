@@ -209,6 +209,17 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-10-01 — **Sources file + "Add your sources" guide** (no phase; for public builds, which ship sourceless).
+  - `Core/Sources`: `SourcesFile` (`.scsources` = zip of `sources.json` + `packs/*.dll`; a bare JSON manifest
+    reads too; pack entries can only land in the sources folder), `SourcesTransferService` (export; import only
+    adds — feeds by URL, groups only if unset, packs copied, Mihon repositories queued in AppConfig
+    `MihonBridge.PendingRepositories` and added when the server runs), `RssFeedProbe` (is a pasted link a feed,
+    with items that carry a .torrent/magnet link — names no site).
+  - Settings → Sources → Sources file: Import / Export / How to add sources…. The guide (`SourcesGuideDialog`)
+    opens at launch while there are no feeds, no packs and Mihon is off, until "Don't show" (`SourcesGuideDismissed`).
+  - Mihon section: the Repositories box shows whenever the bridge is on (adding one starts the server), with a
+    line on what a repository address looks like; "Turn on" skips the download explanation when installed.
+
 - 2026-09-30 — **More Windows checks**, on a placeholder copy of a real library (own data dir).
   - **Tidy library:** a real first run mangled scene-named folders (`Show.S02.COMPLETE.1080p…-GRP[tag]`)
     and filed a creditless `ED2` as episode 2. Fixed (`FolderNameCleaner` scene rule, `ReleaseName.IsExtra`);

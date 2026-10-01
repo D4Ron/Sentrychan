@@ -36,3 +36,7 @@ Sentrychan.App/Assets/frpc.exe
 # at _local\source-pack with its own history). Never remove this rule.
 /_local/
 
+# Your own sources file (feeds, groups, source pack) and how to import it. Holds site
+# addresses and a source pack, so it must never be published. Never remove this rule.
+/my-sources/
+*.scsources

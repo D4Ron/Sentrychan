@@ -125,7 +125,7 @@
                            FontSize="14" Margin="0,6,0,24"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
 
-                <TabControl Classes="pills">
+                <TabControl Classes="pills" SelectedIndex="{Binding SelectedTab}">
 
                     <!-- ═══════════════ General ═══════════════ -->
                     <TabItem Header="General">
@@ -407,6 +407,19 @@
                     <!-- ═══════════════ Sources ═══════════════ -->
                     <TabItem Header="Sources">
                         <StackPanel Margin="0,12,0,0">
+                            <ctrls:SettingsSection Title="Sources file"
+                                                   Description="Move your whole setup in one file: RSS feeds, preferred release groups, source packs and Mihon repositories. Importing only adds; it never removes anything.">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Button Content="Import sources file…" Classes="ghost pill" Command="{Binding ImportSourcesFileCommand}"/>
+                                        <Button Content="Export my sources…" Classes="ghost pill" Command="{Binding ExportSourcesCommand}"/>
+                                        <Button Content="How to add sources…" Classes="ghost pill" Command="{Binding OpenSourcesGuideCommand}"/>
+                                    </StackPanel>
+                                    <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding SourcesFileMessage}"
+                                               IsVisible="{Binding SourcesFileMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                </StackPanel>
+                            </ctrls:SettingsSection>
+
                             <ctrls:SettingsSection Title="Local manga"
                                                    Description="Read manga you already have on disk with the Local source.">
                                 <StackPanel>

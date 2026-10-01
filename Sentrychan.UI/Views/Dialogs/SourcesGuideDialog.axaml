@@ -1,0 +1,140 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sentrychan.UI.ViewModels"
+        x:Class="Sentrychan.UI.Views.Dialogs.SourcesGuideDialog"
+        x:DataType="vm:SourcesGuideViewModel"
+        Title="Add your sources"
+        Width="740" Height="780" MinWidth="560" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Window.Styles>
+        <Style Selector="Border.step">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="18,14"/>
+        </Style>
+        <Style Selector="TextBlock.body">
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.result">
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.result.good">
+            <Setter Property="Foreground" Value="{DynamicResource StatusGreenBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.result.bad">
+            <Setter Property="Foreground" Value="{DynamicResource StatusRedBrush}"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="26,22">
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="10" Margin="0,0,0,14">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <Border Width="48" Height="48" CornerRadius="24" ClipToBounds="True" Background="#0B0D14">
+                    <Image Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="Add your sources" FontSize="20" FontWeight="Bold"/>
+                    <TextBlock Classes="body"
+                               Text="Sentrychan doesn't come with any. It finds and downloads only from sources you add — here are the ways to add them."/>
+                </StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding Have}" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentLightBrush}"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Spacing="12" Margin="0,0,10,0">
+
+                <!-- 1. Sources file -->
+                <Border Classes="step">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="1 · Have a sources file?" FontSize="14.5" FontWeight="SemiBold"/>
+                        <TextBlock Classes="body"
+                                   Text="A sources file (.scsources) sets everything up in one go: RSS feeds, preferred release groups, source packs and Mihon repositories. Someone you trust can make one with Settings → Sources → Export my sources — and you can make one to move your own setup to another computer."/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Import a sources file…" Classes="accent pill" Command="{Binding ImportFileCommand}"/>
+                        </StackPanel>
+                        <TextBlock Classes="result" Text="{Binding FileMessage}"
+                                   IsVisible="{Binding FileMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 2. RSS feed -->
+                <Border Classes="step">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="2 · Add an RSS feed — for anime episodes" FontSize="14.5" FontWeight="SemiBold"/>
+                        <TextBlock Classes="body"
+                                   Text="Sentrychan watches feeds of new releases and downloads new episodes of the shows in your library. What to look for:"/>
+                        <StackPanel Spacing="5" Margin="4,0,0,0">
+                            <TextBlock Classes="body"
+                                       Text="•  A site you trust that lists anime releases and offers an RSS feed. Look for a link called RSS or the orange RSS icon — usually beside the search results or at the bottom of the page."/>
+                            <TextBlock Classes="body"
+                                       Text="•  Narrow it first: search for the show, the release group you like, or a quality such as 1080p, then use the RSS link of that search. The feed then lists only matching releases."/>
+                            <TextBlock Classes="body"
+                                       Text="•  Copy the whole link. It usually has “rss” in it or ends in .xml. Opened in a browser it shows plain text (XML) with an &lt;item&gt; for each release, each carrying a .torrent or magnet link — not a normal web page."/>
+                        </StackPanel>
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                            <TextBox Text="{Binding FeedUrl}" Watermark="Paste the feed link (https://…)"/>
+                            <Button Grid.Column="1" Content="Check" Classes="ghost field" Command="{Binding CheckFeedCommand}"/>
+                            <Button Grid.Column="2" Content="Add feed" Classes="accent field" Command="{Binding AddFeedCommand}"/>
+                        </Grid>
+                        <TextBlock Classes="result" Classes.good="{Binding FeedGood}" Classes.bad="{Binding FeedBad}"
+                                   Text="{Binding FeedMessage}"
+                                   IsVisible="{Binding FeedMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Classes="body" VerticalAlignment="Center"
+                                       Text="Quality per feed and backup feeds are in Settings → Downloads."/>
+                            <Button Content="Open feed settings" Classes="ghost pill" Click="OnFeedSettings"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 3. Manga -->
+                <Border Classes="step">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="3 · Manga and novel sources" FontSize="14.5" FontWeight="SemiBold"/>
+                        <TextBlock Classes="body"
+                                   Text="•  A source pack (.dll) adds online manga sources. Only install packs from people you trust: a pack is code that runs inside Sentrychan."/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Import a source pack…" Classes="ghost pill" Command="{Binding ImportPackCommand}"/>
+                        </StackPanel>
+                        <TextBlock Classes="body"
+                                   Text="•  Mihon extensions: turn them on in Settings → Sources, then paste a repository address — the extension list its maintainers publish, usually ending in index.min.json."/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Open source settings" Classes="ghost pill" Click="OnSourceSettings"/>
+                        </StackPanel>
+                        <TextBlock Classes="body"
+                                   Text="•  Manga you already have on disk needs nothing online: set its folder under Settings → Sources → Local manga."/>
+                        <TextBlock Classes="result" Text="{Binding MangaMessage}"
+                                   IsVisible="{Binding MangaMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- A pack only loads at startup -->
+                <Border IsVisible="{Binding NeedsRestart}" CornerRadius="8" Padding="14,10"
+                        Background="{DynamicResource AccentSubtleBrush}">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBlock Classes="result" VerticalAlignment="Center"
+                                   Text="New source packs load when Sentrychan starts. Restart to use them."/>
+                        <Button Grid.Column="1" Content="Restart now" Classes="accent pill"
+                                Command="{Binding RestartCommand}" IsVisible="{Binding CanRestart}"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+            <CheckBox Content="Don't show this when Sentrychan starts" IsChecked="{Binding DontShowAgain}"
+                      FontSize="12.5" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="Done" Classes="accent" Click="OnDone"/>
+        </Grid>
+    </Grid>
+</Window>

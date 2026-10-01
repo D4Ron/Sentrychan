@@ -29,7 +29,13 @@ public sealed class MihonExtensionsViewModel : ViewModelBase
         _secretMode = secretMode;
         _bridge.StateChanged += () => Avalonia.Threading.Dispatcher.UIThread.Post(RaiseState);
 
-        BeginEnableCommand = ReactiveCommand.Create(() => { ConfirmingEnable = true; });
+        // The download explanation only matters when there's something to download: a server that's
+        // already installed (turned off earlier, or copied in) just turns back on.
+        BeginEnableCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (_bridge.IsInstalled) await EnableAsync();
+            else ConfirmingEnable = true;
+        });
         CancelEnableCommand = ReactiveCommand.Create(() => { ConfirmingEnable = false; });
         EnableCommand = ReactiveCommand.CreateFromTask(EnableAsync);
         CancelInstallCommand = ReactiveCommand.Create(() => _installCts?.Cancel());
@@ -189,7 +195,7 @@ public sealed class MihonExtensionsViewModel : ViewModelBase
             {
                 await _bridge.EnableAsync(progress, _installCts.Token);
                 ProgressText = string.Empty;
-                Message = "Installed. Add a repository to see its extensions.";
+                Message = HasRepos ? "Turned on." : "Turned on. Add a repository below to see its extensions.";
             }
             catch (OperationCanceledException)
             {

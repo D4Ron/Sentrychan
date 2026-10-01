@@ -57,16 +57,19 @@
                     </StackPanel>
                 </Grid>
                 <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding !IsRunning}"
-                           Text="Start the server to manage repositories and extensions. It also starts by itself when you browse or read one of its sources."/>
+                           Text="The server starts by itself when you add a repository, or browse or read one of its sources. Start it to see the extensions you have."/>
 
                 <ToggleSwitch IsChecked="{Binding AllowWebChecks}"
                               OnContent="Allow web checks" OffContent="Allow web checks"/>
                 <TextBlock Classes="hint" TextWrapping="Wrap"
                            Text="Some sites put a browser check in front of their pages. With this on, the server sets up its built-in browser to pass them — a further download the first time."/>
 
-                <!-- Repositories: only what the user adds -->
-                <StackPanel Spacing="8" IsVisible="{Binding IsRunning}">
+                <!-- Repositories: only what the user adds. Shown whenever the bridge is on (not only
+                     while running) — it's the first thing anyone looks for, and adding one starts the server. -->
+                <StackPanel Spacing="8">
                     <TextBlock Text="Repositories" Classes="label"/>
+                    <TextBlock Classes="hint" TextWrapping="Wrap"
+                               Text="A repository is the web address of an extension list — the link its maintainers publish, usually ending in index.min.json. Paste it below and press Add."/>
                     <ItemsControl ItemsSource="{Binding Repos}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:RepoRowVm">
@@ -82,7 +85,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <TextBlock Classes="hint" IsVisible="{Binding !HasRepos}" TextWrapping="Wrap"
-                               Text="No repositories yet. Paste the address of a repository you trust."/>
+                               Text="None listed. Paste the address of a repository you trust (if the server isn't running, ones you added before show once it starts)."/>
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                         <TextBox Text="{Binding NewRepoUrl}" Watermark="Repository address (https://…)"/>
                         <Button Grid.Column="1" Content="Add" Classes="ghost field" Command="{Binding AddRepoCommand}"/>

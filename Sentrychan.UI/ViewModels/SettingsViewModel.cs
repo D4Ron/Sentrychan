@@ -399,7 +399,49 @@ public class SettingsViewModel : ViewModelBase
         nameof(StatusMessage), nameof(IsStatusError), nameof(IsDirty), nameof(QBitTestResult),
         nameof(MalImportResult), nameof(UpdateStatus), nameof(IsCheckingUpdate), nameof(UpdateAvailable),
         nameof(ConfirmingReset), nameof(ShowSaveBar), nameof(NamingExample), nameof(IsCustomNaming),
+        nameof(SelectedTab), nameof(SourcesFileMessage),
     ];
+
+    // Tab positions in SettingsView, for opening the page at one.
+    public const int DownloadsTab = 2;
+    public const int SourcesTab = 5;
+
+    private int _selectedTab;
+    public int SelectedTab { get => _selectedTab; set => this.RaiseAndSetIfChanged(ref _selectedTab, value); }
+
+    /// <summary>Opens the "Add your sources" guide; wired by the main window.</summary>
+    public Func<Task>? OpenSourcesGuide { get; set; }
+    public ReactiveCommand<Unit, Unit> OpenSourcesGuideCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ImportSourcesFileCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ExportSourcesCommand { get; private set; } = null!;
+
+    private string? _sourcesFileMessage;
+    /// <summary>What the last sources-file import or export did. Acts at once, not on Save.</summary>
+    public string? SourcesFileMessage { get => _sourcesFileMessage; private set => this.RaiseAndSetIfChanged(ref _sourcesFileMessage, value); }
+
+    private async Task ImportSourcesFileAsync()
+    {
+        if (_owner == null) return;
+        try
+        {
+            var result = await Services.SourcesFileActions.ImportAsync(_owner);
+            if (result == null) return;
+            SourcesFileMessage = result.Summary();
+            RssFeedsVm?.LoadFeedsCommand.Execute().Subscribe();
+            if (MihonExtensions != null) await MihonExtensions.LoadAsync();
+        }
+        catch (Exception ex) { SourcesFileMessage = "That file couldn't be imported: " + ex.Message; }
+    }
+
+    private async Task ExportSourcesAsync()
+    {
+        if (_owner == null) return;
+        try
+        {
+            if (await Services.SourcesFileActions.ExportAsync(_owner) is { } message) SourcesFileMessage = message;
+        }
+        catch (Exception ex) { SourcesFileMessage = "Export failed: " + ex.Message; }
+    }
 
     private bool _loading;
 
@@ -449,6 +491,9 @@ public class SettingsViewModel : ViewModelBase
             Succeed("Changes discarded");
         });
         OpenAccountCommand = ReactiveCommand.CreateFromTask(async () => { if (OpenAccount != null) await OpenAccount(); });
+        OpenSourcesGuideCommand = ReactiveCommand.CreateFromTask(async () => { if (OpenSourcesGuide != null) await OpenSourcesGuide(); });
+        ImportSourcesFileCommand = ReactiveCommand.CreateFromTask(ImportSourcesFileAsync);
+        ExportSourcesCommand = ReactiveCommand.CreateFromTask(ExportSourcesAsync);
         CancelResetCommand = ReactiveCommand.Create(() => { ConfirmingReset = false; });
     }
 
