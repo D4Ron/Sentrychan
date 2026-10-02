@@ -40,6 +40,8 @@ public class TitleResolverService : ITitleResolverService
     // Tokens are small distinct arrays of shared strings: a HashSet per key cost ~40 MB for
     // sets of three or four words.
     private List<(string Key, int EntryIdx, string[] Tokens)> _fuzzyKeys = [];
+    // MAL id → the entries of its show in airing order (only shows MAL splits into several).
+    private Dictionary<int, int[]> _chainByMalId = new();
 
     // per-session resolution memo (positive AND negative results)
     private readonly ConcurrentDictionary<string, ResolvedAnime?> _resolveCache = new(StringComparer.OrdinalIgnoreCase);
@@ -195,6 +197,7 @@ public class TitleResolverService : ITitleResolverService
 
         _entries = root.Data;
         _byMalId = byMal;
+        _chainByMalId = BuildChains(root.Data);
         _exactIndex = exact;
         _fuzzyKeys = fuzzy;
     }
@@ -363,6 +366,65 @@ public class TitleResolverService : ITitleResolverService
 
     public ResolvedAnime? GetByMalId(int malId) =>
         IsReady && _byMalId.TryGetValue(malId, out var idx) ? ToResolved(_entries[idx]) : null;
+
+    public IReadOnlyList<ResolvedAnime> GetSeasonChain(int malId)
+    {
+        if (!IsReady) return [];
+        if (_chainByMalId.TryGetValue(malId, out var chain)) return chain.Select(i => ToResolved(_entries[i])).ToList();
+        return GetByMalId(malId) is { } self ? [self] : [];
+    }
+
+    // ── Season chains ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Groups the TV/ONA entries that are one show split up by MAL — "Bleach: Sennen Kessen-hen",
+    /// "… - Ketsubetsu-tan", "… - Soukoku-tan"; "Re:Zero … ", "… 2nd Season", "… 2nd Season Part 2" —
+    /// by their base title, and orders each group by when it aired. Specials, recaps and movies
+    /// are left out: release groups don't count them in a show's episode numbers.
+    /// </summary>
+    private static Dictionary<int, int[]> BuildChains(List<OfflineAnimeEntry> entries)
+    {
+        var groups = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var e = entries[i];
+            if (e.MalId <= 0 || string.IsNullOrWhiteSpace(e.Title)) continue;
+            if (!string.Equals(e.Type, "TV", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(e.Type, "ONA", StringComparison.OrdinalIgnoreCase)) continue;
+            var key = ChainKey(e.Title);
+            if (key.Length < 2) continue;
+            if (!groups.TryGetValue(key, out var list)) groups[key] = list = [];
+            list.Add(i);
+        }
+
+        var byMal = new Dictionary<int, int[]>();
+        foreach (var list in groups.Values)
+        {
+            if (list.Count < 2) continue;
+            var ordered = list
+                .OrderBy(i => entries[i].AnimeSeason?.Year ?? int.MaxValue)
+                .ThenBy(i => SeasonRank(entries[i].AnimeSeason?.Season))
+                .ThenBy(i => entries[i].MalId)
+                .ToArray();
+            foreach (var i in ordered) byMal[entries[i].MalId] = ordered;
+        }
+        return byMal;
+    }
+
+    /// <summary>A show's title without its season, part or cour: what its seasons have in common.</summary>
+    internal static string ChainKey(string title)
+    {
+        var t = SeasonDetector.ExtractBaseTitle(title);
+        // A cour's own subtitle comes after " - " ("Bleach: Sennen Kessen-hen - Kashin-tan").
+        var dash = t.IndexOf(" - ", StringComparison.Ordinal);
+        if (dash > 0) t = t[..dash];
+        return Normalize(t);
+    }
+
+    private static int SeasonRank(string? season) => season?.ToUpperInvariant() switch
+    {
+        "WINTER" => 0, "SPRING" => 1, "SUMMER" => 2, "FALL" => 3, _ => 4,
+    };
 
     public ResolvedAnime? ResolveTitle(string title, int season = 1)
     {

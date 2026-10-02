@@ -507,13 +507,19 @@ public class FileMovementPipeline : IFileMovementPipeline
 
         Series? matchedSeries = null;
 
-        // Resolve the file name to a canonical MAL id (offline synonym DB) and
-        // match by id — far more accurate than string fuzzy-matching.
+        // Resolve the file name to a canonical MAL id (offline synonym DB) and match by id — far
+        // more accurate than string fuzzy-matching — cour-aware, so "Show - 48" counted straight
+        // through lands on the cour MAL numbers it 8 in, as episode 8.
         if (_titleResolver.IsReady)
         {
-            var resolved = _titleResolver.ResolveRelease(fileName);
-            if (resolved is { MalId: > 0 })
-                matchedSeries = allSeries.FirstOrDefault(s => s.MalId == resolved.MalId);
+            foreach (var series in allSeries)
+            {
+                var (verdict, episode) = ReleaseMatcher.Match(_titleResolver, fileName, series);
+                if (verdict != ReleaseVerdict.Yes) continue;
+                matchedSeries = series;
+                if (episode is { } e) episodeNum = e;
+                break;
+            }
         }
 
         // Fallback: legacy title fuzzy match

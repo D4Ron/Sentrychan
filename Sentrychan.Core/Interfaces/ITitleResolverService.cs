@@ -56,6 +56,15 @@ public interface ITitleResolverService
     ResolvedAnime? GetByMalId(int malId) => null;
 
     /// <summary>
+    /// The show <paramref name="malId"/> belongs to, as MAL splits it: every TV/ONA entry sharing its
+    /// base title (cours, parts and seasons), in airing order. Release groups often number such a
+    /// show straight through ("Bleach - Sennen Kessen Hen - 48") while MAL starts each cour at 1;
+    /// the chain is what turns one into the other. Just the entry itself when nothing shares it.
+    /// </summary>
+    IReadOnlyList<ResolvedAnime> GetSeasonChain(int malId) =>
+        GetByMalId(malId) is { } self ? [self] : [];
+
+    /// <summary>
     /// Free-text search over the offline database — every title/synonym is matched,
     /// ranked by relevance. Powers Add Series without depending on Jikan's flaky
     /// search endpoint. Returns up to <paramref name="limit"/> results.

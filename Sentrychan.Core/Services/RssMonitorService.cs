@@ -398,7 +398,8 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
 
                 foreach (var series in seriesList)
                 {
-                    if (!TitleMatchesSeries(title, series)) continue;
+                    var (matched, episodeNum) = MatchRelease(title, series);
+                    if (!matched) continue;
 
                     bool isCompleted = series.AiringStatus == "Finished Airing" || series.AiringStatus == "Completed";
                     // Same strict rule as everywhere else — a space-padded "S2 - 04"
@@ -407,7 +408,6 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
 
                     if (isCompleted && !isBatch) continue; // Only accept batches for completed series
 
-                    int? episodeNum = ExtractEpisodeNumber(title);
                     // A real batch with no parseable number starts the series at ep 1.
                     if (isBatch && episodeNum == null) episodeNum = 1;
                     if (episodeNum == null) continue;
@@ -492,10 +492,16 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
         try
         {
             var targetEp = Math.Max(1, series.LastEpisodeNumber + 1); // We look for 1 if it's -1 or 0
-            var query = $"{series.Title} {targetEp:D2}";
+            var queries = new List<string> { $"{series.Title} {targetEp:D2}" };
+            // A later cour is usually released under the show's first title, numbered straight through.
+            if (ReleaseMatcher.AbsoluteEpisode(_titleResolver, series, targetEp) is { } absolute &&
+                _titleResolver.GetSeasonChain(series.MalId) is [var first, ..])
+                queries.Insert(0, $"{first.CanonicalTitle} {absolute:D2}");
 
             _logger.LogInformation("Performing targeted search for {Title} Ep {Ep}", series.Title, targetEp);
-            var results = await _releases.SearchAsync(query, quality: null, secretMode: false, ct);
+            var results = new List<ReleaseResult>();
+            foreach (var query in queries)
+                results.AddRange(await _releases.SearchAsync(query, quality: null, secretMode: false, ct));
 
             foreach (var result in results)
             {
@@ -503,9 +509,8 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                 var link = result.DownloadLink;
 
                 if (!MatchesQuality(title, qualityPreference)) continue;
-                if (!TitleMatchesSeries(title, series)) continue;
-
-                int? episodeNum = ExtractEpisodeNumber(title);
+                var (matched, episodeNum) = MatchRelease(title, series);
+                if (!matched) continue;
                 if (episodeNum == null || episodeNum <= series.LastEpisodeNumber) continue;
 
                 _logger.LogInformation("Targeted search found early episode: {Title} Ep {Ep} from {Source}", series.Title, episodeNum.Value, ExtractSourceGroup(title));
@@ -571,21 +576,25 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
         }
     }
 
+    /// <summary>
+    /// Whether a release is an episode of the series, and which one in the series' own numbering.
+    /// Primary: the offline database's MAL ids, cour-aware (<see cref="ReleaseMatcher"/>) — a
+    /// release resolving to a different show is a definite no, which is what stops "Season 2"
+    /// releases matching the Season 1 entry. Fallback when the release can't be identified: titles.
+    /// </summary>
+    private (bool Matched, int? Episode) MatchRelease(string rssTitle, Series series)
+    {
+        var (verdict, episode) = ReleaseMatcher.Match(_titleResolver, rssTitle, series);
+        return verdict switch
+        {
+            ReleaseVerdict.Yes => (true, episode),
+            ReleaseVerdict.No => (false, null),
+            _ => (TitleMatchesSeries(rssTitle, series), ExtractEpisodeNumber(rssTitle)),
+        };
+    }
+
     private bool TitleMatchesSeries(string rssTitle, Series series)
     {
-        // Primary: resolve the release to a canonical MAL id via the offline
-        // synonym database and compare ids — an integer comparison instead of
-        // string fuzzy-matching, which mistook similar titles far too often.
-        // When the release resolves to a DIFFERENT anime, that's a definitive NO
-        // (this is what stops "Season 2" releases matching the Season 1 entry).
-        if (_titleResolver.IsReady && series.MalId > 0)
-        {
-            var resolved = _titleResolver.ResolveRelease(rssTitle);
-            if (resolved is { MalId: > 0 })
-                return resolved.MalId == series.MalId;
-        }
-
-        // Fallback (resolver unavailable or release unidentifiable): legacy fuzzy
         var allTitles = new List<string> { series.Title };
 
         if (!string.IsNullOrEmpty(series.OriginalTitle))

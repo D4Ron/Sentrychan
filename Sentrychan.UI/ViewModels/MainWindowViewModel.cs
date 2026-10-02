@@ -747,7 +747,7 @@ public class MainWindowViewModel : ViewModelBase,
             {
                 // Resolve to a canonical anime (MAL id + poster). MAL-sourced entries carry
                 // their id already; anything else is matched by title.
-                ResolvedAnime? res = resolver?.IsReady == true ? resolver.ResolveTitle(e.Title) : null;
+                ResolvedAnime? res = resolver?.IsReady == true ? ResolveScheduleTitle(resolver, e.Title) : null;
                 int malId = e.MalId > 0 ? e.MalId : res?.MalId ?? 0;
                 bool inLib = malId > 0 && _allSeries.Any(s => s.MalId == malId);
 
@@ -782,6 +782,27 @@ public class MainWindowViewModel : ViewModelBase,
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 AiringTodayStatus = "Couldn't load the schedule.");
         }
+    }
+
+    /// <summary>
+    /// A schedule title as the entry that's on air today. Schedules write seasons as "S2"
+    /// ("Clevatess S2"), which a plain title lookup doesn't read — it found nothing or the first
+    /// season, so the entry had no MAL id and Add did nothing. And a show MAL splits into cours
+    /// keeps its first cour's name ("Bleach - Sennen Kessen Hen"), which resolves to a finished
+    /// entry: whatever is airing today is the first cour of that show that hasn't finished.
+    /// </summary>
+    private static ResolvedAnime? ResolveScheduleTitle(ITitleResolverService resolver, string title)
+    {
+        var season = SeasonDetector.DetectSeason(title);
+        var res = (season > 1 ? resolver.ResolveTitle(SeasonDetector.ExtractBaseTitle(title), season) : null)
+                  ?? resolver.ResolveTitle(title);
+        if (res is not { MalId: > 0 } || res.Status != "FINISHED") return res;
+
+        var chain = resolver.GetSeasonChain(res.MalId);
+        var after = chain.SkipWhile(a => a.MalId != res.MalId).Skip(1).ToList();
+        return after.FirstOrDefault(a => a.Status == "ONGOING")
+               ?? after.FirstOrDefault(a => a.Status == "UPCOMING")
+               ?? res;
     }
 
     private static void OpenUrl(string url)
@@ -1908,10 +1929,14 @@ public class MainWindowViewModel : ViewModelBase,
         }
     }
 
-    private async Task OpenAddSeriesAsync()
+    private Task OpenAddSeriesAsync() => OpenAddSeriesAsync(null);
+
+    /// <summary>The Add Series search, optionally started on <paramref name="query"/>.</summary>
+    public async Task OpenAddSeriesAsync(string? query)
     {
         if (_apiService == null || _seriesService == null) return;
         var vm = new AddSeriesViewModel(_apiService, _seriesService);
+        if (!string.IsNullOrWhiteSpace(query)) vm.SearchQuery = query;
         var dialog = new AddSeriesDialog { DataContext = vm };
         await dialog.ShowDialog(GetMainWindow()!);
         if (vm.AddedSeries != null)

@@ -642,8 +642,15 @@ public class LatestArrivalsViewModel : ViewModelBase
                     if (addVm.AddedSeries != null)
                     {
                         _mainWindowVm.AddSeriesToLibrary(addVm.AddedSeries);
+                        // The release may count a split show straight through ("- 48"); the job
+                        // carries the added entry's own number (8), which filing and progress use.
+                        var episode = entry.Episode ?? 0;
+                        if (App.Services?.GetService(typeof(ITitleResolverService)) is ITitleResolverService resolver &&
+                            Sentrychan.Core.Services.ReleaseMatcher.Match(resolver, entry.RawTitle, addVm.AddedSeries) is
+                                (Sentrychan.Core.Services.ReleaseVerdict.Yes, { } own))
+                            episode = own;
                         var added = await queue.EnqueueAsync(entry.Link, addVm.AddedSeries.Id,
-                            entry.Episode ?? 0, addVm.AddedSeries.Title, entry.RawTitle);
+                            episode, addVm.AddedSeries.Title, entry.RawTitle);
                         _mainWindowVm.ToastEnqueue(added, addVm.AddedSeries.Title);
                     }
                     break;

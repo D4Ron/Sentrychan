@@ -77,7 +77,15 @@ public class AnimePreviewViewModel : ViewModelBase
 
     private async Task AddAsync()
     {
-        if (MalId <= 0 || InLibrary) return;
+        if (InLibrary) return;
+        if (MalId <= 0)
+        {
+            // Not identified offline (a show too new for the database, or a title the schedule
+            // spells its own way): this used to do nothing at all. Search for it instead.
+            CloseRequested?.Invoke();
+            await _mainVm.OpenAddSeriesAsync(Title);
+            return;
+        }
         IsBusy = true;
         try
         {
