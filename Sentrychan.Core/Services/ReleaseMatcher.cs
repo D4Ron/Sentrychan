@@ -38,7 +38,7 @@ public static class ReleaseMatcher
             // A number past this entry's own length is counted straight through the show: either
             // it lands in this entry (renumber it) or in another cour, whose episode it is — a
             // finished first cour must not take cour 4's 48.
-            if (episode is { } e && mine >= 0 && chain[mine].Episodes is { } own && e > own)
+            if (episode is { } e && mine >= 0 && Length(chain[mine]) is { } own && e > own)
             {
                 var owner = CourOf(chain, e);
                 if (owner == mine && Offset(chain, mine) is { } start) return (ReleaseVerdict.Yes, e - start);
@@ -53,11 +53,11 @@ public static class ReleaseMatcher
             return (ReleaseVerdict.No, null);
 
         // Named after a later cour and numbered within it ("… Ketsubetsu-tan - 05"): that cour's episode.
-        if (named > 0 && (chain[named].Episodes is not { } namedCount || number <= namedCount))
+        if (named > 0 && (Length(chain[named]) is not { } namedCount || number <= namedCount))
             return (ReleaseVerdict.No, null);
 
         // A season named outright and numbered within it: that season's episode.
-        if (namedSeason is { } season && (chain[season].Episodes is not { } seasonCount || number <= seasonCount))
+        if (namedSeason is { } season && (Length(chain[season]) is not { } seasonCount || number <= seasonCount))
             return season == mine ? (ReleaseVerdict.Yes, number) : (ReleaseVerdict.No, null);
 
         // Numbered straight through from the first cour.
@@ -98,8 +98,9 @@ public static class ReleaseMatcher
 
     /// <summary>
     /// Which entry of the chain episode <paramref name="absolute"/> falls in, counting straight
-    /// through. Null when an earlier entry's length isn't known — a guess there would download or
-    /// file the wrong episode.
+    /// through. The first entry still airing (or announced) takes everything after the finished
+    /// ones — its length isn't known yet, and nothing after it has started. Null past every
+    /// finished entry when none is airing.
     /// </summary>
     internal static int? CourOf(IReadOnlyList<ResolvedAnime> chain, int absolute)
     {
@@ -107,25 +108,40 @@ public static class ReleaseMatcher
         var start = 0;
         for (var i = 0; i < chain.Count; i++)
         {
-            if (chain[i].Episodes is not { } count || count <= 0)
-                return i == chain.Count - 1 ? i : null; // the last entry may still be airing
-            if (absolute <= start + count) return i;
-            start += count;
+            if (Length(chain[i]) is { } count)
+            {
+                if (absolute <= start + count) return i;
+                start += count;
+                continue;
+            }
+            // Finished but of unknown length: no telling where the next one starts.
+            return chain[i].Status == "FINISHED" ? null : i;
         }
-        return null; // past every known entry
+        return null;
     }
 
-    /// <summary>Episodes before entry <paramref name="index"/>, when every one of them is known.</summary>
+    /// <summary>
+    /// Episodes before entry <paramref name="index"/>, when every one of them has finished — a guess
+    /// would download or file the wrong episode.
+    /// </summary>
     internal static int? Offset(IReadOnlyList<ResolvedAnime> chain, int index)
     {
         var total = 0;
         for (var i = 0; i < index; i++)
         {
-            if (chain[i].Episodes is not { } count || count <= 0) return null;
+            if (Length(chain[i]) is not { } count) return null;
             total += count;
         }
         return total;
     }
+
+    /// <summary>
+    /// An entry's length, when it can be relied on. Only finished entries count: one that's airing
+    /// or announced carries a placeholder ("Kusuriya no Hitorigoto 3rd Season", 1 episode, in its
+    /// first week), and trusting it would push its own episode 2 into the next part.
+    /// </summary>
+    private static int? Length(ResolvedAnime entry) =>
+        entry.Status == "FINISHED" && entry.Episodes is > 0 ? entry.Episodes : null;
 
     private static int IndexOf(IReadOnlyList<ResolvedAnime> chain, int malId)
     {

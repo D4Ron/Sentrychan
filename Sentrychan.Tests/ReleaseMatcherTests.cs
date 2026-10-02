@@ -94,6 +94,26 @@ public class ReleaseMatcherTests
     }
 
     [Fact]
+    public void An_airing_seasons_placeholder_length_is_ignored()
+    {
+        // In its first week the database lists the airing season with 1 episode, and the next part
+        // is already announced.
+        static ResolvedAnime Airing(int id, string title, int? eps, string status) => new(id, title, eps, null, null, 2026, "FALL", status, "TV");
+        var s1 = A(54492, "Kusuriya no Hitorigoto", 24);
+        var s2 = A(58514, "Kusuriya no Hitorigoto 2nd Season", 24);
+        var s3 = Airing(61987, "Kusuriya no Hitorigoto 3rd Season", 1, "UPCOMING");
+        var s3p2 = Airing(62841, "Kusuriya no Hitorigoto 3rd Season Part 2", null, "UPCOMING");
+        var r = new FakeResolver([s1, s2, s3, s3p2])
+            .Name("Kusuriya no Hitorigoto", s1)
+            .Name("Kusuriya no Hitorigoto 3rd Season", s3);
+        var all = new[] { s1, s2, s3, s3p2 };
+
+        Assert.Equal(["No", "No", "ep5", "No"], all.Select(a => Verdict(r, "[Grp] Kusuriya no Hitorigoto S3 - 05 (1080p).mkv", a)));
+        Assert.Equal(["No", "No", "ep5", "No"], all.Select(a => Verdict(r, "[Grp] Kusuriya no Hitorigoto - 53 (1080p).mkv", a)));
+        Assert.Equal(["ep20", "No", "No", "No"], all.Select(a => Verdict(r, "[Grp] Kusuriya no Hitorigoto - 20 (1080p).mkv", a)));
+    }
+
+    [Fact]
     public void Seasons_split_in_parts_are_found_by_their_titles()
     {
         var s1 = A(31240, "Re:Zero kara Hajimeru Isekai Seikatsu", 25);
