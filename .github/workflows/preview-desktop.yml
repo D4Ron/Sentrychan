@@ -143,19 +143,18 @@ jobs:
           set -euo pipefail
           pkg=$(find releases -maxdepth 1 -name '*-Setup.pkg' | head -1)
           work=$(mktemp -d)
+          # pkgutil --expand unpacks each component's scripts into a Scripts folder.
           pkgutil --expand "$pkg" "$work/x"
-          scripts=$(find "$work/x" -name Scripts -type f | head -1)
-          mkdir "$work/s"
-          (cd "$work/s" && gunzip -c "$scripts" | cpio -i --quiet)
-          sed -i '' '/ open /d' "$work/s/postinstall"
-          echo "--- postinstall now:"; cat "$work/s/postinstall"
-          if grep -q ' open ' "$work/s/postinstall"; then echo "launch still there"; exit 1; fi
-          (cd "$work/s" && find . | cpio -o --format odc --quiet | gzip -c > "$scripts")
+          script=$(find "$work/x" -path '*Scripts/postinstall' -type f | head -1)
+          test -n "$script" || { echo "no postinstall found"; find "$work/x" -maxdepth 3; exit 1; }
+          sed -i '' '/ open /d' "$script"
+          echo "--- postinstall now:"; cat "$script"
+          if grep -q ' open ' "$script"; then echo "launch still there"; exit 1; fi
           rm "$pkg"
           pkgutil --flatten "$work/x" "$pkg"
           # Check the rebuilt package, then really install it and make sure nothing started.
           pkgutil --expand "$pkg" "$work/check"
-          (cd "$work" && mkdir c && cd c && gunzip -c "$(find "$work/check" -name Scripts -type f | head -1)" | cpio -i --quiet && ! grep -q ' open ' postinstall)
+          ! grep -q ' open ' "$(find "$work/check" -path '*Scripts/postinstall' -type f | head -1)"
           sudo installer -pkg "$pkg" -target /
           test -d "/Applications/$PACK_TITLE.app"
           sleep 10
