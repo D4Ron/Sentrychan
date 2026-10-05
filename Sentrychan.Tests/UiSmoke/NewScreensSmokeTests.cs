@@ -70,6 +70,35 @@ public sealed class NewScreensSmokeTests
         install.Show();
         Capture(install, "install-finished");
         install.Close();
+
+        var fresh = new InstallFinishedDialog(justInstalled: true);
+        fresh.Show();
+        Capture(fresh, "install-finished-windows");
+        Assert.True(fresh.FindControl<CheckBox>("OpenNow")!.IsVisible);
+        fresh.Close();
+    }
+
+    [Fact]
+    public void Start_with_Windows_is_the_users_Run_entry_and_comes_off_again()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        var name = Sentrychan.Core.BuildInfo.AppName;
+        using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(runKey);
+        var before = key.GetValue(name);
+        try
+        {
+            Sentrychan.UI.Services.LoginItem.Set(true);
+            Assert.True(Sentrychan.UI.Services.LoginItem.IsEnabled);
+            Assert.EndsWith("\" --background", (string)key.GetValue(name)!);
+            Sentrychan.UI.Services.LoginItem.Set(false);
+            Assert.False(Sentrychan.UI.Services.LoginItem.IsEnabled);
+        }
+        finally
+        {
+            if (before != null) key.SetValue(name, before);
+            else if (key.GetValue(name) != null) key.DeleteValue(name);
+        }
     }
 
     [AvaloniaFact]

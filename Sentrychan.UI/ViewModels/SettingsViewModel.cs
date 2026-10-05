@@ -433,8 +433,12 @@ public class SettingsViewModel : ViewModelBase
         }
     }
 
-    /// <summary>macOS: "Open at login" acts at once — it's a file in LaunchAgents, not a stored setting.</summary>
+    /// <summary>
+    /// "Start with Windows" / "Open at login" acts at once — it's the system's own list (the Run
+    /// key, a LaunchAgent), not a stored setting.
+    /// </summary>
     public bool CanOpenAtLogin => Services.LoginItem.IsSupported;
+    public string OpenAtLoginLabel => Services.LoginItem.Label;
     public bool OpenAtLogin
     {
         get => Services.LoginItem.IsEnabled;

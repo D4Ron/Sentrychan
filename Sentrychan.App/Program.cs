@@ -43,7 +43,11 @@ public static class Program
         // invokes the app with hook arguments (--velopack-install, etc.) during
         // install/update/uninstall; this call handles them and exits before any of
         // our own startup runs. Skipped entirely on a normal launch.
-        Velopack.VelopackApp.Build().Run();
+        // OnFirstRun: the installer just put the app here and started it — the app then asks what
+        // an installer's last page would (InstallFinishedDialog), including whether to open it at all.
+        Velopack.VelopackApp.Build()
+            .OnFirstRun(_ => Sentrychan.UI.App.JustInstalled = true)
+            .Run();
 
         // ── Single instance ────────────────────────────────────────
         // Without this, launching Sentrychan again (or the tray leaving one running

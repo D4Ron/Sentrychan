@@ -30,6 +30,9 @@ public partial class App : Application
     /// </summary>
     public static Action? Restart { get; set; }
 
+    /// <summary>This run was started by the installer right after installing (set by the composition root).</summary>
+    public static bool JustInstalled { get; set; }
+
     /// <summary>
     /// Loads source packs installed while the app runs and wires what they bring (image settings,
     /// default feeds and groups). Set by the composition root, which owns the plugin loader.
@@ -67,9 +70,18 @@ public partial class App : Application
                   ?? new MainWindowViewModel();
 
             desktop.MainWindow = new MainWindow { DataContext = mainVm };
-            // Started at login: stay out of the way until the user opens it.
+            // Started at sign-in: stay out of the way until the user opens it — in the tray on
+            // Windows (where the window already hides when closed), minimised elsewhere.
             if (desktop.Args?.Contains(Sentrychan.UI.Services.LoginItem.BackgroundArg) == true)
-                desktop.MainWindow.WindowState = Avalonia.Controls.WindowState.Minimized;
+            {
+                var main = desktop.MainWindow;
+                if (OperatingSystem.IsWindows())
+                {
+                    void HideOnce(object? s, EventArgs e) { main.Opened -= HideOnce; main.Hide(); }
+                    main.Opened += HideOnce;
+                }
+                else main.WindowState = Avalonia.Controls.WindowState.Minimized;
+            }
             Sentrychan.UI.Services.TrayService.Initialize();
             if (OperatingSystem.IsMacOS()) SetMacAppMenu(mainVm);
             Sentrychan.UI.Services.WindowFit.Install();
@@ -138,12 +150,9 @@ public partial class App : Application
         menu.Add(about);
         menu.Add(new Avalonia.Controls.NativeMenuItemSeparator());
         menu.Add(settings);
-        if (Sentrychan.Core.BuildInfo.IsTestBuild)
-        {
-            var report = new Avalonia.Controls.NativeMenuItem("Send a problem report…");
-            report.Click += (_, _) => _ = vm.ShowProblemReportAsync();
-            menu.Add(report);
-        }
+        var report = new Avalonia.Controls.NativeMenuItem("Send a problem report…");
+        report.Click += (_, _) => _ = vm.ShowProblemReportAsync();
+        menu.Add(report);
         Avalonia.Controls.NativeMenu.SetMenu(this, menu);
     }
 }

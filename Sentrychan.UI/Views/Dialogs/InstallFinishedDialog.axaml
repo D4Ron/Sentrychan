@@ -11,18 +11,20 @@
                 <Image Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                <TextBlock x:Name="Heading" FontSize="19" FontWeight="Bold"/>
-                <TextBlock Text="One choice before you start — you can change it any time in Settings."
-                           FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock x:Name="Heading" FontSize="19" FontWeight="Bold" TextWrapping="Wrap"/>
+                <TextBlock x:Name="Intro" FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
             </StackPanel>
         </Grid>
         <CheckBox x:Name="OpenAtLogin">
             <StackPanel Spacing="2">
                 <TextBlock x:Name="OpenAtLoginLabel" FontSize="13.5" FontWeight="SemiBold"/>
                 <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextTertiaryBrush}"
-                           Text="It starts in the background and keeps checking for new episodes. Off by default."/>
+                           Text="It starts quietly in the background and keeps checking for new episodes. Off unless you tick it."/>
             </StackPanel>
         </CheckBox>
-        <Button Content="Continue" Classes="accent" HorizontalAlignment="Right" Click="OnContinue"/>
+        <CheckBox x:Name="OpenNow" IsChecked="True" IsVisible="False">
+            <TextBlock x:Name="OpenNowLabel" FontSize="13.5" FontWeight="SemiBold"/>
+        </CheckBox>
+        <Button x:Name="FinishButton" Content="Continue" Classes="accent" HorizontalAlignment="Right" Click="OnContinue"/>
     </StackPanel>
 </Window>

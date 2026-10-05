@@ -1521,8 +1521,9 @@ public class MainWindowViewModel : ViewModelBase,
     }
 
     /// <summary>
-    /// macOS, once: whether to open at login — what an installer's last page would ask. Asked here
-    /// because the Mac installer no longer opens the app on its own.
+    /// Once: what an installer's last page would ask — start at sign-in, and right after a Windows
+    /// install (the installer opens the app by itself) whether to open it now at all. The Mac
+    /// installer no longer opens the app, so there the question waits for the user's first start.
     /// </summary>
     private async Task MaybeAskStartupOptionsAsync()
     {
@@ -1533,14 +1534,22 @@ public class MainWindowViewModel : ViewModelBase,
             if (await db.AppConfigs.AnyAsync(c => c.Key == Sentrychan.UI.Services.LoginItem.AskedKey)) return;
             if (GetMainWindow() is not { } owner) return;
 
-            var openAtLogin = await new Sentrychan.UI.Views.Dialogs.InstallFinishedDialog().ShowDialog<bool?>(owner);
-            if (openAtLogin == null) return; // closed without answering: ask next time
-            Sentrychan.UI.Services.LoginItem.Set(openAtLogin.Value);
-            db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = Sentrychan.UI.Services.LoginItem.AskedKey, Value = openAtLogin.Value ? "on" : "off" });
+            var justInstalled = App.JustInstalled && OperatingSystem.IsWindows();
+            var choices = await new Sentrychan.UI.Views.Dialogs.InstallFinishedDialog(justInstalled)
+                .ShowDialog<Sentrychan.UI.Views.Dialogs.InstallChoices?>(owner);
+            if (choices == null) return; // closed without answering: ask next time
+            Sentrychan.UI.Services.LoginItem.Set(choices.StartAtLogin);
+            db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = Sentrychan.UI.Services.LoginItem.AskedKey, Value = choices.StartAtLogin ? "on" : "off" });
             await db.SaveChangesAsync();
-            Console.WriteLine($"[Startup] open at login: {openAtLogin.Value}");
+            Console.WriteLine($"[Startup] start at sign-in: {choices.StartAtLogin}, open now: {choices.KeepOpen}");
+
+            // "Open now" unticked: the installer's launch was all this was. Quit, the way an
+            // installer that never started the app would leave things.
+            if (!choices.KeepOpen && Avalonia.Application.Current?.ApplicationLifetime
+                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d)
+                d.Shutdown();
         }
-        catch (Exception ex) { Console.WriteLine($"[Startup] open-at-login question failed: {ex}"); }
+        catch (Exception ex) { Console.WriteLine($"[Startup] start-at-sign-in question failed: {ex}"); }
     }
 
     /// <summary>Test builds: the "Report a problem" pill in the top bar.</summary>
