@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sentrychan.Core.Interfaces;
 using Sentrychan.Core;
+using Sentrychan.Core.Sources;
 
 namespace Sentrychan.App;
 
@@ -19,8 +21,12 @@ namespace Sentrychan.App;
 /// (<c>sources/</c>), which is copied ("seeded") into the user folder on startup so beta builds
 /// keep working after an update. The public build bundles nothing, so it ships as a neutral
 /// library manager and reader and the user imports a pack themselves (Mihon-style).
+///
+/// Packs are loaded from their bytes, not from the file: a loaded file stays unlocked, so
+/// importing a newer copy while the app runs works (it takes effect on the next start), and a
+/// pack imported for the first time loads at once.
 /// </summary>
-public static class PluginSourceLoader
+public sealed class PluginSourceLoader : ISourcePackHost
 {
     public static string UserSourcesDir => AppPaths.Sources;
 
@@ -29,15 +35,40 @@ public static class PluginSourceLoader
     /// <summary>Pack file names a newer bundled pack replaces.</summary>
     private static readonly string[] RetiredPackFiles = ["Sentrychan.Sources.dll"];
 
-    public static void SeedAndLoad(IServiceProvider services, IMangaSourceRegistry registry, ILogger logger)
+    private readonly IServiceProvider _services;
+    private readonly ILogger _logger;
+    private readonly object _gate = new();
+    // Keyed on file name; the write time tells a replaced copy from the one that's loaded.
+    private readonly Dictionary<string, (SourcePackStatus Status, DateTime WriteTime)> _packs = new(StringComparer.OrdinalIgnoreCase);
+
+    public PluginSourceLoader(IServiceProvider services, ILogger<PluginSourceLoader> logger)
+    {
+        _services = services;
+        _logger = logger;
+        // A pack loaded from bytes has no folder to find its own dependencies in: look in the
+        // sources folder for them.
+        AppDomain.CurrentDomain.AssemblyResolve += (_, e) =>
+        {
+            var file = Path.Combine(UserSourcesDir, new AssemblyName(e.Name).Name + ".dll");
+            try { return File.Exists(file) ? Assembly.Load(File.ReadAllBytes(file)) : null; }
+            catch { return null; }
+        };
+    }
+
+    public IReadOnlyList<SourcePackStatus> Packs
+    {
+        get { lock (_gate) return Snapshot(); }
+    }
+
+    public void SeedAndLoad()
     {
         try { Directory.CreateDirectory(UserSourcesDir); } catch { /* best-effort */ }
-        Seed(logger);
-        Load(services, registry, logger);
+        Seed();
+        LoadNewPacks();
     }
 
     /// <summary>Copy any bundled pack DLLs into the user folder (auto-seed for beta updates).</summary>
-    private static void Seed(ILogger logger)
+    private void Seed()
     {
         try
         {
@@ -59,11 +90,11 @@ public static class PluginSourceLoader
                     if (File.Exists(old) && !bundled.Any(b => Path.GetFileName(b).Equals(retired, StringComparison.OrdinalIgnoreCase)))
                     {
                         File.Delete(old);
-                        logger.LogInformation("[Sources] removed superseded pack {File}", retired);
+                        _logger.LogInformation("[Sources] removed superseded pack {File}", retired);
                     }
                 }
         }
-        catch (Exception ex) { logger.LogWarning(ex, "[Sources] seeding bundled pack failed"); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[Sources] seeding bundled pack failed"); }
     }
 
     private static bool IsPluginType(Type t) =>
@@ -72,53 +103,105 @@ public static class PluginSourceLoader
          || typeof(IReleaseProvider).IsAssignableFrom(t)
          || typeof(IAiringScheduleService).IsAssignableFrom(t));
 
-    private static void Load(IServiceProvider services, IMangaSourceRegistry mangaRegistry, ILogger logger)
+    public IReadOnlyList<SourcePackStatus> LoadNewPacks()
     {
-        if (!Directory.Exists(UserSourcesDir)) return;
-
-        var releases  = services.GetService<IReleaseProviders>();
-        var schedules = services.GetService<IAiringScheduleRegistry>();
-
-        foreach (var dll in Directory.GetFiles(UserSourcesDir, "*.dll"))
+        lock (_gate)
         {
-            Type[] types;
-            try { types = Assembly.LoadFrom(dll).GetTypes(); }
+            if (!Directory.Exists(UserSourcesDir)) return Snapshot();
+            foreach (var dll in SourcesTransferService.InstalledPacks(UserSourcesDir))
+            {
+                var name = Path.GetFileName(dll);
+                var written = File.GetLastWriteTimeUtc(dll);
+                if (_packs.TryGetValue(name, out var known))
+                {
+                    if (known.Status.Loaded && written > known.WriteTime && !known.Status.NeedsRestart)
+                    {
+                        _packs[name] = (known.Status with { NeedsRestart = true }, known.WriteTime);
+                        _logger.LogInformation("[Sources] {Dll} was replaced while loaded — the new copy loads on the next start", name);
+                    }
+                    else if (!known.Status.Loaded && written > known.WriteTime) _packs[name] = (Load(dll), written);
+                    continue;
+                }
+                _packs[name] = (Load(dll), written);
+            }
+            return Snapshot();
+        }
+    }
+
+    private SourcePackStatus Load(string dll)
+    {
+        var name = Path.GetFileName(dll);
+        Type[] types;
+        try
+        {
+            var bytes = File.ReadAllBytes(dll);
+            if (SourcesInput.CheckPack(bytes) is { } notAPack)
+            {
+                _logger.LogWarning("[Sources] {Dll} skipped: {Why}", name, notAPack);
+                return new(name, false, notAPack, [], [], 0, false);
+            }
+            types = Assembly.Load(bytes).GetTypes();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            // Usually a pack built for a newer (or much older) app: some contract it uses isn't here.
+            var first = ex.LoaderExceptions.FirstOrDefault(e => e != null)?.Message ?? ex.Message;
+            _logger.LogWarning(ex, "[Sources] failed to load {Dll}", name);
+            return new(name, false, "doesn't fit this version of Sentrychan — " + first, [], [], 0, false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Sources] failed to load {Dll}", name);
+            return new(name, false, "couldn't be loaded — " + ex.Message, [], [], 0, false);
+        }
+
+        var manga = new List<string>();
+        var releases = new List<string>();
+        var schedules = 0;
+        var mangaRegistry = _services.GetService<IMangaSourceRegistry>();
+        var releaseProviders = _services.GetService<IReleaseProviders>();
+        var scheduleRegistry = _services.GetService<IAiringScheduleRegistry>();
+        string? firstError = null;
+
+        foreach (var type in types)
+        {
+            if (!IsPluginType(type)) continue;
+
+            // One instance per type, registered under every contract it implements. A type
+            // that fails to construct is skipped without taking the rest of the pack down.
+            object instance;
+            try { instance = ActivatorUtilities.CreateInstance(_services, type); }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "[Sources] failed to load {Dll}", Path.GetFileName(dll));
+                firstError ??= $"{type.Name} couldn't start — {ex.Message}";
+                _logger.LogWarning(ex, "[Sources] could not create {Type} from {Dll}", type.Name, name);
                 continue;
             }
 
-            foreach (var type in types)
+            if (instance is IMangaSourceService src && mangaRegistry != null)
             {
-                if (!IsPluginType(type)) continue;
-
-                // One instance per type, registered under every contract it implements. A type
-                // that fails to construct is skipped without taking the rest of the pack down.
-                object instance;
-                try { instance = ActivatorUtilities.CreateInstance(services, type); }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "[Sources] could not create {Type} from {Dll}", type.Name, Path.GetFileName(dll));
-                    continue;
-                }
-
-                if (instance is IMangaSourceService src)
-                {
-                    mangaRegistry.Add(src);
-                    logger.LogInformation("[Sources] loaded manga source {Name} from {Dll}", src.SourceName, Path.GetFileName(dll));
-                }
-                if (instance is IReleaseProvider rel && releases != null)
-                {
-                    releases.Add(rel);
-                    logger.LogInformation("[Sources] loaded release provider {Name} from {Dll}", rel.ProviderName, Path.GetFileName(dll));
-                }
-                if (instance is IAiringScheduleService sched && schedules != null)
-                {
-                    schedules.Add(sched);
-                    logger.LogInformation("[Sources] loaded schedule {Type} from {Dll}", type.Name, Path.GetFileName(dll));
-                }
+                mangaRegistry.Add(src);
+                manga.Add(src.SourceName);
+                _logger.LogInformation("[Sources] loaded manga source {Name} from {Dll}", src.SourceName, name);
+            }
+            if (instance is IReleaseProvider rel && releaseProviders != null)
+            {
+                releaseProviders.Add(rel);
+                releases.Add(rel.ProviderName);
+                _logger.LogInformation("[Sources] loaded release provider {Name} from {Dll}", rel.ProviderName, name);
+            }
+            if (instance is IAiringScheduleService sched && scheduleRegistry != null)
+            {
+                scheduleRegistry.Add(sched);
+                schedules++;
+                _logger.LogInformation("[Sources] loaded schedule {Type} from {Dll}", type.Name, name);
             }
         }
+
+        var any = manga.Count + releases.Count + schedules > 0;
+        return new(name, any, any ? null : firstError ?? "it has no sources in it", manga, releases, schedules, false);
     }
+
+    private List<SourcePackStatus> Snapshot() =>
+        _packs.Values.Select(p => p.Status).OrderBy(s => s.FileName, StringComparer.OrdinalIgnoreCase).ToList();
 }

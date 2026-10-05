@@ -119,11 +119,21 @@
         <ScrollViewer x:Name="PageScroll" Grid.Row="0" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="40,34,40,40" MaxWidth="1180" HorizontalAlignment="Stretch">
 
-                <TextBlock Text="Settings" FontSize="32" FontWeight="Bold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <TextBlock Text="Manage your library, downloads, playback and app preferences"
-                           FontSize="14" Margin="0,6,0,24"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,24">
+                    <StackPanel>
+                        <TextBlock Text="Settings" FontSize="32" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Text="Folders, sources, downloads and how the app looks."
+                                   FontSize="14" Margin="0,6,0,0"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                    <!-- Most people never need the technical options; they're one switch away. -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom" HorizontalAlignment="Right">
+                        <ToggleSwitch IsChecked="{Binding ShowAdvanced}" OnContent="Show advanced settings"
+                                      OffContent="Show advanced settings"
+                                      ToolTip.Tip="Download engines, check interval, other programs' paths and the danger zone"/>
+                    </StackPanel>
+                </Grid>
 
                 <TabControl Classes="pills" SelectedIndex="{Binding SelectedTab}">
 
@@ -136,7 +146,7 @@
                                     <StackPanel>
                                         <TextBlock Text="Download folder" Classes="label"/>
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                                            <TextBox Text="{Binding DownloadPath}" Watermark="C:\Downloads"/>
+                                            <TextBox Text="{Binding DownloadPath}" Watermark="{Binding DownloadFolderExample}"/>
                                             <Button Grid.Column="1" Content="Browse" Classes="ghost field"
                                                     Command="{Binding BrowseDownloadCommand}"/>
                                         </Grid>
@@ -144,7 +154,7 @@
                                     <StackPanel>
                                         <TextBlock Text="Library folder" Classes="label"/>
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                                            <TextBox Text="{Binding LibraryPath}" Watermark="D:\Anime"/>
+                                            <TextBox Text="{Binding LibraryPath}" Watermark="{Binding LibraryFolderExample}"/>
                                             <Button Grid.Column="1" Content="Browse" Classes="ghost field"
                                                     Command="{Binding BrowseLibraryCommand}"/>
                                         </Grid>
@@ -153,16 +163,26 @@
                                 </StackPanel>
                             </ctrls:SettingsSection>
 
-                            <ctrls:SettingsSection Title="Monitoring"
-                                                   Description="How often your feeds are checked, and which quality to pick.">
+                            <ctrls:SettingsSection Title="Startup"
+                                                   Description="Start when you log in, so new episodes keep arriving."
+                                                   IsVisible="{Binding CanOpenAtLogin}">
+                                <StackPanel>
+                                    <ToggleSwitch IsChecked="{Binding OpenAtLogin}"
+                                                  OnContent="Open at login" OffContent="Open at login"/>
+                                    <TextBlock Classes="hint" Text="It starts in the background. Changes apply at once."/>
+                                </StackPanel>
+                            </ctrls:SettingsSection>
+
+                            <ctrls:SettingsSection Title="New episodes"
+                                                   Description="Which quality to download when a release comes in several.">
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
                                     <StackPanel>
-                                        <TextBlock Text="Check every (minutes)" Classes="label"/>
-                                        <TextBox Text="{Binding CheckInterval}" Watermark="15"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1">
                                         <TextBlock Text="Preferred quality" Classes="label"/>
                                         <ComboBox ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding QualityPreference}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" IsVisible="{Binding ShowAdvanced}">
+                                        <TextBlock Text="Check feeds every (minutes)" Classes="label"/>
+                                        <TextBox Text="{Binding CheckInterval}" Watermark="15"/>
                                     </StackPanel>
                                 </Grid>
                             </ctrls:SettingsSection>
@@ -175,7 +195,7 @@
                                         <TextBox Text="{Binding PreferredReleaseGroups}"
                                                  Watermark="GroupA, GroupB — highest priority first"/>
                                     </StackPanel>
-                                    <StackPanel>
+                                    <StackPanel IsVisible="{Binding ShowAdvanced}">
                                         <TextBlock Text="Auto-download only from" Classes="label"/>
                                         <TextBox Text="{Binding AutoDownloadGroups}" Watermark="Any group"/>
                                         <TextBlock Classes="hint"
@@ -201,9 +221,9 @@
                                     </StackPanel>
                                     <StackPanel>
                                         <ToggleSwitch IsChecked="{Binding WindowsNotifications}"
-                                                      OnContent="Windows notifications" OffContent="Windows notifications"/>
+                                                      OnContent="{Binding NotificationsLabel}" OffContent="{Binding NotificationsLabel}"/>
                                         <TextBlock Classes="hint"
-                                                   Text="On: important events pop up as Windows notifications. Off: they stay as quiet messages inside the app."/>
+                                                   Text="{Binding NotificationsHint}"/>
                                     </StackPanel>
                                 </StackPanel>
                             </ctrls:SettingsSection>
@@ -214,7 +234,8 @@
                     <TabItem Header="Downloads">
                         <StackPanel Margin="0,12,0,0">
                             <ctrls:SettingsSection Title="Download engine"
-                                                   Description="What fetches your downloads, and which files in the download folder get organised.">
+                                                   Description="What fetches your downloads, and which files in the download folder get organised. The built-in engine needs nothing set up."
+                                                   IsVisible="{Binding ShowAdvanced}">
                                 <StackPanel Classes="fields">
                                     <StackPanel>
                                         <TextBlock Text="Active backend" Classes="label"/>
@@ -253,6 +274,7 @@
                                 </StackPanel>
                             </ctrls:SettingsSection>
 
+                            <Panel IsVisible="{Binding ShowAdvanced}">
                             <ctrls:SettingsSection Title="qBittorrent"
                                                    Description="Connection to your qBittorrent Web UI."
                                                    IsVisible="{Binding SelectedDownloadBackend, Converter={StaticResource StringContainsConverter}, ConverterParameter='QBittorrent'}">
@@ -290,6 +312,7 @@
                                     </Grid>
                                 </StackPanel>
                             </ctrls:SettingsSection>
+                            </Panel>
 
                             <ctrls:SettingsSection Title="Monitored feeds"
                                                    Description="The RSS feeds checked for new episodes. Only enabled feeds are monitored.">
@@ -312,10 +335,13 @@
                                         <ComboBox ItemsSource="{Binding PlayerOptions}" SelectedItem="{Binding SelectedPlayer}"
                                                   HorizontalAlignment="Left" MinWidth="260"/>
                                     </StackPanel>
-                                    <StackPanel IsVisible="{Binding SelectedPlayer, Converter={StaticResource StringContainsConverter}, ConverterParameter='VLC'}">
-                                        <TextBlock Text="VLC executable" Classes="label"/>
-                                        <TextBox Text="{Binding VlcPath}" Watermark="C:\Program Files\VideoLAN\VLC\vlc.exe"/>
-                                    </StackPanel>
+                                    <Panel IsVisible="{Binding ShowAdvanced}">
+                                        <StackPanel IsVisible="{Binding SelectedPlayer, Converter={StaticResource StringContainsConverter}, ConverterParameter='VLC'}">
+                                            <TextBlock Text="VLC executable" Classes="label"/>
+                                            <TextBox Text="{Binding VlcPath}" Watermark="C:\Program Files\VideoLAN\VLC\vlc.exe"/>
+                                            <TextBlock Classes="hint" Text="Only if VLC isn't found on its own."/>
+                                        </StackPanel>
+                                    </Panel>
                                 </StackPanel>
                             </ctrls:SettingsSection>
                         </StackPanel>
@@ -389,7 +415,8 @@
                             </ctrls:SettingsSection>
 
                             <ctrls:SettingsSection Title="Danger zone"
-                                                   Description="Erase the library database: series, history and settings. Your files stay on disk.">
+                                                   Description="Erase the library database: series, history and settings. Your files stay on disk."
+                                                   IsVisible="{Binding ShowAdvanced}">
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <Button Content="Reset library database" Classes="ghost pill" IsVisible="{Binding !ConfirmingReset}"
                                             Foreground="{DynamicResource StatusRedBrush}" BorderBrush="{DynamicResource StatusRedBrush}"
@@ -407,14 +434,18 @@
                     <!-- ═══════════════ Sources ═══════════════ -->
                     <TabItem Header="Sources">
                         <StackPanel Margin="0,12,0,0">
-                            <ctrls:SettingsSection Title="Sources file"
-                                                   Description="Move your whole setup in one file: RSS feeds, preferred release groups, source packs and Mihon repositories. Importing only adds; it never removes anything.">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Button Content="Import sources file…" Classes="ghost pill" Command="{Binding ImportSourcesFileCommand}"/>
-                                        <Button Content="Export my sources…" Classes="ghost pill" Command="{Binding ExportSourcesCommand}"/>
-                                        <Button Content="How to add sources…" Classes="ghost pill" Command="{Binding OpenSourcesGuideCommand}"/>
-                                    </StackPanel>
+                            <ctrls:SettingsSection Title="Your sources"
+                                                   Description="Import a sources file, a source pack, or the folder either was unpacked to — or just drag it onto the Sentrychan window. Importing only adds; it never removes anything. Export puts your feeds, preferred groups, packs and Mihon repositories in one file.">
+                                <StackPanel Spacing="8">
+                                    <WrapPanel Orientation="Horizontal">
+                                        <Button Content="Import…" Classes="accent pill" Margin="0,0,10,8" Command="{Binding ImportSourcesFileCommand}"/>
+                                        <Button Content="Import a folder…" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding ImportSourcesFolderCommand}"/>
+                                        <Button Content="Check my sources" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding CheckSourcesCommand}"/>
+                                        <Button Content="Export my sources…" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding ExportSourcesCommand}"/>
+                                        <Button Content="How to add sources…" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding OpenSourcesGuideCommand}"/>
+                                        <Button Content="Open sources folder" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding OpenSourcesFolderCommand}"
+                                                IsVisible="{Binding ShowAdvanced}"/>
+                                    </WrapPanel>
                                     <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding SourcesFileMessage}"
                                                IsVisible="{Binding SourcesFileMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                 </StackPanel>
@@ -424,17 +455,9 @@
                                                    Description="Read manga you already have on disk with the Local source.">
                                 <StackPanel>
                                     <TextBlock Text="Manga folder" Classes="label"/>
-                                    <TextBox Text="{Binding LocalMangaPath}" Watermark="D:\Manga"/>
+                                    <TextBox Text="{Binding LocalMangaPath}" Watermark="{Binding MangaFolderExample}"/>
                                     <TextBlock Classes="hint"
                                                Text="Each subfolder is a manga; its chapter subfolders hold the page images — the same layout downloaded chapters use."/>
-                                </StackPanel>
-                            </ctrls:SettingsSection>
-
-                            <ctrls:SettingsSection Title="Source packs"
-                                                   Description="Sentrychan ships with no online sources. Packs add them and load on the next start.">
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <Button Content="Import source pack…" Classes="ghost pill" Command="{Binding ImportSourcePackCommand}"/>
-                                    <Button Content="Open sources folder" Classes="ghost pill" Command="{Binding OpenSourcesFolderCommand}"/>
                                 </StackPanel>
                             </ctrls:SettingsSection>
 
@@ -553,10 +576,13 @@
                             </ctrls:SettingsSection>
 
                             <ctrls:SettingsSection Title="Help" Description="Walkthrough and diagnostics.">
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <Button Content="Show tutorial" Classes="ghost pill" Command="{Binding ShowTutorialCommand}"/>
-                                    <Button Content="Open logs folder" Classes="ghost pill" Command="{Binding OpenLogsCommand}"/>
-                                </StackPanel>
+                                <WrapPanel Orientation="Horizontal">
+                                    <Button Content="Show tutorial" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding ShowTutorialCommand}"/>
+                                    <Button Content="Send a problem report…" Classes="accent pill" Margin="0,0,10,8" Command="{Binding ProblemReportCommand}"
+                                            IsVisible="{Binding IsTestBuild}"/>
+                                    <Button Content="Open logs folder" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding OpenLogsCommand}"
+                                            IsVisible="{Binding ShowAdvanced}"/>
+                                </WrapPanel>
                             </ctrls:SettingsSection>
 
                             <TextBlock Margin="0,20,0,0" FontSize="12" TextWrapping="Wrap"

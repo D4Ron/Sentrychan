@@ -60,6 +60,16 @@ public static class LibraryFiling
         return (rendered, !string.Equals(Path.GetFileName(rendered), fileName, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The top folder a series' episodes are filed under (relative to the library) — what a
+    /// download would create, so a folder made ahead of time is the one the downloads go into.
+    /// </summary>
+    public static string ShowFolder(NamingTemplate naming, Series series, IEnumerable<Series> showSeasons)
+    {
+        var (relative, _) = Destination(naming, series, showSeasons, "placeholder.mkv", SeasonSearch.EffectiveSeason(series.Title, series.SeasonNumber), 1);
+        return relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries)[0];
+    }
+
     /// <summary>The show folder the app used before naming templates: the base title, sanitised.</summary>
     public static string LegacyShowFolder(string seriesTitle) =>
         InvalidFolderChars.Replace(SeasonDetector.ExtractBaseTitle(seriesTitle), string.Empty).Trim();

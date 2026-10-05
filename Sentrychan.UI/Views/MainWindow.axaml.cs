@@ -10,7 +10,9 @@ using Sentrychan.Core;
 using Sentrychan.UI.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Linq;
 using System.Reactive.Linq;
+using Avalonia.Platform.Storage;
 using Avalonia.Interactivity;
 
 namespace Sentrychan.UI.Views;
@@ -36,7 +38,27 @@ public partial class MainWindow : Window
             e.Handled = true;
             PanicKey.Trigger();
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        
+
+        // Sources can be dropped anywhere on the window: the sources file, a pack, a zip, or the
+        // folder one was unpacked to. Anything else dropped is left alone.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, (_, e) =>
+        {
+            e.DragEffects = e.Data.Contains(DataFormats.Files) ? DragDropEffects.Copy : DragDropEffects.None;
+        });
+        AddHandler(DragDrop.DropEvent, async (_, e) =>
+        {
+            var paths = e.Data.GetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+            if (paths is not { Count: > 0 } || DataContext is not MainWindowViewModel vm) return;
+            if (!SourcesFileActions.LooksLikeSources(paths))
+            {
+                vm.ShowToast("Nothing to import", "Drop a sources file, a source pack (.dll), or the folder one was unpacked to.");
+                return;
+            }
+            e.Handled = true;
+            await vm.ImportSourcesAsync(paths);
+        });
+
         // Top-bar layout: labels drop to icons (tooltips stay) when the centred nav and the
         // logo can't both fit, rather than the nav running over the logo.
         TopBarGrid.PropertyChanged += (_, e) => { if (e.Property == BoundsProperty) FitTopNav(); };
@@ -258,14 +280,14 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel vm) vm.IsInboxHidden = false;
     }
 
-    private void OnHideSidebar(object? sender, RoutedEventArgs e)
+    private async void OnReportProblem(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm) vm.IsSidebarHidden = true;
+        if (DataContext is MainWindowViewModel vm) await vm.ShowProblemReportAsync();
     }
 
-    private void OnRevealSidebar(object? sender, RoutedEventArgs e)
+    private void OnToggleSidebar(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel vm) vm.IsSidebarHidden = false;
+        if (DataContext is MainWindowViewModel vm) vm.IsSidebarHidden = !vm.IsSidebarHidden;
     }
 
     private void MainWindow_Closing(object? sender, WindowClosingEventArgs e)

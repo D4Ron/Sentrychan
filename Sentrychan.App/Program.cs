@@ -213,6 +213,9 @@ public static class Program
                 services.AddSingleton<EpisodeRepairService>();
                 services.AddSingleton<Sentrychan.Core.Library.LibraryTidyService>();
                 services.AddSingleton<Sentrychan.Core.Sources.SourcesTransferService>();
+                services.AddSingleton<Sentrychan.Core.Sources.SourcesChecker>();
+                services.AddSingleton<PluginSourceLoader>();
+                services.AddSingleton<Sentrychan.Core.Sources.ISourcePackHost>(sp => sp.GetRequiredService<PluginSourceLoader>());
                 services.AddSingleton<Sentrychan.Core.Vault.VaultService>();
                 services.AddSingleton<IDownloadPickerService,Sentrychan.UI.Services.DownloadPickerService>();
 
@@ -282,8 +285,9 @@ public static class Program
                     // Uses the maintained Serilog.Sinks.File directly; the old
                     // Serilog.Extensions.Logging.File wrapper is abandoned and dragged
                     // in ancient System.IO.* shims that broke self-contained publish.
+                    // Test builds log in detail: a tester's log is the only view of their machine.
                     var serilog = new Serilog.LoggerConfiguration()
-                        .MinimumLevel.Information()
+                        .MinimumLevel.Is(BuildInfo.IsTestBuild ? Serilog.Events.LogEventLevel.Debug : Serilog.Events.LogEventLevel.Information)
                         .WriteTo.File(
                             Path.Combine(_logDir, "sentrychan-.log"),
                             rollingInterval: Serilog.RollingInterval.Day,
@@ -292,11 +296,28 @@ public static class Program
                         .CreateLogger();
                     logging.AddSerilog(serilog, dispose: true);
 
-                    logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
+                    logging.SetMinimumLevel(BuildInfo.IsTestBuild
+                        ? Microsoft.Extensions.Logging.LogLevel.Debug
+                        : Microsoft.Extensions.Logging.LogLevel.Information);
+                    // EF Core's per-query lines would bury everything else.
+                    logging.AddFilter("Microsoft.EntityFrameworkCore", Microsoft.Extensions.Logging.LogLevel.Warning);
+                    logging.AddFilter("System.Net.Http.HttpClient", Microsoft.Extensions.Logging.LogLevel.Warning);
                 });
             });
 
         var host = hostBuilder.Build();
+
+        var startLog = host.Services.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>().CreateLogger("Startup");
+        Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(startLog,
+            "[Startup] {App} {Version} ({Flavor}{Test}) on {OS} {Arch}, .NET {Runtime}, data {Data}",
+            BuildInfo.AppName, typeof(Program).Assembly.GetName().Version, BuildInfo.Flavor, BuildInfo.IsTestBuild ? ", test build" : "",
+            System.Runtime.InteropServices.RuntimeInformation.OSDescription, System.Runtime.InteropServices.RuntimeInformation.OSArchitecture,
+            Environment.Version, AppPaths.DataDir);
+        if (BuildInfo.IsTestBuild)
+        {
+            Console.SetOut(new ConsoleToLog(startLog));
+            System.Diagnostics.Trace.Listeners.Add(new System.Diagnostics.TextWriterTraceListener(Console.Out));
+        }
 
         // Apply migrations
         using (var scope = host.Services.CreateScope())
@@ -370,14 +391,26 @@ public static class Program
             // particular — run their first check the moment the host starts, so any release
             // provider and the default feeds it brings must already be registered by then.
             var mangaRegistry = host.Services.GetRequiredService<Sentrychan.Core.Interfaces.IMangaSourceRegistry>();
+            var packLoader = host.Services.GetRequiredService<PluginSourceLoader>();
+            var transfer = host.Services.GetRequiredService<Sentrychan.Core.Sources.SourcesTransferService>();
+            var releaseProviders = host.Services.GetRequiredService<IReleaseProviders>();
             try
             {
-                var srcLog = host.Services.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
-                                 .CreateLogger("Sources");
-                PluginSourceLoader.SeedAndLoad(host.Services, mangaRegistry, srcLog);
-                SeedProviderDefaults(host.Services, srcLog);
+                // Sources put into the sources folder by hand, in whatever shape, are taken in first.
+                transfer.TidySourcesFolderAsync().GetAwaiter().GetResult();
+                packLoader.SeedAndLoad();
+                transfer.ApplyPackDefaultsAsync(releaseProviders).GetAwaiter().GetResult();
             }
-            catch (Exception ex) { Console.WriteLine($"Source plugin load failed: {ex.Message}"); }
+            catch (Exception ex) { LogCrash("Loading source packs", ex); }
+
+            // Packs imported while the app runs load at once (a replaced one waits for a restart).
+            Sentrychan.UI.App.LoadNewPacks = async () =>
+            {
+                var status = packLoader.LoadNewPacks();
+                await transfer.ApplyPackDefaultsAsync(releaseProviders);
+                RegisterImageSettings(mangaRegistry);
+                return status;
+            };
 
             // Bridged Mihon sources the user installed last time, from the saved list — the
             // server itself only starts when one of them is used.
@@ -386,15 +419,7 @@ public static class Program
             catch (Exception ex) { Console.WriteLine($"Mihon bridge init failed: {ex.Message}"); }
             Sentrychan.UI.Controls.AsyncImage.UrlResolver = url => mihonBridge.ResolveImageUrlAsync(url);
 
-            // Teach AsyncImage which manga sources need a Referer for their image CDN, and
-            // which are adult sources whose images must never reach the disk cache.
-            foreach (var src in mangaRegistry.Sources)
-            {
-                if (!string.IsNullOrEmpty(src.ImageReferer))
-                    Sentrychan.UI.Controls.AsyncImage.RegisterReferer(src.SourceName, src.ImageReferer!);
-                if (src.IsAdultSource)
-                    Sentrychan.UI.Controls.AsyncImage.RegisterPrivateSource(src.SourceName);
-            }
+            RegisterImageSettings(mangaRegistry);
             // Extensions installed later join while the app runs.
             mihonBridge.SourcesChanged += sources =>
             {
@@ -531,41 +556,18 @@ public static class Program
     }
 
     /// <summary>
-    /// Adds the default feeds and release-group preference that loaded source packs suggest —
-    /// but only on an install that has none yet, so it never overrides a user's own choices.
-    /// With no pack loaded this does nothing, which is what keeps the public build from
-    /// subscribing itself to anything.
+    /// Teaches AsyncImage which manga sources need a Referer for their image CDN, and which are
+    /// adult sources whose images must never reach the disk cache. Safe to repeat.
     /// </summary>
-    private static void SeedProviderDefaults(IServiceProvider services, Microsoft.Extensions.Logging.ILogger log)
+    private static void RegisterImageSettings(Sentrychan.Core.Interfaces.IMangaSourceRegistry registry)
     {
-        var releases = services.GetRequiredService<IReleaseProviders>();
-        var feeds    = releases.DefaultFeeds;
-        var groups   = releases.DefaultPreferredGroups;
-        if (feeds.Count == 0 && string.IsNullOrWhiteSpace(groups)) return;
-
-        using var db = services
-            .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<AppDbContext>>()
-            .CreateDbContext();
-
-        if (feeds.Count > 0 && !db.RssFeeds.Any())
+        foreach (var src in registry.Sources)
         {
-            foreach (var f in feeds)
-                db.RssFeeds.Add(new Sentrychan.Core.Models.RssFeed
-                {
-                    Url              = f.Url,
-                    FeedType         = f.Type,
-                    PreferredQuality = f.PreferredQuality,
-                    IsEnabled        = true,
-                    AddedAt          = DateTime.UtcNow
-                });
-            Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
-                log, "[Sources] seeded {Count} default feed(s) from loaded packs", feeds.Count);
+            if (!string.IsNullOrEmpty(src.ImageReferer))
+                Sentrychan.UI.Controls.AsyncImage.RegisterReferer(src.SourceName, src.ImageReferer!);
+            if (src.IsAdultSource)
+                Sentrychan.UI.Controls.AsyncImage.RegisterPrivateSource(src.SourceName);
         }
-
-        if (!string.IsNullOrWhiteSpace(groups) && !db.AppConfigs.Any(c => c.Key == "PreferredReleaseGroups"))
-            db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = "PreferredReleaseGroups", Value = groups! });
-
-        db.SaveChanges();
     }
 
     /// <summary>

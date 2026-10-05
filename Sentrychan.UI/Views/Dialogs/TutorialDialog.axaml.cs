@@ -27,7 +27,7 @@ public partial class TutorialDialog : Window
         new("DownloadRegular", "Downloads",
             "A torrent client is built in: pause, resume, set speed limits, and cap how many run at once. Prefer your own? Point Sentrychan at qBittorrent instead. Right-click any download to open its folder."),
         new("CalendarRegular", "Always up to date",
-            "A background monitor quietly checks your sources for new episodes and chapters and sends a Windows notification when they land — so you never have to go looking. The Airing Today rail shows what's dropping."),
+            "A background monitor quietly checks your sources for new episodes and chapters and sends a notification when they land — so you never have to go looking. The Airing Today rail shows what's dropping."),
         new("SettingsRegular", "Make it yours",
             "Four themes, a sidebar or top-bar layout, release-group preferences, and more all live in Settings. That's the tour — Sentrychan is free and open source, so if something's missing, the issue tracker is open."),
     ];

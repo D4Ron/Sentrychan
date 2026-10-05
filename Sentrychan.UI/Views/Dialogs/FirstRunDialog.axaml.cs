@@ -15,6 +15,12 @@ public partial class FirstRunDialog : Window
     public FirstRunDialog()
     {
         InitializeComponent();
+        // Filled in with the usual places, so "Get started" works without browsing. "Skip" used to
+        // leave the library unset, and then nothing that downloaded was ever filed.
+        var home = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+        var videos = System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyVideos);
+        DownloadBox.Text = System.IO.Path.Combine(home, "Downloads");
+        LibraryBox.Text = System.IO.Path.Combine(string.IsNullOrEmpty(videos) ? home : videos, "Anime");
     }
 
     private async void OnBrowseDownload(object? sender, RoutedEventArgs e)
@@ -40,7 +46,18 @@ public partial class FirstRunDialog : Window
     }
 
     private void OnConfirm(object? sender, RoutedEventArgs e)
-        => Close((DownloadBox.Text ?? string.Empty, LibraryBox.Text ?? string.Empty));
+    {
+        var download = DownloadBox.Text?.Trim() ?? string.Empty;
+        var library = LibraryBox.Text?.Trim() ?? string.Empty;
+        // The suggested library folder usually doesn't exist yet.
+        if (!Sentrychan.Core.Library.LibraryFolder.Ensure(library, out var problem, out _) && library.Length > 0)
+        {
+            Problem.Text = "The library folder can't be used: " + problem;
+            Problem.IsVisible = true;
+            return;
+        }
+        Close((download, library));
+    }
 
     private void OnSkip(object? sender, RoutedEventArgs e) => Close(null);
 }

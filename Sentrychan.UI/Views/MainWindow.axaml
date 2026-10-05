@@ -184,25 +184,25 @@
             <Border Grid.Row="1" Height="46" Background="{DynamicResource SurfaceBackgroundBrush}"
                     BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
                 <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="16,0">
-                    <!-- Col 0: Hide sidebar (sidebar layout only) -->
-                    <Button Grid.Column="0" Width="28" Height="28" Click="OnHideSidebar"
-                            IsVisible="{Binding IsSidebarLayout}"
-                            Background="{DynamicResource AccentSubtleBrush}"
-                            BorderBrush="{DynamicResource BorderEmphasisBrush}" BorderThickness="1"
+                    <!-- Col 0: the one sidebar toggle (sidebar layout only). There used to be a "‹" here
+                         and a "⟩" tab on the window edge, both on screen at once and easy to mistake
+                         for the "‹ Back" of detail pages. -->
+                    <Button Grid.Column="0" Width="30" Height="28" Padding="0" Click="OnToggleSidebar"
+                            IsVisible="{Binding IsSidebarLayout}" Classes="ghost"
                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                            ToolTip.Tip="Hide sidebar">
-                        <Path Fill="{DynamicResource TextSecondaryBrush}" Data="{StaticResource ChevronRight}"
-                              HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Path.RenderTransform>
-                                <RotateTransform Angle="180"/>
-                            </Path.RenderTransform>
-                        </Path>
+                            ToolTip.Tip="{Binding SidebarToggleTip}">
+                        <PathIcon Data="{StaticResource SidebarRegular}" Width="16" Height="16"
+                                  Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Button>
 
                     <!-- Col 1: Section Title + Count -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8" Margin="16,0,0,0">
                         <TextBlock Text="{Binding CurrentPageTitle}" FontSize="17" FontWeight="700" Foreground="{DynamicResource TextPrimaryBrush}"/>
                         <TextBlock Text="{Binding CurrentPageCountText}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Bottom" Margin="0,0,0,2"/>
+                        <!-- Test builds only: the way for a tester to send the developer what happened. -->
+                        <Button Content="Test build · Report a problem" Classes="ghost" FontSize="11" Padding="9,3"
+                                Margin="10,0,0,0" VerticalAlignment="Center" IsVisible="{Binding IsTestBuild}"
+                                Click="OnReportProblem"/>
                     </StackPanel>
 
                     <!-- Col 2: Spacer (*) -->
@@ -672,14 +672,6 @@
                 </Border>
             </StackPanel>
         </Button>
-
-        <!-- Sidebar reveal tab — shown when the sidebar is fully hidden -->
-        <Button Grid.Column="0" IsVisible="{Binding ShowSidebarReveal}" ZIndex="400"
-                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,8,0,0"
-                Width="20" Height="46" Padding="0" Click="OnRevealSidebar"
-                Background="{DynamicResource AccentSubtleBrush}"
-                BorderBrush="{DynamicResource BorderEmphasisBrush}" BorderThickness="0,1,1,1"
-                CornerRadius="0,6,6,0" ToolTip.Tip="Show sidebar" Content="⟩"/>
 
         <!-- Toast host — top-right, non-blocking transient feedback -->
         <controls:NotificationToast Grid.ColumnSpan="2" x:Name="Toast"

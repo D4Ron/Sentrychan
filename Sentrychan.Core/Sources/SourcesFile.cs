@@ -94,7 +94,7 @@ public static class SourcesFile
                                && e.FullName.IndexOf('/', PackFolder.Length) < 0
                                && e.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
 
-    private static SourcesManifest Parse(string json)
+    internal static SourcesManifest Parse(string json)
     {
         try
         {

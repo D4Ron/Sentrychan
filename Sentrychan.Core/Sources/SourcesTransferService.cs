@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Sentrychan.Core.Data;
+using Sentrychan.Core.Interfaces;
 using Sentrychan.Core.MihonBridge;
 using Sentrychan.Core.Models;
 
@@ -11,13 +12,18 @@ public sealed record SourcesImportResult(
     int FeedsAdded,
     int FeedsAlreadyThere,
     IReadOnlyList<string> FeedsRefused,
-    bool GroupsSet,
-    bool GroupsKept,
+    IReadOnlyList<string> GroupsAdded,
     IReadOnlyList<string> PacksInstalled,
+    IReadOnlyList<string> Skipped,
     int ReposAdded,
     int ReposWaiting)
 {
-    public bool NeedsRestart => PacksInstalled.Count > 0;
+    /// <summary>Set by the caller once it has tried to load the installed packs.</summary>
+    public IReadOnlyList<SourcePackStatus> PackStatus { get; init; } = [];
+
+    public bool NeedsRestart => PackStatus.Any(p => p.NeedsRestart);
+    public bool FoundNothing => FeedsAdded == 0 && FeedsAlreadyThere == 0 && FeedsRefused.Count == 0
+                                && GroupsAdded.Count == 0 && PacksInstalled.Count == 0 && ReposAdded == 0 && ReposWaiting == 0;
 
     public string Summary()
     {
@@ -25,19 +31,26 @@ public sealed record SourcesImportResult(
         if (FeedsAdded > 0) parts.Add(FeedsAdded == 1 ? "1 RSS feed added" : $"{FeedsAdded} RSS feeds added");
         if (FeedsAlreadyThere > 0) parts.Add($"{FeedsAlreadyThere} feed(s) you already had");
         if (FeedsRefused.Count > 0) parts.Add($"{FeedsRefused.Count} feed(s) skipped — {FeedsRefused[0]}");
-        if (GroupsSet) parts.Add("preferred release groups set");
-        if (GroupsKept) parts.Add("your own preferred groups kept");
-        if (PacksInstalled.Count > 0) parts.Add($"{PacksInstalled.Count} source pack(s) installed — restart Sentrychan to load them");
+        if (GroupsAdded.Count > 0) parts.Add($"preferred groups added: {string.Join(", ", GroupsAdded)}");
+        if (PacksInstalled.Count > 0)
+            parts.Add(NeedsRestart
+                ? $"{PacksInstalled.Count} source pack(s) installed — restart Sentrychan to use the new copy"
+                : $"{PacksInstalled.Count} source pack(s) installed and ready");
         if (ReposAdded > 0) parts.Add($"{ReposAdded} Mihon repositor{(ReposAdded == 1 ? "y" : "ies")} added");
         if (ReposWaiting > 0) parts.Add($"{ReposWaiting} Mihon repositor{(ReposWaiting == 1 ? "y waits" : "ies wait")} until you turn on Mihon extensions (Settings → Sources)");
-        return parts.Count == 0 ? "Nothing new — you already had everything in that file." : string.Join("; ", parts) + ".";
+        if (parts.Count == 0)
+            return Skipped.Count > 0
+                ? "Nothing could be used from that — " + Skipped[0] + "."
+                : "Nothing new — you already had everything in that file.";
+        return string.Join("; ", parts) + ".";
     }
 }
 
 /// <summary>
-/// Moves a user's sources between installs as one <see cref="SourcesFile"/>: export what this app
-/// has, import what a file brings. Importing only ever adds — nothing the user has is replaced
-/// or removed, except a source pack of the same file name, which is the newer copy.
+/// Moves a user's sources between installs: export what this app has as one
+/// <see cref="SourcesFile"/>, import whatever the user picked (<see cref="SourcesInput"/>).
+/// Importing only ever adds — nothing the user has is replaced or removed, except a source pack of
+/// the same file name, which is the newer copy.
 /// </summary>
 public sealed class SourcesTransferService(
     IDbContextFactory<AppDbContext> dbFactory,
@@ -47,14 +60,23 @@ public sealed class SourcesTransferService(
 {
     public const string GroupsKey = "PreferredReleaseGroups";
 
+    /// <summary>Where things the startup tidy took out of the sources folder are kept.</summary>
+    public const string ImportedFolder = ".imported";
+
     private readonly string _packsDir = packsDir ?? AppPaths.Sources;
 
     /// <summary>Source packs installed for this app (the files the plugin loader reads).</summary>
     public static IReadOnlyList<string> InstalledPacks(string? dir = null)
     {
         dir ??= AppPaths.Sources;
-        return Directory.Exists(dir) ? Directory.GetFiles(dir, "*.dll").OrderBy(f => f).ToList() : [];
+        return Directory.Exists(dir)
+            ? Directory.GetFiles(dir, "*.dll").Where(f => !SourcesInput.IsJunk(Path.GetFileName(f))).OrderBy(f => f).ToList()
+            : [];
     }
+
+    public static IReadOnlyList<string> SplitGroups(string? groups) =>
+        (groups ?? "").Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     public async Task<SourcesManifest> BuildManifestAsync(string? name = null, CancellationToken ct = default)
     {
@@ -91,11 +113,21 @@ public sealed class SourcesTransferService(
         return new(manifest, packs.Select(Path.GetFileName).ToList()!);
     }
 
+    public Task<SourcesImportResult> ImportAsync(string path, Func<string, string?>? refuseFeed = null, CancellationToken ct = default) =>
+        ImportAsync([path], refuseFeed, ct);
+
+    /// <param name="paths">Files and folders, in any of the shapes <see cref="SourcesInput"/> reads.</param>
     /// <param name="refuseFeed">Why a feed mustn't be added here (an adult feed outside secret mode), or null.</param>
-    public async Task<SourcesImportResult> ImportAsync(string path, Func<string, string?>? refuseFeed = null, CancellationToken ct = default)
+    public Task<SourcesImportResult> ImportAsync(IEnumerable<string> paths, Func<string, string?>? refuseFeed = null, CancellationToken ct = default)
     {
-        var contents = SourcesFile.Read(path);
-        var manifest = contents.Manifest;
+        var list = paths.ToList();
+        log.LogInformation("[Sources] importing from {Paths}", string.Join(" | ", list.Select(Path.GetFileName)));
+        return ImportAsync(SourcesInput.Read(list), refuseFeed, ct);
+    }
+
+    public async Task<SourcesImportResult> ImportAsync(SourcesInput input, Func<string, string?>? refuseFeed = null, CancellationToken ct = default)
+    {
+        var manifest = input.Manifest;
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var known = (await db.RssFeeds.Select(f => f.Url).ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -122,21 +154,21 @@ public sealed class SourcesTransferService(
             added++;
         }
 
-        bool groupsSet = false, groupsKept = false;
-        if (!string.IsNullOrWhiteSpace(manifest.PreferredReleaseGroups))
-        {
-            var row = await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == GroupsKey, ct);
-            if (row == null || string.IsNullOrWhiteSpace(row.Value))
-            {
-                if (row == null) db.AppConfigs.Add(new AppConfig { Key = GroupsKey, Value = manifest.PreferredReleaseGroups.Trim() });
-                else row.Value = manifest.PreferredReleaseGroups.Trim();
-                groupsSet = true;
-            }
-            else groupsKept = !string.Equals(row.Value.Trim(), manifest.PreferredReleaseGroups.Trim(), StringComparison.OrdinalIgnoreCase);
-        }
+        // Groups are merged: the file's groups the user doesn't have go after their own, so their
+        // order (which is their priority) stays as it was.
+        var groupsAdded = await AddGroupsAsync(db, manifest.PreferredReleaseGroups, ct);
         await db.SaveChangesAsync(ct);
 
-        var packs = SourcesFile.ExtractPacks(path, _packsDir);
+        var packs = new List<string>();
+        foreach (var pack in input.Packs)
+        {
+            Directory.CreateDirectory(_packsDir);
+            var dest = Path.Combine(_packsDir, Path.GetFileName(pack.Name));
+            var tmp = dest + ".tmp";
+            await File.WriteAllBytesAsync(tmp, pack.Bytes, ct);
+            File.Move(tmp, dest, overwrite: true);
+            packs.Add(pack.Name);
+        }
 
         int reposAdded = 0, reposWaiting = 0;
         var repos = manifest.MihonRepositories
@@ -153,8 +185,103 @@ public sealed class SourcesTransferService(
             reposWaiting = (await bridge.GetPendingRepositoriesAsync(ct)).Count;
         }
 
-        log.LogInformation("[Sources] imported a sources file: {Feeds} feed(s), {Packs} pack(s), {Repos} repositories",
-            added, packs.Count, repos.Count);
-        return new(added, already, refused, groupsSet, groupsKept, packs, reposAdded, reposWaiting);
+        foreach (var s in input.Skipped) log.LogInformation("[Sources] left out: {Why}", s);
+        log.LogInformation("[Sources] imported: {Feeds} feed(s) added, {Groups} group(s) added, packs [{Packs}], {Repos} repositories",
+            added, groupsAdded.Count, string.Join(", ", packs), repos.Count);
+        return new(added, already, refused, groupsAdded, packs, input.Skipped, reposAdded, reposWaiting);
+    }
+
+    private static async Task<IReadOnlyList<string>> AddGroupsAsync(AppDbContext db, string? incoming, CancellationToken ct)
+    {
+        var groups = SplitGroups(incoming);
+        if (groups.Count == 0) return [];
+        var row = await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == GroupsKey, ct);
+        var mine = SplitGroups(row?.Value).ToList();
+        var add = groups.Where(g => !mine.Contains(g, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (add.Count == 0) return [];
+        var value = string.Join(",", mine.Concat(add));
+        if (row == null) db.AppConfigs.Add(new AppConfig { Key = GroupsKey, Value = value });
+        else row.Value = value;
+        return add;
+    }
+
+    /// <summary>
+    /// The feeds and preferred groups the loaded packs suggest — added only when the user has no
+    /// feeds (resp. no groups) yet, so it never overrides their own choices. With no pack loaded it
+    /// does nothing, which keeps the public build from subscribing itself to anything.
+    /// </summary>
+    public async Task ApplyPackDefaultsAsync(IReleaseProviders releases, CancellationToken ct = default)
+    {
+        var feeds = releases.DefaultFeeds;
+        var groups = releases.DefaultPreferredGroups;
+        if (feeds.Count == 0 && string.IsNullOrWhiteSpace(groups)) return;
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (feeds.Count > 0 && !await db.RssFeeds.AnyAsync(ct))
+        {
+            foreach (var f in feeds)
+                db.RssFeeds.Add(new RssFeed
+                {
+                    Url = f.Url, FeedType = f.Type, PreferredQuality = f.PreferredQuality,
+                    IsEnabled = true, AddedAt = DateTime.UtcNow,
+                });
+            log.LogInformation("[Sources] seeded {Count} default feed(s) from loaded packs", feeds.Count);
+        }
+        var row = await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == GroupsKey, ct);
+        if (!string.IsNullOrWhiteSpace(groups) && string.IsNullOrWhiteSpace(row?.Value))
+        {
+            if (row == null) db.AppConfigs.Add(new AppConfig { Key = GroupsKey, Value = groups! });
+            else row.Value = groups!;
+            log.LogInformation("[Sources] preferred groups set from loaded packs");
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Run at startup, before packs load: whatever was put into the sources folder by hand in the
+    /// wrong shape is set right — the unpacked <c>packs/</c> folder, <c>sources.json</c>, a
+    /// <c>.scsources</c> or zip dropped in whole, and the "._" files macOS leaves on copied files.
+    /// What was taken in is moved to <see cref="ImportedFolder"/>, never deleted.
+    /// </summary>
+    public async Task<SourcesImportResult?> TidySourcesFolderAsync(CancellationToken ct = default)
+    {
+        if (!Directory.Exists(_packsDir)) return null;
+
+        foreach (var junk in Directory.EnumerateFileSystemEntries(_packsDir)
+                     .Where(p => SourcesInput.IsJunk(Path.GetFileName(p)) && Path.GetFileName(p) != "__MACOSX"))
+        {
+            try { if (File.Exists(junk)) File.Delete(junk); } catch { /* harmless if it stays */ }
+        }
+
+        var stray = Directory.EnumerateFileSystemEntries(_packsDir)
+            .Where(p =>
+            {
+                var name = Path.GetFileName(p);
+                if (name.Equals(ImportedFolder, StringComparison.OrdinalIgnoreCase) || name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) return false;
+                if (Directory.Exists(p)) return true;
+                return !name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) && !SourcesInput.IsJunk(name);
+            })
+            .ToList();
+        if (stray.Count == 0) return null;
+
+        var input = SourcesInput.Read(stray);
+        if (input.IsEmpty) return null;
+
+        log.LogInformation("[Sources] found sources put into the sources folder by hand: {Items}",
+            string.Join(", ", stray.Select(Path.GetFileName)));
+        var result = await ImportAsync(input, ct: ct);
+
+        var keep = Path.Combine(_packsDir, ImportedFolder, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        Directory.CreateDirectory(keep);
+        foreach (var item in stray)
+        {
+            try
+            {
+                var dest = Path.Combine(keep, Path.GetFileName(item));
+                if (Directory.Exists(item)) Directory.Move(item, dest); else File.Move(item, dest);
+            }
+            catch (Exception ex) { log.LogWarning("[Sources] couldn't move {Item} aside: {Message}", Path.GetFileName(item), ex.Message); }
+        }
+        return result;
     }
 }

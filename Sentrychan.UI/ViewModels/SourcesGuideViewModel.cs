@@ -40,18 +40,22 @@ public sealed class SourcesGuideViewModel : ViewModelBase
         _dbFactory = dbFactory;
         _owner = owner;
         var idle = this.WhenAnyValue(x => x.IsBusy, b => !b);
-        ImportFileCommand = ReactiveCommand.CreateFromTask(ImportFileAsync, idle);
-        CheckFeedCommand  = ReactiveCommand.CreateFromTask(async () => { await CheckFeedAsync(); }, idle);
-        AddFeedCommand    = ReactiveCommand.CreateFromTask(AddFeedAsync, idle);
-        ImportPackCommand = ReactiveCommand.CreateFromTask(ImportPackAsync, idle);
-        RestartCommand    = ReactiveCommand.Create(() => App.Restart?.Invoke());
+        ImportFileCommand   = ReactiveCommand.CreateFromTask(() => PickAndImportAsync(folder: false), idle);
+        ImportFolderCommand = ReactiveCommand.CreateFromTask(() => PickAndImportAsync(folder: true), idle);
+        CheckFeedCommand    = ReactiveCommand.CreateFromTask(async () => { await CheckFeedAsync(); }, idle);
+        AddFeedCommand      = ReactiveCommand.CreateFromTask(AddFeedAsync, idle);
     }
 
     public ReactiveCommand<Unit, Unit> ImportFileCommand { get; }
+    public ReactiveCommand<Unit, Unit> ImportFolderCommand { get; }
     public ReactiveCommand<Unit, Unit> CheckFeedCommand { get; }
     public ReactiveCommand<Unit, Unit> AddFeedCommand { get; }
-    public ReactiveCommand<Unit, Unit> ImportPackCommand { get; }
-    public ReactiveCommand<Unit, Unit> RestartCommand { get; }
+
+    /// <summary>The check shown under the import once something was imported.</summary>
+    public SourcesCheckViewModel Check { get; } = new();
+
+    private bool _showCheck;
+    public bool ShowCheck { get => _showCheck; private set => this.RaiseAndSetIfChanged(ref _showCheck, value); }
 
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; private set => this.RaiseAndSetIfChanged(ref _isBusy, value); }
@@ -88,14 +92,6 @@ public sealed class SourcesGuideViewModel : ViewModelBase
     public bool FeedGood => FeedOk == true;
     public bool FeedBad => FeedOk == false;
 
-    private string? _mangaMessage;
-    public string? MangaMessage { get => _mangaMessage; private set => this.RaiseAndSetIfChanged(ref _mangaMessage, value); }
-
-    private bool _needsRestart;
-    /// <summary>A source pack was installed; it loads on the next start.</summary>
-    public bool NeedsRestart { get => _needsRestart; private set => this.RaiseAndSetIfChanged(ref _needsRestart, value); }
-    public bool CanRestart => App.Restart != null;
-
     private bool _dontShowAgain;
     public bool DontShowAgain { get => _dontShowAgain; set => this.RaiseAndSetIfChanged(ref _dontShowAgain, value); }
 
@@ -127,21 +123,27 @@ public sealed class SourcesGuideViewModel : ViewModelBase
             mihon ? "Mihon extensions on" : "Mihon extensions off");
     }
 
-    // ── 1. A sources file ───────────────────────────────────────────
+    // ── 1. A sources file or pack ───────────────────────────────────
 
-    private async Task ImportFileAsync()
+    private async Task PickAndImportAsync(bool folder)
     {
         if (_owner() is not { } owner) return;
+        if (await SourcesFileActions.PickAsync(owner, folder) is { } paths) await ImportAsync(paths);
+    }
+
+    /// <summary>Imports picked or dropped paths, then checks — the check is how a user knows it took.</summary>
+    public async Task ImportAsync(System.Collections.Generic.IReadOnlyList<string> paths)
+    {
         IsBusy = true;
         try
         {
-            var result = await SourcesFileActions.ImportAsync(owner);
-            if (result == null) return;
+            var result = await SourcesFileActions.ImportPathsAsync(paths);
             FileMessage = result.Summary();
-            if (result.NeedsRestart) NeedsRestart = true;
         }
-        catch (Exception ex) { FileMessage = "That file couldn't be imported: " + ex.Message; }
+        catch (Exception ex) { FileMessage = "That couldn't be imported: " + ex.Message; }
         finally { IsBusy = false; await RefreshAsync(); }
+        ShowCheck = true;
+        await Check.RunAsync(live: true);
     }
 
     // ── 2. An RSS feed ──────────────────────────────────────────────
@@ -186,33 +188,6 @@ public sealed class SourcesGuideViewModel : ViewModelBase
         _feedUrl = string.Empty;
         this.RaisePropertyChanged(nameof(FeedUrl));
         FeedMessage = check.Message + " Added — monitoring checks it from now on, and you can add more.";
-        await RefreshAsync();
-    }
-
-    // ── 3. Manga: a source pack ─────────────────────────────────────
-
-    private async Task ImportPackAsync()
-    {
-        if (_owner() is not { } owner) return;
-        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Import a source pack",
-            AllowMultiple = true,
-            FileTypeFilter = [new FilePickerFileType("Source pack (*.dll)") { Patterns = ["*.dll"] }],
-        });
-        if (files.Count == 0) return;
-        try
-        {
-            System.IO.Directory.CreateDirectory(AppPaths.Sources);
-            foreach (var f in files)
-            {
-                var src = f.Path.LocalPath;
-                System.IO.File.Copy(src, System.IO.Path.Combine(AppPaths.Sources, System.IO.Path.GetFileName(src)), overwrite: true);
-            }
-            MangaMessage = files.Count == 1 ? "Source pack installed." : $"{files.Count} source packs installed.";
-            NeedsRestart = true;
-        }
-        catch (Exception ex) { MangaMessage = "Couldn't install it: " + ex.Message; }
         await RefreshAsync();
     }
 

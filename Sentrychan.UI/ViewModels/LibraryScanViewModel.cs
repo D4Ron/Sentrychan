@@ -11,12 +11,14 @@ namespace Sentrychan.UI.ViewModels;
 /// <summary>A library series whose folder disappeared from disk.</summary>
 public class MissingFolderRowVm : ViewModelBase
 {
+    public int SeriesId { get; }
     public int MalId { get; }
     public string Title { get; }
     public string Detail { get; }
 
     public MissingFolderRowVm(SeriesScanResult result)
     {
+        SeriesId = result.SeriesId;
         MalId = result.MalId;
         Title = result.Title;
         Detail = $"Expected folder \"{result.ExpectedFolder}\" not found";
@@ -50,6 +52,7 @@ public class LibraryScanViewModel : ViewModelBase
 
     public ReactiveCommand<MissingFolderRowVm, Unit> RemoveSeriesCommand { get; }
     public ReactiveCommand<MissingFolderRowVm, Unit> KeepSeriesCommand { get; }
+    public ReactiveCommand<MissingFolderRowVm, Unit> RecreateFolderCommand { get; }
     public ReactiveCommand<UnknownFolderRowVm, Unit> AddFolderAsSeriesCommand { get; }
     public ReactiveCommand<UnknownFolderRowVm, Unit> DismissFolderCommand { get; }
 
@@ -80,6 +83,7 @@ public class LibraryScanViewModel : ViewModelBase
             MissingFolders.Remove(row);
             RaiseCounts();
         });
+        RecreateFolderCommand = ReactiveCommand.CreateFromTask<MissingFolderRowVm>(RecreateFolderAsync);
         AddFolderAsSeriesCommand = ReactiveCommand.CreateFromTask<UnknownFolderRowVm>(AddFolderAsSeriesAsync);
         DismissFolderCommand = ReactiveCommand.Create<UnknownFolderRowVm>(row =>
         {
@@ -109,6 +113,22 @@ public class LibraryScanViewModel : ViewModelBase
         catch (Exception ex)
         {
             _mainWindowVm.ShowToast("Remove failed", ex.Message);
+        }
+    }
+
+    private async Task RecreateFolderAsync(MissingFolderRowVm row)
+    {
+        try
+        {
+            if (App.Services?.GetService(typeof(ILibraryScanService)) is not ILibraryScanService scanner) return;
+            var folder = await scanner.RecreateFolderAsync(row.SeriesId);
+            _mainWindowVm.ShowToast("Folder created", folder);
+            MissingFolders.Remove(row);
+            RaiseCounts();
+        }
+        catch (Exception ex)
+        {
+            _mainWindowVm.ShowToast("Couldn't create the folder", ex.Message);
         }
     }
 

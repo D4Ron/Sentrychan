@@ -46,7 +46,7 @@
       <_BuildInfoFile>$(IntermediateOutputPath)BuildInfo.g.cs</_BuildInfoFile>
     </PropertyGroup>
     <WriteLinesToFile File="$(_BuildInfoFile)" Overwrite="true" WriteOnlyWhenDifferent="true"
-                      Lines="// &lt;auto-generated/&gt;;namespace Sentrychan.Core%3B;public static partial class BuildInfo;{;    public static string Flavor =&gt; &quot;$(Flavor)&quot;%3B;}" />
+                      Lines="// &lt;auto-generated/&gt;;namespace Sentrychan.Core%3B;public static partial class BuildInfo;{;    public static string Flavor =&gt; &quot;$(Flavor)&quot;%3B;    public static bool IsTestBuild =&gt; $(TestBuild)%3B;}" />
     <ItemGroup>
       <Compile Include="$(_BuildInfoFile)" />
       <FileWrites Include="$(_BuildInfoFile)" />

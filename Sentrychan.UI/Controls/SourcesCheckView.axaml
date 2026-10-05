@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sentrychan.UI.ViewModels"
+             x:Class="Sentrychan.UI.Controls.SourcesCheckView"
+             x:DataType="vm:SourcesCheckViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.mark">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Width" Value="16"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.mark.ok"><Setter Property="Foreground" Value="{DynamicResource StatusGreenBrush}"/></Style>
+        <Style Selector="TextBlock.mark.warn"><Setter Property="Foreground" Value="{DynamicResource StatusAmberBrush}"/></Style>
+        <Style Selector="TextBlock.mark.bad"><Setter Property="Foreground" Value="{DynamicResource StatusRedBrush}"/></Style>
+        <Style Selector="TextBlock.verdict.good"><Setter Property="Foreground" Value="{DynamicResource StatusGreenBrush}"/></Style>
+    </UserControl.Styles>
+
+    <StackPanel Spacing="8">
+        <TextBlock Text="{Binding ImportSummary}" TextWrapping="Wrap" FontSize="12.5"
+                   Foreground="{DynamicResource TextPrimaryBrush}"
+                   IsVisible="{Binding ImportSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <TextBlock Classes="verdict" Classes.good="{Binding AllGood}" Text="{Binding Verdict}"
+                       TextWrapping="Wrap" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="Test" Classes="ghost pill" Command="{Binding TestCommand}"
+                    ToolTip.Tip="Try every feed, the episode search and each manga source"/>
+        </Grid>
+        <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsRunning}" Height="3"/>
+        <ItemsControl ItemsSource="{Binding Rows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SourcesCheckRowVm">
+                    <Grid ColumnDefinitions="Auto,170,*" ColumnSpacing="8" Margin="0,3">
+                        <TextBlock Classes="mark" Classes.ok="{Binding IsOk}" Classes.warn="{Binding IsWarning}"
+                                   Classes.bad="{Binding IsProblem}" Text="{Binding Mark}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}"/>
+                        <SelectableTextBlock Grid.Column="2" Text="{Binding Detail}" FontSize="12.5" TextWrapping="Wrap"
+                                             Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Border IsVisible="{Binding NeedsRestart}" CornerRadius="8" Padding="14,10"
+                Background="{DynamicResource AccentSubtleBrush}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" FontSize="12.5"
+                           Text="A newer copy of a pack you already had is installed. Restart Sentrychan to use it."/>
+                <Button Grid.Column="1" Content="Restart now" Classes="accent pill"
+                        Command="{Binding RestartCommand}" IsVisible="{Binding CanRestart}"/>
+            </Grid>
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -45,8 +45,15 @@ public class LibraryScanService : ILibraryScanService
 
         var libraryPath = (await db.AppConfigs
             .FirstOrDefaultAsync(c => c.Key == "LibraryPath", ct))?.Value;
-        if (string.IsNullOrEmpty(libraryPath) || !Directory.Exists(libraryPath))
+        if (string.IsNullOrEmpty(libraryPath))
             return null;
+
+        // Deleted by hand: this used to report "library path not configured" and stop, and nothing
+        // made the folder again until a download happened to be filed.
+        if (!Library.LibraryFolder.Ensure(libraryPath, out var problem, out var created))
+            throw new IOException(problem);
+        var recreated = created ? libraryPath : null;
+        if (created) _logger.LogWarning("[LibraryScan] the library folder {Path} was missing — created it again", libraryPath);
 
         var allSeries = await db.Series.AsNoTracking().ToListAsync(ct);
 
@@ -150,7 +157,26 @@ public class LibraryScanService : ILibraryScanService
             results.Count(r => r.HasProgressAdvance),
             unknown.Count);
 
-        return new LibraryScanReport(results, unknown);
+        return new LibraryScanReport(results, unknown) { RecreatedLibraryFolder = recreated };
+    }
+
+    public async Task<string> RecreateFolderAsync(int seriesId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        string? Config(string key) => db.AppConfigs.AsNoTracking().FirstOrDefault(c => c.Key == key)?.Value;
+
+        var libraryPath = Config("LibraryPath");
+        if (string.IsNullOrWhiteSpace(libraryPath))
+            throw new InvalidOperationException("No anime folder is set (Settings → General).");
+        var series = await db.Series.AsNoTracking().FirstOrDefaultAsync(s => s.Id == seriesId, ct)
+                     ?? throw new InvalidOperationException("That series isn't in the library any more.");
+        var all = await db.Series.AsNoTracking().ToListAsync(ct);
+
+        var naming = Library.NamingTemplate.FromConfig(Config(Library.NamingTemplate.PresetKey), Config(Library.NamingTemplate.TemplateKey));
+        var folder = Path.Combine(libraryPath, Library.LibraryFiling.ShowFolder(naming, series, all));
+        Directory.CreateDirectory(folder);
+        _logger.LogInformation("[LibraryScan] recreated the folder for {Title}: {Folder}", Vault.Privacy.Name(series.Title), folder);
+        return folder;
     }
 
     public async Task<int> ApplyProgressAdvancesAsync(LibraryScanReport report, CancellationToken ct = default)

@@ -249,6 +249,15 @@ public class SettingsViewModel : ViewModelBase
                 await mvm.ShowTutorialAsync();
         });
 
+    public ReactiveCommand<Unit, Unit> ProblemReportCommand { get; } =
+        ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d
+                && d.MainWindow?.DataContext is MainWindowViewModel mvm)
+                await mvm.ShowProblemReportAsync();
+        });
+
     private static void OpenUrl(string url)
     {
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
@@ -399,12 +408,67 @@ public class SettingsViewModel : ViewModelBase
         nameof(StatusMessage), nameof(IsStatusError), nameof(IsDirty), nameof(QBitTestResult),
         nameof(MalImportResult), nameof(UpdateStatus), nameof(IsCheckingUpdate), nameof(UpdateAvailable),
         nameof(ConfirmingReset), nameof(ShowSaveBar), nameof(NamingExample), nameof(IsCustomNaming),
-        nameof(SelectedTab), nameof(SourcesFileMessage),
+        nameof(SelectedTab), nameof(SourcesFileMessage), nameof(ShowAdvanced), nameof(OpenAtLogin),
     ];
+
+    public const string ShowAdvancedKey = "ShowAdvancedSettings";
+
+    private bool _showAdvanced;
+    /// <summary>
+    /// Technical options (download engines, intervals, paths to other programs, the danger zone)
+    /// stay out of sight until asked for. Remembered at once — it's how the page looks, not a setting.
+    /// </summary>
+    public bool ShowAdvanced
+    {
+        get => _showAdvanced;
+        set
+        {
+            if (_showAdvanced == value) return;
+            this.RaiseAndSetIfChanged(ref _showAdvanced, value);
+            if (!_loading && _dbFactory != null) _ = SaveFlagAsync(ShowAdvancedKey, value);
+        }
+    }
+
+    /// <summary>macOS: "Open at login" acts at once — it's a file in LaunchAgents, not a stored setting.</summary>
+    public bool CanOpenAtLogin => Services.LoginItem.IsSupported;
+    public bool OpenAtLogin
+    {
+        get => Services.LoginItem.IsEnabled;
+        set
+        {
+            try { Services.LoginItem.Set(value); }
+            catch (Exception ex) { Fail("Couldn't change Open at login: " + ex.Message); }
+            this.RaisePropertyChanged();
+        }
+    }
+
+    public bool IsTestBuild => Sentrychan.Core.BuildInfo.IsTestBuild;
+
+    // Words and examples that fit the system the app runs on — a Mac user was shown "C:\Downloads"
+    // and "Windows notifications".
+    public string NotificationsLabel => OperatingSystem.IsWindows() ? "Windows notifications" : "System notifications";
+    public string NotificationsHint => OperatingSystem.IsWindows()
+        ? "On: important events pop up as Windows notifications. Off: they stay as quiet messages inside the app."
+        : "On: important events show up in the system's notifications. Off: they stay as quiet messages inside the app.";
+    public string DownloadFolderExample => OperatingSystem.IsWindows() ? @"C:\Users\you\Downloads" : "~/Downloads";
+    public string LibraryFolderExample => OperatingSystem.IsWindows() ? @"D:\Anime" : "~/Movies/Anime";
+    public string MangaFolderExample => OperatingSystem.IsWindows() ? @"D:\Manga" : "~/Documents/Manga";
+
+    private async Task SaveFlagAsync(string key, bool value)
+    {
+        try
+        {
+            await using var db = await _dbFactory!.CreateDbContextAsync();
+            await SetConfig(db, key, value ? "true" : "false", default);
+            await db.SaveChangesAsync();
+        }
+        catch { /* only a view preference */ }
+    }
 
     // Tab positions in SettingsView, for opening the page at one.
     public const int DownloadsTab = 2;
     public const int SourcesTab = 5;
+    public const int AboutTab = 8;
 
     private int _selectedTab;
     public int SelectedTab { get => _selectedTab; set => this.RaiseAndSetIfChanged(ref _selectedTab, value); }
@@ -413,24 +477,31 @@ public class SettingsViewModel : ViewModelBase
     public Func<Task>? OpenSourcesGuide { get; set; }
     public ReactiveCommand<Unit, Unit> OpenSourcesGuideCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ImportSourcesFileCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ImportSourcesFolderCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ExportSourcesCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CheckSourcesCommand { get; private set; } = null!;
+
+    /// <summary>Imports picked paths and shows the result with the sources check; wired by the main window.</summary>
+    public Func<System.Collections.Generic.IReadOnlyList<string>, Task>? ImportSources { get; set; }
+    /// <summary>Opens the sources check on its own; wired by the main window.</summary>
+    public Func<Task>? CheckSources { get; set; }
 
     private string? _sourcesFileMessage;
-    /// <summary>What the last sources-file import or export did. Acts at once, not on Save.</summary>
+    /// <summary>What the last sources-file export did. Acts at once, not on Save.</summary>
     public string? SourcesFileMessage { get => _sourcesFileMessage; private set => this.RaiseAndSetIfChanged(ref _sourcesFileMessage, value); }
 
-    private async Task ImportSourcesFileAsync()
+    private async Task ImportSourcesAsync(bool folder)
     {
-        if (_owner == null) return;
+        if (_owner == null || ImportSources == null) return;
         try
         {
-            var result = await Services.SourcesFileActions.ImportAsync(_owner);
-            if (result == null) return;
-            SourcesFileMessage = result.Summary();
+            if (await Services.SourcesFileActions.PickAsync(_owner, folder) is not { } paths) return;
+            SourcesFileMessage = null;
+            await ImportSources(paths);
             RssFeedsVm?.LoadFeedsCommand.Execute().Subscribe();
             if (MihonExtensions != null) await MihonExtensions.LoadAsync();
         }
-        catch (Exception ex) { SourcesFileMessage = "That file couldn't be imported: " + ex.Message; }
+        catch (Exception ex) { SourcesFileMessage = "That couldn't be imported: " + ex.Message; }
     }
 
     private async Task ExportSourcesAsync()
@@ -492,8 +563,10 @@ public class SettingsViewModel : ViewModelBase
         });
         OpenAccountCommand = ReactiveCommand.CreateFromTask(async () => { if (OpenAccount != null) await OpenAccount(); });
         OpenSourcesGuideCommand = ReactiveCommand.CreateFromTask(async () => { if (OpenSourcesGuide != null) await OpenSourcesGuide(); });
-        ImportSourcesFileCommand = ReactiveCommand.CreateFromTask(ImportSourcesFileAsync);
+        ImportSourcesFileCommand = ReactiveCommand.CreateFromTask(() => ImportSourcesAsync(folder: false));
+        ImportSourcesFolderCommand = ReactiveCommand.CreateFromTask(() => ImportSourcesAsync(folder: true));
         ExportSourcesCommand = ReactiveCommand.CreateFromTask(ExportSourcesAsync);
+        CheckSourcesCommand = ReactiveCommand.CreateFromTask(async () => { if (CheckSources != null) await CheckSources(); });
         CancelResetCommand = ReactiveCommand.Create(() => { ConfirmingReset = false; });
     }
 
@@ -515,6 +588,7 @@ public class SettingsViewModel : ViewModelBase
     {
         await using var db = await _dbFactory!.CreateDbContextAsync(ct);
 
+        ShowAdvanced = await GetConfig(db, ShowAdvancedKey, "false", ct) == "true";
         FdmPath = await GetConfig(db, "FdmPath", @"C:\Program Files\Free Download Manager\fdm.exe", ct);
         DownloadPath = await GetConfig(db, "DownloadPath", "", ct);
         LibraryPath = await GetConfig(db, "LibraryPath", "", ct);

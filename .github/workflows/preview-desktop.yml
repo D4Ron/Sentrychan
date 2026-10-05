@@ -83,10 +83,12 @@ jobs:
           base=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Sentrychan.App/Sentrychan.App.csproj | head -1)
           echo "VERSION=${base}-preview.${{ github.run_number }}" >> "$GITHUB_ENV"
 
+      # Test builds (-p:TestBuild=true): these go to testers, so they log in detail, check themselves on
+      # their first start and can save a problem report to send back.
       - name: Publish
         run: >
           dotnet publish Sentrychan.App/Sentrychan.App.csproj -c Release -r ${{ matrix.rid }}
-          --self-contained true -p:Flavor=Preview -p:IncludeSources=false -o publish
+          --self-contained true -p:Flavor=Preview -p:IncludeSources=false -p:TestBuild=true -o publish
 
       - name: AppImage tools
         if: startsWith(matrix.rid, 'linux')
@@ -129,6 +131,35 @@ jobs:
           vpk pack --packId "$PACK_ID" --packVersion "$VERSION" --packDir "$APP_BUNDLE"
           --mainExe Sentrychan.App --packTitle "$PACK_TITLE" --packAuthors D4Ron
           --icon Sentrychan.icns --channel ${{ matrix.channel }} --runtime ${{ matrix.rid }} --outputDir releases
+          --instConclusion packaging/macos/conclusion.html
+
+      # Velopack's installer ends by opening the app on its own (its postinstall script), which a
+      # tester found alarming — an installer shouldn't start what it installed. The script keeps its
+      # clean-up and loses the launch; the conclusion page tells the user how to open it instead.
+      - name: Installer doesn't open the app (macOS)
+        if: startsWith(matrix.rid, 'osx')
+        run: |
+          set -euo pipefail
+          pkg=$(find releases -maxdepth 1 -name '*-Setup.pkg' | head -1)
+          work=$(mktemp -d)
+          pkgutil --expand "$pkg" "$work/x"
+          scripts=$(find "$work/x" -name Scripts -type f | head -1)
+          mkdir "$work/s"
+          (cd "$work/s" && gunzip -c "$scripts" | cpio -i --quiet)
+          sed -i '' '/ open /d' "$work/s/postinstall"
+          echo "--- postinstall now:"; cat "$work/s/postinstall"
+          if grep -q ' open ' "$work/s/postinstall"; then echo "launch still there"; exit 1; fi
+          (cd "$work/s" && find . | cpio -o --format odc --quiet | gzip -c > "$scripts")
+          rm "$pkg"
+          pkgutil --flatten "$work/x" "$pkg"
+          # Check the rebuilt package, then really install it and make sure nothing started.
+          pkgutil --expand "$pkg" "$work/check"
+          (cd "$work" && mkdir c && cd c && gunzip -c "$(find "$work/check" -name Scripts -type f | head -1)" | cpio -i --quiet && ! grep -q ' open ' postinstall)
+          sudo installer -pkg "$pkg" -target /
+          test -d "/Applications/$PACK_TITLE.app"
+          sleep 10
+          if pgrep -f "$PACK_TITLE.app/Contents/MacOS" >/dev/null; then echo "the app started after install"; exit 1; fi
+          echo "Installed to /Applications/$PACK_TITLE.app and nothing was started."
 
       - uses: actions/upload-artifact@v4
         with:

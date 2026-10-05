@@ -4,7 +4,7 @@
         x:Class="Sentrychan.UI.Views.Dialogs.LibraryScanDialog"
         x:DataType="vm:LibraryScanViewModel"
         Title="Library Scan Results"
-        Width="620" Height="520"
+        Width="720" Height="520"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource AppBackgroundBrush}">
 
@@ -26,19 +26,24 @@
                             <DataTemplate x:DataType="vm:MissingFolderRowVm">
                                 <Border Background="{DynamicResource CardBackgroundBrush}"
                                         CornerRadius="8" Padding="14,10" Margin="0,0,0,6">
-                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                                         <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Title}" FontSize="13.5" FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding Detail}" FontSize="11"
+                                            <TextBlock Text="{Binding Detail}" FontSize="11" TextWrapping="Wrap"
                                                        Foreground="{DynamicResource TextTertiaryBrush}"/>
                                         </StackPanel>
-                                        <Button Grid.Column="1" Content="Keep tracking" Classes="ghost"
+                                        <Button Grid.Column="1" Content="Recreate folder" Classes="accent"
+                                                FontSize="12" Padding="10,5" Margin="8,0,6,0"
+                                                ToolTip.Tip="Make the series' folder again, named the way new downloads are filed"
+                                                Command="{Binding $parent[Window].((vm:LibraryScanViewModel)DataContext).RecreateFolderCommand}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Grid.Column="2" Content="Keep tracking" Classes="ghost"
                                                 FontSize="12" Padding="10,5" Margin="0,0,6,0"
                                                 ToolTip.Tip="I deleted the files on purpose — keep monitoring this series"
                                                 Command="{Binding $parent[Window].((vm:LibraryScanViewModel)DataContext).KeepSeriesCommand}"
                                                 CommandParameter="{Binding}"/>
-                                        <Button Grid.Column="2" Content="Remove from library"
+                                        <Button Grid.Column="3" Content="Remove from library"
                                                 Background="Transparent" BorderThickness="1" CornerRadius="4"
                                                 BorderBrush="{DynamicResource StatusRedBrush}"
                                                 Foreground="{DynamicResource StatusRedBrush}"

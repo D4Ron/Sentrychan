@@ -229,11 +229,11 @@ public class FileMovementPipeline : IFileMovementPipeline
         AppDbContext db,
         CancellationToken ct)
     {
-        var libraryPath = await GetConfigValueAsync(db, "LibraryPath", ct);
+        var libraryPath = await LibraryPathAsync(db, ct);
         string finalPath = videoFiles[0];
         string folderName = "Unknown";
 
-        if (!string.IsNullOrEmpty(libraryPath) && Directory.Exists(libraryPath))
+        if (libraryPath != null)
         {
             var sourceName = !string.IsNullOrEmpty(job.RssTitle)
                 ? job.RssTitle
@@ -266,7 +266,7 @@ public class FileMovementPipeline : IFileMovementPipeline
         else
         {
             _logger.LogWarning(
-                "[Pipeline] Library path not configured — standalone download stays at {Path}", finalPath);
+                "[Pipeline] No anime folder to use — standalone download stays at {Path}", finalPath);
         }
 
         job.Status        = JobStatus.Completed;
@@ -310,12 +310,10 @@ public class FileMovementPipeline : IFileMovementPipeline
         AppDbContext db,
         CancellationToken ct)
     {
-        var libraryPath = await GetConfigValueAsync(db, "LibraryPath", ct);
-        if (string.IsNullOrEmpty(libraryPath) || !Directory.Exists(libraryPath))
+        var libraryPath = await LibraryPathAsync(db, ct);
+        if (libraryPath == null)
         {
-            _logger.LogWarning(
-                "[Pipeline] Library path not configured — batch stays at source. " +
-                "Configure Library Path in Settings.");
+            _logger.LogWarning("[Pipeline] No anime folder to use — batch stays at source.");
             await CompleteJobAsync(job, series, videoFiles[0], db, ct);
             return;
         }
@@ -630,12 +628,10 @@ public class FileMovementPipeline : IFileMovementPipeline
         }
 
         // Build destination: /Anime/{SeriesTitle}/Season {N}/{filename}
-        var libraryPath = await GetConfigValueAsync(db, "LibraryPath", ct);
-        if (string.IsNullOrEmpty(libraryPath) || !Directory.Exists(libraryPath))
+        var libraryPath = await LibraryPathAsync(db, ct);
+        if (libraryPath == null)
         {
-            _logger.LogWarning(
-                "[Pipeline] Library path not configured or not found. " +
-                "File stays at {Source}. Configure Library Path in Settings.", sourcePath);
+            _logger.LogWarning("[Pipeline] No anime folder to use — file stays at {Source}.", sourcePath);
             // Still mark the job complete — the file is downloaded, just not moved
             await CompleteJobAsync(job, series, sourcePath, db, ct);
             return;
@@ -762,8 +758,8 @@ public class FileMovementPipeline : IFileMovementPipeline
         AppDbContext db,
         CancellationToken ct)
     {
-        var libraryPath = await GetConfigValueAsync(db, "LibraryPath", ct);
-        if (string.IsNullOrEmpty(libraryPath) || !Directory.Exists(libraryPath))
+        var libraryPath = await LibraryPathAsync(db, ct);
+        if (libraryPath == null)
         {
             await MoveToUnmatchedAsync(filePath, ct);
             return;
@@ -809,8 +805,8 @@ public class FileMovementPipeline : IFileMovementPipeline
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
-            var libraryPath = await GetConfigValueAsync(db, "LibraryPath", ct);
-            if (string.IsNullOrEmpty(libraryPath)) return;
+            var libraryPath = await LibraryPathAsync(db, ct);
+            if (libraryPath == null) return;
 
             var unmatchedDir = Path.Combine(libraryPath, "_Unmatched");
             Directory.CreateDirectory(unmatchedDir);
@@ -955,6 +951,22 @@ public class FileMovementPipeline : IFileMovementPipeline
 
     private static string SanitizeFolderName(string name) =>
         InvalidFolderCharsPattern.Replace(name, string.Empty).Trim();
+
+    /// <summary>
+    /// The anime folder to file into — created again if the user deleted it — or null (logged with
+    /// the reason) when there's none to use, and the file stays where it is.
+    /// </summary>
+    private async Task<string?> LibraryPathAsync(AppDbContext db, CancellationToken ct)
+    {
+        var path = await GetConfigValueAsync(db, "LibraryPath", ct);
+        if (Library.LibraryFolder.Ensure(path, out var problem, out var created))
+        {
+            if (created) _logger.LogWarning("[Pipeline] the anime folder {Path} was missing — created it again", path);
+            return path;
+        }
+        _logger.LogWarning("[Pipeline] can't file into the anime folder: {Problem}", problem);
+        return null;
+    }
 
     private static async Task<string> GetConfigValueAsync(
         AppDbContext db, string key, CancellationToken ct)

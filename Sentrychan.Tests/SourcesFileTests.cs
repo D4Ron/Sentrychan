@@ -158,9 +158,16 @@ public sealed class SourcesFileTests : IDisposable
             factory, bridge, server);
     }
 
+    /// <summary>A stand-in source pack: any .NET library built against Sentrychan.Core passes the check — this one is.</summary>
+    private string RealPack(string name = "Example.Sources.dll")
+    {
+        File.Copy(typeof(SourcesFileTests).Assembly.Location, P(name), overwrite: true);
+        return P(name);
+    }
+
     private string SampleFile()
     {
-        File.WriteAllText(P("Example.Sources.dll"), "pack");
+        RealPack();
         SourcesFile.Write(P("in.scsources"), new SourcesManifest
         {
             Feeds =
@@ -192,8 +199,8 @@ public sealed class SourcesFileTests : IDisposable
         Assert.Equal(0, result.FeedsAdded);
         Assert.Equal(1, result.FeedsAlreadyThere);
         Assert.Equal(2, result.FeedsRefused.Count);
-        Assert.True(result.GroupsKept);
-        Assert.False(result.GroupsSet);
+        // Groups merge: the file's go after the user's own, which keep their order.
+        Assert.Equal(["GroupA"], result.GroupsAdded);
         Assert.Equal(["Example.Sources.dll"], result.PacksInstalled);
         Assert.True(File.Exists(Path.Combine(P("installed-packs"), "Example.Sources.dll")));
         // The bridge is off: the repository waits for it.
@@ -202,10 +209,10 @@ public sealed class SourcesFileTests : IDisposable
         Assert.Equal(["https://example.test/other/index.min.json"], await bridge.GetPendingRepositoriesAsync());
         await using (var db = factory.CreateDbContext())
         {
-            Assert.Equal("MyGroup", (await db.AppConfigs.SingleAsync(c => c.Key == SourcesTransferService.GroupsKey)).Value);
+            Assert.Equal("MyGroup,GroupA", (await db.AppConfigs.SingleAsync(c => c.Key == SourcesTransferService.GroupsKey)).Value);
             Assert.Single(db.RssFeeds);
         }
-        Assert.Contains("restart", result.Summary());
+        Assert.Contains("installed and ready", result.Summary());
     }
 
     [Fact]
@@ -220,7 +227,7 @@ public sealed class SourcesFileTests : IDisposable
         var result = await service.ImportAsync(SampleFile());
 
         Assert.Equal(2, result.FeedsAdded);
-        Assert.True(result.GroupsSet);
+        Assert.Equal(["GroupA"], result.GroupsAdded);
         Assert.Equal(1, result.ReposAdded);
         Assert.Equal(0, result.ReposWaiting);
         Assert.Equal("https://example.test/other/index.min.json",
@@ -236,7 +243,109 @@ public sealed class SourcesFileTests : IDisposable
         // A second import of the same file changes nothing.
         var again = await service.ImportAsync(SampleFile());
         Assert.Equal(0, again.FeedsAdded);
-        Assert.False(again.GroupsSet);
-        Assert.False(again.GroupsKept);
+        Assert.Empty(again.GroupsAdded);
+    }
+
+    // ── Whatever shape the sources arrive in ────────────────────────
+
+    /// <summary>What a Mac leaves after a double-click on the file: a folder, plus "._" shadow files.</summary>
+    private string UnpackedFolder()
+    {
+        var root = Directory.CreateDirectory(P("My sources")).FullName;
+        File.WriteAllText(Path.Combine(root, "sources.json"),
+            """{ "feeds": [ { "url": "https://example.test/rss/a" } ], "preferredReleaseGroups": "GroupA,GroupB" }""");
+        Directory.CreateDirectory(Path.Combine(root, "packs"));
+        File.Copy(RealPack(), Path.Combine(root, "packs", "Example.Sources.dll"));
+        File.WriteAllText(Path.Combine(root, "packs", "._Example.Sources.dll"), "AppleDouble");
+        Directory.CreateDirectory(Path.Combine(root, "__MACOSX"));
+        File.WriteAllText(Path.Combine(root, "__MACOSX", "._sources.json"), "AppleDouble");
+        return root;
+    }
+
+    [Fact]
+    public void The_unpacked_folder_reads_like_the_file()
+    {
+        var input = SourcesInput.Read(UnpackedFolder());
+        Assert.True(input.FoundManifest);
+        Assert.Equal("https://example.test/rss/a", Assert.Single(input.Manifest.Feeds).Url);
+        Assert.Equal("Example.Sources.dll", Assert.Single(input.Packs).Name);
+        Assert.Empty(input.Skipped);
+    }
+
+    [Fact]
+    public void A_renamed_or_re_zipped_file_and_a_bare_pack_are_read()
+    {
+        // macOS "Compress" puts everything under the folder's name, and adds __MACOSX.
+        var folder = UnpackedFolder();
+        ZipFile.CreateFromDirectory(folder, P("again.zip"), CompressionLevel.Fastest, includeBaseDirectory: true);
+        var zipped = SourcesInput.Read(P("again.zip"));
+        Assert.True(zipped.FoundManifest);
+        Assert.Equal("Example.Sources.dll", Assert.Single(zipped.Packs).Name);
+
+        var bare = SourcesInput.Read(RealPack("Other.Sources.dll"));
+        Assert.False(bare.FoundManifest);
+        Assert.Equal("Other.Sources.dll", Assert.Single(bare.Packs).Name);
+    }
+
+    [Fact]
+    public void A_library_that_isnt_a_pack_is_refused_with_a_reason()
+    {
+        File.WriteAllText(P("Fake.dll"), "not a library at all");
+        File.Copy(typeof(object).Assembly.Location, P("System.Private.CoreLib.dll"));
+        var input = SourcesInput.Read([P("Fake.dll"), P("System.Private.CoreLib.dll")]);
+        Assert.Empty(input.Packs);
+        Assert.Contains(input.Skipped, s => s.StartsWith("Fake.dll") && s.Contains("not a .NET library"));
+        Assert.Contains(input.Skipped, s => s.StartsWith("System.Private.CoreLib.dll") && s.Contains("not a Sentrychan source pack"));
+    }
+
+    [Fact]
+    public async Task Importing_the_unpacked_folder_installs_the_pack_and_merges_groups()
+    {
+        var (service, factory, bridge, _) = Transfer(bridgeOn: false);
+        using var _b = bridge;
+        var result = await service.ImportAsync([UnpackedFolder()]);
+        Assert.Equal(1, result.FeedsAdded);
+        Assert.Equal(["GroupA", "GroupB"], result.GroupsAdded);
+        Assert.Equal(["Example.Sources.dll"], result.PacksInstalled);
+        Assert.Equal(["Example.Sources.dll"], Directory.GetFiles(P("installed-packs")).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task Sources_put_into_the_sources_folder_by_hand_are_taken_in_at_startup()
+    {
+        var (service, factory, bridge, _) = Transfer(bridgeOn: false);
+        using var _b = bridge;
+        // What a tester did: copied the unpacked folder's contents into the sources folder.
+        var packs = Directory.CreateDirectory(P("installed-packs")).FullName;
+        var unpacked = UnpackedFolder();
+        File.Copy(Path.Combine(unpacked, "sources.json"), Path.Combine(packs, "sources.json"));
+        Directory.Move(Path.Combine(unpacked, "packs"), Path.Combine(packs, "packs"));
+
+        var result = await service.TidySourcesFolderAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result!.FeedsAdded);
+        Assert.True(File.Exists(Path.Combine(packs, "Example.Sources.dll")));
+        Assert.False(File.Exists(Path.Combine(packs, "sources.json")));
+        Assert.False(Directory.Exists(Path.Combine(packs, "packs")));
+        Assert.Single(Directory.GetDirectories(Path.Combine(packs, SourcesTransferService.ImportedFolder)));
+        // Nothing left to do the next time.
+        Assert.Null(await service.TidySourcesFolderAsync());
+    }
+
+    // ── The library folder ──────────────────────────────────────────
+
+    [Fact]
+    public void A_deleted_library_folder_is_made_again_but_not_on_a_missing_drive()
+    {
+        var library = P("Anime");
+        Assert.True(Sentrychan.Core.Library.LibraryFolder.Ensure(library, out _, out var created));
+        Assert.True(created && Directory.Exists(library));
+        Assert.True(Sentrychan.Core.Library.LibraryFolder.Ensure(library, out _, out created));
+        Assert.False(created);
+
+        Assert.False(Sentrychan.Core.Library.LibraryFolder.Ensure(P(Path.Combine("gone", "Anime")), out var problem, out _));
+        Assert.Contains("drive connected", problem);
+        Assert.False(Directory.Exists(P("gone")));
     }
 }

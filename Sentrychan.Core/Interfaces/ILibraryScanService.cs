@@ -28,6 +28,9 @@ public record LibraryScanReport(
         Series.Where(s => s.HasProgressAdvance).ToList();
 
     public bool HasIssues => MissingFolders.Count > 0 || UnknownFolders.Count > 0;
+
+    /// <summary>The library folder itself was gone and the scan created it again (its path), else null.</summary>
+    public string? RecreatedLibraryFolder { get; init; }
 }
 
 /// <summary>
@@ -41,10 +44,17 @@ public record LibraryScanReport(
 public interface ILibraryScanService
 {
     /// <summary>
-    /// Walk the library folder and diff it against the series DB.
-    /// Returns null when the library path isn't configured.
+    /// Walk the library folder and diff it against the series DB. Returns null when the library
+    /// path isn't configured. A configured library folder that was deleted is created again
+    /// (<see cref="LibraryScanReport.RecreatedLibraryFolder"/>); if that fails, the OS's reason is thrown.
     /// </summary>
     Task<LibraryScanReport?> ScanAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates a series' show folder again, named by the current naming template. Returns its
+    /// full path; throws with the reason when it can't (no library folder set, no permission…).
+    /// </summary>
+    Task<string> RecreateFolderAsync(int seriesId, CancellationToken ct = default);
 
     /// <summary>
     /// Persist the cursor advances found by a scan (LastEpisodeNumber := max

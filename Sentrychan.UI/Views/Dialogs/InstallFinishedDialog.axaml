@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sentrychan.UI.Views.Dialogs.InstallFinishedDialog"
+        Title="Welcome"
+        Width="500" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundBrush}">
+    <StackPanel Margin="26,22" Spacing="14">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+            <Border Width="48" Height="48" CornerRadius="24" ClipToBounds="True" Background="#0B0D14">
+                <Image Source="avares://Sentrychan.UI/Assets/logo.png" Stretch="UniformToFill"/>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                <TextBlock x:Name="Heading" FontSize="19" FontWeight="Bold"/>
+                <TextBlock Text="One choice before you start — you can change it any time in Settings."
+                           FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+        </Grid>
+        <CheckBox x:Name="OpenAtLogin">
+            <StackPanel Spacing="2">
+                <TextBlock x:Name="OpenAtLoginLabel" FontSize="13.5" FontWeight="SemiBold"/>
+                <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextTertiaryBrush}"
+                           Text="It starts in the background and keeps checking for new episodes. Off by default."/>
+            </StackPanel>
+        </CheckBox>
+        <Button Content="Continue" Classes="accent" HorizontalAlignment="Right" Click="OnContinue"/>
+    </StackPanel>
+</Window>

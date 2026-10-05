@@ -5,6 +5,9 @@
        Sentrychan.Core turns this into BuildInfo so every project reads the same answer. -->
   <PropertyGroup>
     <Flavor Condition="'$(Flavor)' == ''">Stable</Flavor>
+    <!-- A build handed to testers (`-p:TestBuild=true`): detailed logs, screenshots of each window,
+         a diagnosis on its first start and a "Send a problem report" button. BuildInfo.IsTestBuild. -->
+    <TestBuild Condition="'$(TestBuild)' != 'true'">false</TestBuild>
   </PropertyGroup>
 
   <Target Name="ValidateFlavor" BeforeTargets="BeforeBuild"

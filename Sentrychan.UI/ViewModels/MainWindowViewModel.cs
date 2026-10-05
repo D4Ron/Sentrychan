@@ -138,7 +138,7 @@ public class MainWindowViewModel : ViewModelBase,
         {
             this.RaiseAndSetIfChanged(ref _isSidebarHidden, value);
             this.RaisePropertyChanged(nameof(SidebarWidth));
-            this.RaisePropertyChanged(nameof(ShowSidebarReveal));
+            this.RaisePropertyChanged(nameof(SidebarToggleTip));
         }
     }
 
@@ -146,7 +146,7 @@ public class MainWindowViewModel : ViewModelBase,
     public double SidebarWidth =>
         IsSidebarLayout && !IsSidebarHidden ? 214 : 0;
 
-    public bool ShowSidebarReveal => IsSidebarLayout && IsSidebarHidden;
+    public string SidebarToggleTip => IsSidebarHidden ? "Show sidebar" : "Hide sidebar";
 
     public string[] LayoutModes { get; } = ["Sidebar", "Top Bar"];
 
@@ -160,7 +160,6 @@ public class MainWindowViewModel : ViewModelBase,
             this.RaisePropertyChanged(nameof(IsSidebarLayout));
             this.RaisePropertyChanged(nameof(IsTopBarLayout));
             this.RaisePropertyChanged(nameof(SidebarWidth));
-            this.RaisePropertyChanged(nameof(ShowSidebarReveal));
         }
     }
 
@@ -1392,12 +1391,22 @@ public class MainWindowViewModel : ViewModelBase,
 
         if (!silent) ShowToast("Library scan", "Scanning your anime folder…");
 
-        var report = await scanner.ScanAsync();
+        Sentrychan.Core.Interfaces.LibraryScanReport? report;
+        try { report = await scanner.ScanAsync(); }
+        catch (Exception ex)
+        {
+            // The anime folder is set but gone, and it can't be made again (no permission, a drive
+            // that isn't connected…): say so, rather than "not configured".
+            ShowToast("Anime folder missing", "It couldn't be created again: " + ex.Message);
+            return;
+        }
         if (report == null)
         {
             if (!silent) ShowToast("Library scan", "Library path not configured (Settings → General).");
             return;
         }
+        if (report.RecreatedLibraryFolder is { } recreated)
+            ShowToast("Anime folder recreated", $"It was missing, so it was created again: {recreated}");
 
         int advanced = await scanner.ApplyProgressAdvancesAsync(report);
         if (advanced > 0)
@@ -1463,6 +1472,8 @@ public class MainWindowViewModel : ViewModelBase,
             {
                 OpenAccount = OpenAccountDialogAsync,
                 OpenSourcesGuide = ShowSourcesGuideAsync,
+                ImportSources = ImportSourcesAsync,
+                CheckSources = () => ShowSourcesCheckAsync(null, live: false),
             };
             // Appearance settings that live on the main window follow a save.
             vm.Saved += () =>
@@ -1501,10 +1512,77 @@ public class MainWindowViewModel : ViewModelBase,
         await LoadSeriesAsync();
         await LoadAppearanceAsync();
         if (await MaybeOfferStableCopyAsync()) return; // restarting into the copied library
+        await MaybeAskStartupOptionsAsync();
         await CheckFirstRunAsync();
         await MaybeShowTutorialAsync();
         await MaybeShowSourcesGuideAsync();
         await SyncMonitoringStateAsync();
+        if (BuildInfo.IsTestBuild) _ = RunFirstStartDiagnosisAsync();
+    }
+
+    /// <summary>
+    /// macOS, once: whether to open at login — what an installer's last page would ask. Asked here
+    /// because the Mac installer no longer opens the app on its own.
+    /// </summary>
+    private async Task MaybeAskStartupOptionsAsync()
+    {
+        if (!Sentrychan.UI.Services.LoginItem.IsSupported || _dbContextFactory == null) return;
+        try
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            if (await db.AppConfigs.AnyAsync(c => c.Key == Sentrychan.UI.Services.LoginItem.AskedKey)) return;
+            if (GetMainWindow() is not { } owner) return;
+
+            var openAtLogin = await new Sentrychan.UI.Views.Dialogs.InstallFinishedDialog().ShowDialog<bool?>(owner);
+            if (openAtLogin == null) return; // closed without answering: ask next time
+            Sentrychan.UI.Services.LoginItem.Set(openAtLogin.Value);
+            db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = Sentrychan.UI.Services.LoginItem.AskedKey, Value = openAtLogin.Value ? "on" : "off" });
+            await db.SaveChangesAsync();
+            Console.WriteLine($"[Startup] open at login: {openAtLogin.Value}");
+        }
+        catch (Exception ex) { Console.WriteLine($"[Startup] open-at-login question failed: {ex}"); }
+    }
+
+    /// <summary>Test builds: the "Report a problem" pill in the top bar.</summary>
+    public bool IsTestBuild => BuildInfo.IsTestBuild;
+
+    public async Task ShowProblemReportAsync()
+    {
+        if (GetMainWindow() is { } owner) await new Sentrychan.UI.Views.Dialogs.ProblemReportDialog().ShowDialog(owner);
+    }
+
+    /// <summary>
+    /// Test builds check themselves once per version, a little after the first start (once the
+    /// title database and first-start dialogs have had their turn), and save the result for the
+    /// tester to send — so a report exists even if they never think to make one.
+    /// </summary>
+    private async Task RunFirstStartDiagnosisAsync()
+    {
+        if (_dbContextFactory == null) return;
+        try
+        {
+            var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "?";
+            await using (var db = await _dbContextFactory.CreateDbContextAsync())
+                if ((await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == Sentrychan.Core.Diagnostics.DiagnosticReport.FirstRunKey))?.Value == version)
+                    return;
+
+            await Task.Delay(TimeSpan.FromSeconds(20));
+            var file = await Sentrychan.UI.Services.Diagnostics.WriteReportAsync("first start of this test version");
+
+            await using (var db = await _dbContextFactory.CreateDbContextAsync())
+            {
+                var row = await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == Sentrychan.Core.Diagnostics.DiagnosticReport.FirstRunKey);
+                if (row == null) db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = Sentrychan.Core.Diagnostics.DiagnosticReport.FirstRunKey, Value = version });
+                else row.Value = version;
+                await db.SaveChangesAsync();
+            }
+
+            Console.WriteLine($"[Diagnosis] first-start report saved: {file}");
+            if (GetMainWindow() is { IsVisible: true } owner)
+                await Sentrychan.UI.Views.Dialogs.ProblemReportDialog.ForExisting(file).ShowDialog(owner);
+            else ShowToast("Report saved for the developer", file);
+        }
+        catch (Exception ex) { Console.WriteLine($"[Diagnosis] first-start report failed: {ex}"); }
     }
 
     /// <summary>
@@ -1537,7 +1615,35 @@ public class MainWindowViewModel : ViewModelBase,
         else if (IsShowingSettings) SettingsVm?.RssFeedsVm?.LoadFeedsCommand.Execute().Subscribe();
     }
 
-    private async Task OpenSettingsAtAsync(int tab)
+    /// <summary>
+    /// Imports sources from whatever was picked or dropped, then shows what happened together with
+    /// a live check — so a user can see at once whether the import really took.
+    /// </summary>
+    public async Task ImportSourcesAsync(IReadOnlyList<string> paths)
+    {
+        string summary;
+        try { summary = (await Sentrychan.UI.Services.SourcesFileActions.ImportPathsAsync(paths)).Summary(); }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Sources] import failed: {ex}");
+            summary = "That couldn't be imported: " + ex.Message;
+        }
+        if (IsShowingSettings) SettingsVm?.RssFeedsVm?.LoadFeedsCommand.Execute().Subscribe();
+        await ShowSourcesCheckAsync(summary, live: true);
+    }
+
+    /// <summary>The sources check, optionally under what an import just did.</summary>
+    public async Task ShowSourcesCheckAsync(string? importSummary, bool live)
+    {
+        var owner = GetMainWindow();
+        if (owner == null) return;
+        var vm = new SourcesCheckViewModel { ImportSummary = importSummary };
+        var dialog = new Sentrychan.UI.Views.Dialogs.SourcesCheckDialog { DataContext = vm };
+        _ = vm.RunAsync(live);
+        await dialog.ShowDialog(owner);
+    }
+
+    public async Task OpenSettingsAtAsync(int tab)
     {
         await OpenSettingsAsync();
         if (SettingsVm != null) SettingsVm.SelectedTab = tab;

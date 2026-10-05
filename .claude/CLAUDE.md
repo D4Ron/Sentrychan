@@ -209,6 +209,28 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-10-05 — **First Mac tester's feedback.**
+  - **All builds:** one sidebar toggle (a panel icon, not an arrow — the "‹" and the edge "⟩" were both on
+    screen and read like "Back"). Sources import takes any shape (`SourcesInput`: the .scsources, it renamed or
+    re-zipped, the folder a Mac unpacks it to, `sources.json`, a bare pack; skips `__MACOSX`/`._*`; a DLL must
+    reference Sentrychan.Core to count as a pack), by drag and drop too; packs load from bytes (file stays
+    unlocked) and a new one is live at once (`ISourcePackHost`); preferred groups merge instead of "only if unset";
+    a "Check my sources" (`SourcesChecker`, live tests of feeds, search, each manga source) follows every import;
+    things dropped into the sources folder by hand are taken in at startup (`TidySourcesFolderAsync`, kept in
+    `sources/.imported`). A deleted anime folder is created again (`LibraryFolder.Ensure`, not on a disconnected
+    drive) — the filer used to give up on every download — and the library scan offers "Recreate folder".
+    Settings: "Show advanced settings" hides engines, interval, other programs' paths, the danger zone; Startup
+    section (open at login, macOS); OS-fitting labels and examples. First-run folders are pre-filled. Windows are
+    kept inside the screen's work area (`WindowFit`). The macOS app menu says the app's name.
+  - **Test builds** (`-p:TestBuild=true`, the Mac/Linux CI packs): Debug logging, console lines in the log, every
+    window logged and screenshotted (`logs/screens`), a self-check report on the first start of each version and
+    "Report a problem" (`DiagnosticReport`: folders + write test, series vs folders, recent downloads, settings with
+    secrets removed, sources check, warnings, logs, screenshots → a zip on the Desktop).
+  - **Mac installer:** CI strips the app launch from Velopack's postinstall, adds a conclusion page, and installs the
+    package on the runner to check nothing starts. First start asks about open at login (LaunchAgent).
+  - **Needs checking on a Mac:** all of the above on the tester's machine; their first-start report should say why
+    the UI overlapped on first boot.
+
 - 2026-10-01 — **Sources file + "Add your sources" guide** (no phase; for public builds, which ship sourceless).
   - `Core/Sources`: `SourcesFile` (`.scsources` = zip of `sources.json` + `packs/*.dll`; a bare JSON manifest
     reads too; pack entries can only land in the sources folder), `SourcesTransferService` (export; import only
