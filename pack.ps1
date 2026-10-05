@@ -58,6 +58,8 @@ $publishArgs = @(
     "--self-contained", "true",
     "-p:IncludeSources=$IncludeSources",
     "-p:Flavor=$BuildFlavor",
+    # The package version, so the app (About, problem reports) can say which release it is.
+    "-p:Version=$Version",
     "-o", $PublishDir
 )
 & dotnet @publishArgs

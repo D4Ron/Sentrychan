@@ -88,7 +88,8 @@ jobs:
       - name: Publish
         run: >
           dotnet publish Sentrychan.App/Sentrychan.App.csproj -c Release -r ${{ matrix.rid }}
-          --self-contained true -p:Flavor=Preview -p:IncludeSources=false -p:TestBuild=true -o publish
+          --self-contained true -p:Flavor=Preview -p:IncludeSources=false -p:TestBuild=true
+          -p:Version=$VERSION -o publish
 
       - name: AppImage tools
         if: startsWith(matrix.rid, 'linux')

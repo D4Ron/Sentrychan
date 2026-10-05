@@ -225,9 +225,13 @@ public class SettingsViewModel : ViewModelBase
     }
 
     // ── About ──────────────────────────────────────────────────────
+    // The package's version ("1.0.5"), without the commit the SDK appends ("+1a2b3c…"). The
+    // assembly version is pinned at 1.0.0, so it said "v1.0.0" on every release.
     public string AppVersion =>
-        "v" + (System.Reflection.Assembly.GetEntryAssembly()?
-            .GetName().Version?.ToString(3) ?? "1.0.0");
+        "v" + ((System.Reflection.Assembly.GetEntryAssembly()?
+                   .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                   .FirstOrDefault() as System.Reflection.AssemblyInformationalVersionAttribute)?.InformationalVersion?.Split('+')[0]
+               ?? System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "1.0.0");
 
     public string LogFolderPath => AppPaths.Logs;
 

@@ -1561,7 +1561,11 @@ public class MainWindowViewModel : ViewModelBase,
         if (_dbContextFactory == null) return;
         try
         {
-            var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "?";
+            // The informational version is the package's ("1.0.0-preview.16"); the assembly version never changes.
+            var entry = System.Reflection.Assembly.GetEntryAssembly();
+            var version = (entry?.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                              .FirstOrDefault() as System.Reflection.AssemblyInformationalVersionAttribute)?.InformationalVersion
+                          ?? entry?.GetName().Version?.ToString() ?? "?";
             await using (var db = await _dbContextFactory.CreateDbContextAsync())
                 if ((await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == Sentrychan.Core.Diagnostics.DiagnosticReport.FirstRunKey))?.Value == version)
                     return;
