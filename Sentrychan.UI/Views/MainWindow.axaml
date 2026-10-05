@@ -505,15 +505,18 @@
                                        Margin="16,8,16,0" FontSize="12" TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextTertiaryBrush}"/>
 
-                            <ScrollViewer Grid.Row="1" Padding="10,0,10,12"
+                            <!-- The inset is the list's margin, not the ScrollViewer's padding: padding
+                                 there wasn't taken off the rows' width, so each row overflowed by it
+                                 and the air time was cut at the rail's edge. -->
+                            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                           IsVisible="{Binding HasAiringToday}">
-                                <ItemsControl ItemsSource="{Binding AiringTodayList}">
+                                <ItemsControl ItemsSource="{Binding AiringTodayList}" Margin="10,0,10,12">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:AiringTodayRowVm">
                                             <Button Command="{Binding OpenCommand}"
                                                     Background="Transparent" BorderThickness="0"
                                                     Padding="6" Margin="0,0,0,2" HorizontalAlignment="Stretch"
-                                                    HorizontalContentAlignment="Left" Cursor="Hand">
+                                                    HorizontalContentAlignment="Stretch" Cursor="Hand">
                                                 <Grid ColumnDefinitions="Auto,*,Auto" >
                                                     <Border Grid.Column="0" Width="34" Height="46" CornerRadius="4"
                                                             ClipToBounds="True" Margin="0,0,10,0"
@@ -545,20 +548,24 @@
                             </ScrollViewer>
                         </Grid>
                     </Border>
-                    </Grid>
 
-                    <!-- S3: Empty State Messaging -->
-                    <Panel IsVisible="{Binding IsShowingLibraryEmptyState}" IsHitTestVisible="False" VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <StackPanel Spacing="16" HorizontalAlignment="Center">
-                            <Image Source="avares://Sentrychan.UI/Assets/logo.png" Width="88" Height="88"
-                                   Opacity="0.35" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Your library is empty" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                            <TextBlock Text="Search and add your favorite anime to start monitoring episodes." 
-                                       FontSize="14" HorizontalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}" TextAlignment="Center"/>
-                            <Button Content="+ Add My First Series" Classes="accent" Command="{Binding AddSeriesCommand}" 
-                                    HorizontalAlignment="Center" Margin="0,12,0,0"/>
-                        </StackPanel>
-                    </Panel>
+                    <!-- Empty library. Inside the library column: centred on the whole page it ran
+                         under the Airing Today rail, and it was hit-test invisible, so its button
+                         couldn't be clicked. -->
+                    <StackPanel Grid.Column="0" IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsShowingLibraryEmptyState}"
+                                Spacing="16" Margin="24,0" MaxWidth="460"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Image Source="avares://Sentrychan.UI/Assets/logo.png" Width="88" Height="88"
+                               Opacity="0.35" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Your library is empty" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Text="Search and add your favorite anime to start monitoring episodes."
+                                   FontSize="14" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                        <Button Content="+ Add My First Series" Classes="accent" Command="{Binding AddSeriesCommand}"
+                                HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                    </StackPanel>
+                    </Grid>
 
                     <!-- Fix 3: Series Detail View -->
                     <views:SeriesDetailView IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsShowingSeriesDetail}" 
