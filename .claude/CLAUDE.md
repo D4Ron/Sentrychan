@@ -209,6 +209,20 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-10-06 — **Season families (step 2: library layout) + the show page.**
+  - `Library/SeasonLayout` places a series in its show's folder: parts ("Part 2", or a cour sharing the
+    chain key) **continue their season** (offset = the earlier FINISHED parts of that season; an unknown length →
+    the file is left alone and reported). An entry named apart from the show (`LibraryShows.ShowKey`: base title
+    cut at " - ") gets its own show folder counted from season 1 there, with the arc's first year. Per show
+    `Series.SeparateParts` (migration `AddSeparateParts`) = one season per entry; the show page's Library Files
+    shows the switch only when it changes anything. Filing, Tidy (`TidyPlanner.MatcherPlacement`), the locator
+    and the library scan all read the same placement; `SeasonLayout.Resolver` is set in Program.cs.
+  - Show page (`d3a51f8`): opens at once on long shows (episode grid from the DB first, one folder pass for all
+    episodes, details load in the background with a status line instead of a spinner over the page).
+  - Dry run on the real library: only straight-through names in an already-right season folder are renamed
+    (13–24 → S02E01–12); already-tidied shows don't move. **Not done:** a per-show episode offset override and
+    showing both numbers.
+
 - 2026-10-06 — **Season families (step 1 of 2: matching).** `SeasonFamilyService` links a show's seasons through MAL
   sequel/prequel relations (Jikan `/anime/{id}/relations`, paced, `season-families.json`, refreshed from the monitor
   in the background); without it, `TitleResolverService` walks the offline DB's `relatedAnime` links between entries
