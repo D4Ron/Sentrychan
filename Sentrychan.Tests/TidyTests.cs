@@ -109,6 +109,19 @@ public sealed class TidyPlannerTests : IDisposable
     }
 
     [Fact]
+    public void The_users_numbering_places_what_the_season_lengths_cannot()
+    {
+        var s1 = new TidySeries(1, 101, "Show", 2020, "TV", 1, null);
+        var s2 = new TidySeries(2, 102, "Show Season 2", 2022, "TV", 1, null) { NumberingOffset = 12 };
+        Touch("Show/Season 2/[Grp] Show S2 - 14.mkv");
+        Touch("Show/Season 2/[Grp] Show S2 - 03.mkv");
+
+        var items = Plan([s1, s2]).Items.OrderBy(i => i.Source).ToList();
+        Assert.Equal(TidyItemStatus.Unsure, items[0].Status); // "03": not a straight-through number, so the usual rules — still unsure
+        Assert.Equal(L("Show (2020)/Season 02/Show S02E02.mkv"), items[1].Destination);
+    }
+
+    [Fact]
     public void Files_without_an_episode_number_and_batches_are_unsure()
     {
         Touch("Frieren/Season 1/Frieren Opening.mkv");

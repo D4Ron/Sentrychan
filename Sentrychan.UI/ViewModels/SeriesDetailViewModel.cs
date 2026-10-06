@@ -141,7 +141,41 @@ public class SeriesDetailViewModel : ViewModelBase
         catch (Exception ex) { Console.WriteLine($"[SeriesDetail] release-group rule not saved: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// The number groups give this season's episode 1, as the user typed it (Series.EpisodeNumberOffset + 1);
+    /// empty works it out from the season chain.
+    /// </summary>
+    public string EpisodeOneNumber
+    {
+        get => Series.EpisodeNumberOffset is { } offset ? (offset + 1).ToString() : string.Empty;
+        set
+        {
+            int? offset = int.TryParse(value?.Trim().TrimStart('#'), out var n) && n >= 1 ? n - 1 : null;
+            if (Series.EpisodeNumberOffset == offset) return;
+            Series.EpisodeNumberOffset = offset;
+            this.RaisePropertyChanged();
+            _ = SaveNumberingAsync();
+        }
+    }
+
+    /// <summary>What an empty box means for this show.</summary>
+    public string EpisodeOneWatermark => _automaticFirst is { } first ? $"{first} (worked out)" : "1 (same as here)";
+
+    private async Task SaveNumberingAsync()
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await db.Series.Where(s => s.Id == Series.Id).ExecuteUpdateAsync(u => u.SetProperty(s => s.EpisodeNumberOffset, Series.EpisodeNumberOffset));
+            BuildFamilyLine();
+            await BuildEpisodeGridAsync(Series, DownloadHistory.ToList(), CancellationToken.None);
+        }
+        catch (Exception ex) { Console.WriteLine($"[SeriesDetail] numbering not saved: {ex.Message}"); }
+    }
+
     public int CurrentEpisode => Series.LastEpisodeNumber;
+    /// <summary>" (#18)": the current episode's number counted straight through, when the show has one.</summary>
+    public string CurrentAbsoluteText => _absoluteOffset is { } offset && Series.LastEpisodeNumber > 0 ? $" (#{offset + Series.LastEpisodeNumber})" : string.Empty;
     public string TotalEpisodesDisplay => Series?.TotalEpisodes?.ToString() ?? "?";
 
     private AnimeResult? _metadata;
@@ -325,25 +359,35 @@ public class SeriesDetailViewModel : ViewModelBase
 
     private void BuildFamilyLine()
     {
-        if (App.Services?.GetService(typeof(ITitleResolverService)) is not ITitleResolverService { IsReady: true } resolver) return;
-        var chain = resolver.GetSeasonChain(Series.MalId);
-        var mine = chain.ToList().FindIndex(a => a.MalId == Series.MalId);
-        if (chain.Count < 2 || mine < 0) return;
-
-        var seasons = Sentrychan.Core.Services.ReleaseMatcher.SeasonsOf(chain);
-        var line = $"Season {seasons[mine]} of {chain[0].CanonicalTitle}";
-        if (Sentrychan.Core.Services.ReleaseMatcher.AbsoluteForms(resolver, Series, 1) is [var first, ..])
+        string? line = null;
+        _automaticFirst = null;
+        if (App.Services?.GetService(typeof(ITitleResolverService)) is ITitleResolverService { IsReady: true } resolver)
         {
-            _absoluteOffset = first.Number - 1;
-            line += Series.TotalEpisodes is > 0 and var total
-                ? $" · #{first.Number}–{first.Number + total - 1} counted straight through"
-                : $" · from #{first.Number} counted straight through";
+            var chain = resolver.GetSeasonChain(Series.MalId);
+            var mine = chain.ToList().FindIndex(a => a.MalId == Series.MalId);
+            if (chain.Count >= 2 && mine >= 0)
+                line = $"Season {Sentrychan.Core.Services.ReleaseMatcher.SeasonsOf(chain)[mine]} of {chain[0].CanonicalTitle}";
+            // What the chain says, whatever the user has set — the box's watermark.
+            var automatic = new Series { MalId = Series.MalId, Title = Series.Title, TotalEpisodes = Series.TotalEpisodes };
+            if (Sentrychan.Core.Services.ReleaseMatcher.AbsoluteForms(resolver, automatic, 1) is [var first, ..])
+                _automaticFirst = first.Number;
+        }
+
+        _absoluteOffset = Series.EpisodeNumberOffset is { } user ? (user > 0 ? user : null) : _automaticFirst - 1;
+        if (_absoluteOffset is { } offset)
+        {
+            var numbers = Series.TotalEpisodes is > 0 and var total ? $"#{offset + 1}–{offset + total}" : $"from #{offset + 1}";
+            line = (line == null ? "" : line + " · ") + numbers + " counted straight through"
+                   + (Series.EpisodeNumberOffset != null ? " (your setting)" : "");
         }
         FamilyLine = line;
         this.RaisePropertyChanged(nameof(FamilyLine));
+        this.RaisePropertyChanged(nameof(EpisodeOneWatermark));
+        this.RaisePropertyChanged(nameof(CurrentAbsoluteText));
     }
 
     private int? _absoluteOffset;
+    private int? _automaticFirst;
 
     private async Task LoadMetadataAsync(CancellationToken ct)
     {
@@ -540,6 +584,7 @@ public class SeriesDetailViewModel : ViewModelBase
 
         Series.LastEpisodeNumber = newLastEpisode;
         this.RaisePropertyChanged(nameof(CurrentEpisode));
+        this.RaisePropertyChanged(nameof(CurrentAbsoluteText));
         
         await BuildEpisodeGridAsync(Series, DownloadHistory.ToList(), ct);
     }

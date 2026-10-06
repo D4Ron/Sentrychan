@@ -69,6 +69,9 @@ public sealed record TidySeries(
     /// <summary>Its place in the show's folder from the season family (SeasonLayout), when known.</summary>
     public SeasonPlacement? Placement { get; init; }
 
+    /// <summary>The user's word on how groups number this season (Series.EpisodeNumberOffset).</summary>
+    public int? NumberingOffset { get; init; }
+
     public int EffectiveSeason => Placement?.Season ?? Services.SeasonSearch.EffectiveSeason(Title, SeasonNumber);
 
     /// <summary>Where its episodes start in its season: 0 for a season's first part; null when not known.</summary>
@@ -78,5 +81,6 @@ public sealed record TidySeries(
         s.Id, s.MalId, s.Title, s.Year, s.MediaType, s.SeasonNumber, s.TotalEpisodes, s.TidyExcluded, s.KeepFileNames)
     {
         Placement = SeasonLayout.For(s),
+        NumberingOffset = s.EpisodeNumberOffset,
     };
 }

@@ -101,6 +101,7 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Currently at episode " FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBlock Text="{Binding CurrentEpisode}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}"/>
+                        <TextBlock Text="{Binding CurrentAbsoluteText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBlock Text=" of " FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBlock Text="{Binding TotalEpisodesDisplay}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBlock Text="  —  click a tile to set your progress, right-click to play" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
@@ -154,11 +155,16 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     
-                                    <TextBlock Text="{Binding EpisodeNumber}"
-                                               FontSize="10" FontWeight="Bold"
-                                               Foreground="White"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" />
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding EpisodeNumber}"
+                                                   FontSize="10" FontWeight="Bold"
+                                                   Foreground="White"
+                                                   HorizontalAlignment="Center" />
+                                        <!-- The number groups counting straight through give it. -->
+                                        <TextBlock Text="{Binding AbsoluteText}" FontSize="8" Foreground="White" Opacity="0.75"
+                                                   HorizontalAlignment="Center"
+                                                   IsVisible="{Binding AbsoluteText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
                                 </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -291,7 +297,7 @@
                 <StackPanel Spacing="16">
                     <TextBlock Text="Release Groups" FontSize="20" FontWeight="Bold"/>
                     <Border Background="{DynamicResource CardBackgroundBrush}" Padding="20" CornerRadius="8">
-                        <Grid ColumnDefinitions="*, *">
+                        <Grid ColumnDefinitions="*, *" RowDefinitions="Auto, Auto">
                             <StackPanel Grid.Column="0" Spacing="6">
                                 <TextBlock Text="New episodes" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <ComboBox ItemsSource="{Binding GroupModeOptions}" SelectedItem="{Binding GroupMode}" MinWidth="220"/>
@@ -302,6 +308,12 @@
                                 <TextBlock Text="Groups for this show" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <TextBox Text="{Binding SeriesGroups, UpdateSourceTrigger=LostFocus}" Watermark="Your preferred groups"/>
                                 <TextBlock Text="Leave empty to use your preferred groups. For a show only one other group subs, put that group here."
+                                           FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Spacing="6" Margin="0,16,0,0">
+                                <TextBlock Text="Groups release episode 1 as" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBox Text="{Binding EpisodeOneNumber, UpdateSourceTrigger=LostFocus}" Watermark="{Binding EpisodeOneWatermark}" Width="160" HorizontalAlignment="Left"/>
+                                <TextBlock Text="For a season that groups number straight through the show: if this season's first episode comes out as &quot;Show - 13&quot;, type 13. Type 1 if they start again at 1. Leave empty to work it out."
                                            FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Grid>

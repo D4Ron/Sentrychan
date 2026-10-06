@@ -128,7 +128,7 @@ public sealed class SeriesDetailSmokeTests : IDisposable
         await using (var db = factory.CreateDbContext())
         {
             db.Database.Migrate();
-            part2 = new Series { Title = SeasonLayoutTests.Mushoku[1].CanonicalTitle, MalId = 2 };
+            part2 = new Series { Title = SeasonLayoutTests.Mushoku[1].CanonicalTitle, MalId = 2, TotalEpisodes = 12 };
             plain = new Series { Title = "Plain Show", MalId = 99 };
             db.Series.AddRange(part2, plain);
             await db.SaveChangesAsync();
@@ -139,7 +139,7 @@ public sealed class SeriesDetailSmokeTests : IDisposable
         try
         {
             SeriesDetailViewModel Vm(Series s) => new(s, Stub<ISeriesService>.Create(), Stub<IAnimeApiService>.Create(), factory,
-                Stub<ITitleAliasService>.Create(), Stub<IRssMonitorService>.Create(), Stub<IVideoFileLocator>.Create());
+                Stub<ITitleAliasService>.Create(), Stub<IRssMonitorService>.Create(), new VideoFileLocator(new ConfigService(factory), new EpisodeNormalizer(), factory));
             Assert.False(Vm(plain).HasParts);
 
             var vm = Vm(part2);
@@ -150,9 +150,32 @@ public sealed class SeriesDetailSmokeTests : IDisposable
                 await Task.Delay(10);
                 Dispatcher.UIThread.RunJobs();
                 await using var db = factory.CreateDbContext();
-                if (db.Series.Single(s => s.Id == part2.Id).SeparateParts) return;
+                if (db.Series.Single(s => s.Id == part2.Id).SeparateParts) break;
             }
-            Assert.Fail("the switch wasn't saved");
+            await using (var db = factory.CreateDbContext())
+                Assert.True(db.Series.Single(s => s.Id == part2.Id).SeparateParts, "the switch wasn't saved");
+
+            // "Groups release episode 1 as 12": saved as an offset of 11, and the tiles show both numbers.
+            vm.EpisodeOneNumber = "12";
+            for (var i = 0; i < 100 && vm.EpisodeGrid.FirstOrDefault()?.AbsoluteText != "#12"; i++)
+            {
+                await Task.Delay(10);
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.Equal("#12", vm.EpisodeGrid[0].AbsoluteText);
+            Assert.Equal("#23", vm.EpisodeGrid[11].AbsoluteText);
+            Assert.Contains("#12–23 counted straight through (your setting)", vm.FamilyLine);
+            await using (var db = factory.CreateDbContext())
+                Assert.Equal(11, db.Series.Single(s => s.Id == part2.Id).EpisodeNumberOffset);
+
+            Application.Current!.Resources["MonitoringStateToBoolConverter"] = new MonitoringStateToBoolConverter();
+            var window = new Window { Width = 1300, Height = 2000, Content = new SeriesDetailView { DataContext = vm } };
+            window.Show();
+            for (var i = 0; i < 6; i++) Dispatcher.UIThread.RunJobs();
+            var frame = window.CaptureRenderedFrame();
+            if (Environment.GetEnvironmentVariable("SENTRYCHAN_SCREENSHOTS") is { Length: > 0 } dir)
+                frame!.Save(Path.Combine(Directory.CreateDirectory(dir).FullName, "series-detail-numbers.png"));
+            window.Close();
         }
         finally { Sentrychan.Core.Library.SeasonLayout.Resolver = before; }
     }

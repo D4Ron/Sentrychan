@@ -52,7 +52,8 @@ public sealed class TidyPlanner
         resolver is not { IsReady: true } r ? null : (fileName, show) =>
         {
             foreach (var row in show.Seasons.Where(s => s.Placement != null && !s.IsMovie))
-                if (Services.ReleaseMatcher.Match(r, fileName, new Models.Series { MalId = row.MalId, Title = row.Title })
+                if (Services.ReleaseMatcher.Match(r, fileName, new Models.Series
+                        { MalId = row.MalId, Title = row.Title, TotalEpisodes = row.TotalEpisodes, EpisodeNumberOffset = row.NumberingOffset })
                         is (Services.ReleaseVerdict.Yes, { } episode))
                     return (row, episode);
             return null;
@@ -222,7 +223,13 @@ public sealed class TidyPlanner
             return;
         }
 
-        var resolved = EpisodeNumbering.Resolve(season, episode, parsed.HasExplicitSeasonEpisode, totals, out var why);
+        // The user has said how groups number this season: a number past its own length is counted
+        // straight through, where the earlier seasons' lengths would otherwise have to be known.
+        string? why = null;
+        var resolved = !parsed.HasExplicitSeasonEpisode && show?.ForSeason(season) is { NumberingOffset: { } userOffset } numbered
+                       && userOffset > 0 && episode > userOffset && !(numbered.TotalEpisodes is > 0 and var length && episode <= length)
+            ? (season, episode - userOffset)
+            : EpisodeNumbering.Resolve(season, episode, parsed.HasExplicitSeasonEpisode, totals, out why);
         if (resolved is not { } se)
         {
             plan.Items.Add(Unsure(video, folder.Name, show?.ForSeason(season)?.Id, why!));

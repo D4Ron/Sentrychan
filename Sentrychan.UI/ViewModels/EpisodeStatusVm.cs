@@ -45,6 +45,9 @@ public class EpisodeStatusVm : ViewModelBase
     /// <summary>The number groups counting straight through the show give it ("#50"), when it differs.</summary>
     public int? Absolute { get; init; }
 
+    /// <summary>"#18" under the tile's own number; empty for a show numbered one way.</summary>
+    public string AbsoluteText => Absolute is { } a ? $"#{a}" : string.Empty;
+
     private string Label => Absolute is { } a ? $"Episode {EpisodeNumber} (#{a})" : $"Episode {EpisodeNumber}";
 
     public IBrush StatusBrush => (Application.Current!.Styles.TryGetResource(Status switch

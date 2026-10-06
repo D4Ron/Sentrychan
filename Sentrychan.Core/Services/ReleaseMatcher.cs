@@ -30,7 +30,13 @@ public static partial class ReleaseMatcher
         var mine = IndexOf(chain, series.MalId);
         var named = IndexOf(chain, resolved.MalId);
         if (mine < 0 || named < 0)
-            return resolved.MalId == series.MalId ? (ReleaseVerdict.Yes, parsed.Episode) : (ReleaseVerdict.No, null);
+        {
+            if (resolved.MalId == series.MalId) return ByUserOffset(series, parsed.Episode, sameEntry: true) ?? (ReleaseVerdict.Yes, parsed.Episode);
+            // Seasons the database doesn't link: the user's offset still places the show's own title.
+            return parsed.Season <= 1 && TitleResolverService.ChainKey(resolved.CanonicalTitle) == TitleResolverService.ChainKey(series.Title)
+                ? ByUserOffset(series, parsed.Episode, sameEntry: false) ?? (ReleaseVerdict.No, null)
+                : (ReleaseVerdict.No, null);
+        }
 
         // Where the release's numbering starts: the season it names ("S04E08", "S3 - 14"), else the
         // entry its title names. A named season that isn't in the chain can't be placed.
@@ -48,6 +54,8 @@ public static partial class ReleaseMatcher
         if (parsed.Episode is not { } number)
             return from == mine ? (ReleaseVerdict.Yes, null) : (ReleaseVerdict.No, null);
 
+        if (from <= mine && ByUserOffset(series, number, sameEntry: from == mine) is { } byUser) return byUser;
+
         // Counted on from the start, the number lands in one entry; that's whose episode it is.
         if (CourOf(chain, number, from) is { } owner)
             return owner == mine && Offset(chain, mine, from) is { } offset
@@ -58,6 +66,23 @@ public static partial class ReleaseMatcher
         // only taken at face value by the entry it starts from — a long show whose count has run
         // past the database's ("One Piece - 1150").
         return from == mine ? (ReleaseVerdict.Yes, number) : (ReleaseVerdict.No, null);
+    }
+
+    /// <summary>
+    /// A number placed by the user's own offset (<see cref="Series.EpisodeNumberOffset"/>), which beats
+    /// the database's count; null when none is set. Named after an earlier season, the number counts
+    /// straight through — at or below the offset it's an earlier season's episode. Named after this
+    /// season itself, it's this season's own number unless it runs past the season's length.
+    /// </summary>
+    /// <summary>A number from a release the database couldn't place, matched on its title: the user's offset still applies.</summary>
+    public static int? WithUserOffset(Series series, int? number) =>
+        ByUserOffset(series, number, sameEntry: true) is (_, var episode) ? episode : number;
+
+    private static (ReleaseVerdict, int?)? ByUserOffset(Series series, int? number, bool sameEntry)
+    {
+        if (series.EpisodeNumberOffset is not { } offset || number is not { } n) return null;
+        if (!sameEntry) return n > offset ? (ReleaseVerdict.Yes, n - offset) : (ReleaseVerdict.No, null);
+        return series.TotalEpisodes is > 0 and var total && n > total && n > offset ? (ReleaseVerdict.Yes, n - offset) : (ReleaseVerdict.Yes, n);
     }
 
     /// <summary>
@@ -112,6 +137,9 @@ public static partial class ReleaseMatcher
     /// </summary>
     public static IReadOnlyList<(string Title, int Number)> AbsoluteForms(ITitleResolverService resolver, Series series, int episode)
     {
+        // The user's offset is the one numbering groups use for this show; 0 says they use the season's own.
+        if (series.EpisodeNumberOffset is { } userOffset)
+            return userOffset > 0 ? [(SeasonDetector.ExtractBaseTitle(series.Title), userOffset + episode)] : [];
         if (!resolver.IsReady || series.MalId <= 0) return [];
         var chain = resolver.GetSeasonChain(series.MalId);
         var mine = IndexOf(chain, series.MalId);

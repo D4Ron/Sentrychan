@@ -212,6 +212,38 @@ public class ReleaseMatcherTests
             [T("Enen no Shouboutai"), T("Enen no Shouboutai: Ni no Shou"), T("Enen no Shouboutai: San no Shou"), T("Enen no Shouboutai: San no Shou Part 2")]));
     }
 
+    [Fact]
+    public void The_users_offset_places_seasons_the_database_does_not_link()
+    {
+        var s1 = A(1, "Show", 12);
+        var s2 = new ResolvedAnime(2, "Show Season 2", 12, null, null, 2026, "FALL", "RELEASING", "TV");
+        var r = new FakeResolver([s1], [s2]).Name("Show", s1).Name("Show Season 2", s2);
+        var series = new Series { MalId = 2, Title = "Show Season 2", TotalEpisodes = 12 };
+
+        Assert.Equal((ReleaseVerdict.No, null), ReleaseMatcher.Match(r, "[Grp] Show - 18 (1080p).mkv", series));
+        series.EpisodeNumberOffset = 12;
+        Assert.Equal((ReleaseVerdict.Yes, 6), ReleaseMatcher.Match(r, "[Grp] Show - 18 (1080p).mkv", series));
+        Assert.Equal((ReleaseVerdict.No, null), ReleaseMatcher.Match(r, "[Grp] Show - 05 (1080p).mkv", series));
+        Assert.Equal([("Show", 18)], ReleaseMatcher.AbsoluteForms(r, series, 6));
+        Assert.Equal(6, ReleaseMatcher.WithUserOffset(series, 18));
+        Assert.Equal(5, ReleaseMatcher.WithUserOffset(series, 5));
+
+        // 1: groups start again at 1, so there's no other number to look for.
+        series.EpisodeNumberOffset = 0;
+        Assert.Empty(ReleaseMatcher.AbsoluteForms(r, series, 6));
+    }
+
+    [Fact]
+    public void The_users_offset_beats_the_database_count()
+    {
+        var r = Bleach();
+        var cour2 = new Series { MalId = Cour2.MalId, Title = Cour2.CanonicalTitle, TotalEpisodes = 13, EpisodeNumberOffset = 10 };
+        Assert.Equal((ReleaseVerdict.Yes, 10), ReleaseMatcher.Match(r, "[Grp] Bleach - Sennen Kessen Hen - 20 (1080p).mkv", cour2));
+        // Named after this cour itself: its own numbers, unless past its length.
+        Assert.Equal((ReleaseVerdict.Yes, 5), ReleaseMatcher.Match(r, "[Grp] Bleach - Sennen Kessen-hen - Ketsubetsu-tan - 05 [1080p].mkv", cour2));
+        Assert.Equal((ReleaseVerdict.Yes, 5), ReleaseMatcher.Match(r, "[Grp] Bleach - Sennen Kessen-hen - Ketsubetsu-tan - 15 [1080p].mkv", cour2));
+    }
+
     [Theory]
     [InlineData("Bleach: Sennen Kessen-hen - Kashin-tan", "bleach sennen kessen hen")]
     [InlineData("Re:Zero kara Hajimeru Isekai Seikatsu 2nd Season Part 2", "re zero kara hajimeru isekai seikatsu")]

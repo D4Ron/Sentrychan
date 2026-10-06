@@ -56,6 +56,13 @@ public class Series
     /// </summary>
     public bool SeparateParts { get; set; }
 
+    /// <summary>
+    /// The user's word on how groups number this season: episode 1 comes out as offset + 1
+    /// ("Show - 13" is episode 1 at 12). Null works it out from the season chain (ReleaseMatcher);
+    /// it's there for shows the database splits differently from the groups, or doesn't link at all.
+    /// </summary>
+    public int? EpisodeNumberOffset { get; set; }
+
     /// <summary>This series' own release-group rule (Any / Prefer / Only); null follows the app's setting.</summary>
     public string? GroupMode { get; set; }
 

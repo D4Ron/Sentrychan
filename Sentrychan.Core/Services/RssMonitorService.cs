@@ -677,7 +677,7 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
         {
             ReleaseVerdict.Yes => (true, episode),
             ReleaseVerdict.No => (false, null),
-            _ => (TitleMatchesSeries(rssTitle, series), ExtractEpisodeNumber(rssTitle)),
+            _ => (TitleMatchesSeries(rssTitle, series), ReleaseMatcher.WithUserOffset(series, ExtractEpisodeNumber(rssTitle))),
         };
     }
 
