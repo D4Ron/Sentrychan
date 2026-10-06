@@ -135,13 +135,67 @@ public class SeriesDetailViewModel : ViewModelBase
     public ObservableCollection<WatchHistoryEntry> WatchHistory { get; } = new();
     public ObservableCollection<DownloadJob> DownloadHistory { get; } = new();
     public ObservableCollection<TitleAlias> Aliases { get; } = new();
-    public ObservableCollection<EpisodeStatusVm> EpisodeGrid { get; } = new();
+
+    private ObservableCollection<EpisodeStatusVm> _episodeGrid = new();
+    /// <summary>Replaced whole once built: adding 170 tiles one by one laid the page out 170 times.</summary>
+    public ObservableCollection<EpisodeStatusVm> EpisodeGrid { get => _episodeGrid; private set => this.RaiseAndSetIfChanged(ref _episodeGrid, value); }
+
+    // Long histories show their latest entries; the rest one click away.
+    private const int HistoryShown = 8;
+    private bool _showAllHistory;
+    public bool ShowAllHistory
+    {
+        get => _showAllHistory;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _showAllHistory, value);
+            this.RaisePropertyChanged(nameof(WatchHistoryShown));
+            this.RaisePropertyChanged(nameof(DownloadHistoryShown));
+        }
+    }
+    public IEnumerable<WatchHistoryEntry> WatchHistoryShown => ShowAllHistory ? WatchHistory : WatchHistory.Take(HistoryShown);
+    public IEnumerable<DownloadJob> DownloadHistoryShown => ShowAllHistory ? DownloadHistory : DownloadHistory.Take(HistoryShown);
+    public bool HasMoreHistory => !ShowAllHistory && (WatchHistory.Count > HistoryShown || DownloadHistory.Count > HistoryShown);
+    public string ShowAllHistoryText => $"Show all ({WatchHistory.Count} watched, {DownloadHistory.Count} downloads)";
 
     private bool _isLoading;
+    /// <summary>Only while the page's own data loads — a fraction of a second.</summary>
     public bool IsLoading
     {
         get => _isLoading;
         set => this.RaiseAndSetIfChanged(ref _isLoading, value);
+    }
+
+    private string? _detailsStatus;
+    /// <summary>Shown where the synopsis goes while details load from MyAnimeList, or when they can't.</summary>
+    public string? DetailsStatus { get => _detailsStatus; private set => this.RaiseAndSetIfChanged(ref _detailsStatus, value); }
+
+    /// <summary>
+    /// Where this season sits in its show, and the numbers groups counting straight through give it:
+    /// "Season 3 of Jujutsu Kaisen · #48–59 counted straight through". Empty for a single season.
+    /// </summary>
+    public string? FamilyLine { get; private set; }
+
+    public string QualityPreferenceChoice
+    {
+        get => string.IsNullOrEmpty(Series.QualityPreference) ? "Any" : Series.QualityPreference;
+        set
+        {
+            Series.QualityPreference = value == "Any" ? null : value;
+            this.RaisePropertyChanged();
+            _ = SaveQualityAsync();
+        }
+    }
+    public string[] QualityOptions { get; } = ["Any", "1080p", "720p", "480p"];
+
+    private async Task SaveQualityAsync()
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await db.Series.Where(s => s.Id == Series.Id).ExecuteUpdateAsync(u => u.SetProperty(s => s.QualityPreference, Series.QualityPreference));
+        }
+        catch (Exception ex) { Console.WriteLine($"[SeriesDetail] quality not saved: {ex.Message}"); }
     }
 
     public ReactiveCommand<Unit, Unit> BackCommand { get; }
@@ -208,29 +262,68 @@ public class SeriesDetailViewModel : ViewModelBase
         _ = InitializeAsync(CancellationToken.None);
     }
 
+    /// <summary>
+    /// The page's own data first — episodes, history, aliases, all local — then the details from
+    /// MyAnimeList in the background. It used to wait for MyAnimeList (details, then recommendations)
+    /// before even building the episode grid, behind a dark overlay: minutes when the API is slow or
+    /// down, as it was on 2026-10-06.
+    /// </summary>
     public async Task InitializeAsync(CancellationToken ct = default)
     {
         IsLoading = true;
         try
         {
-            await Task.WhenAll(
-                LoadMetadataAsync(ct),
-                LoadWatchHistoryAsync(ct),
-                LoadDownloadHistoryAsync(ct),
-                LoadAliasesAsync(ct)
-            );
-
-            // Fetch recommendations sequentially after metadata to avoid rate bounds
-            await Task.Delay(400, ct);
-            await LoadRecommendationsAsync(ct);
-
+            BuildFamilyLine();
+            await Task.WhenAll(LoadWatchHistoryAsync(ct), LoadDownloadHistoryAsync(ct), LoadAliasesAsync(ct));
             await BuildEpisodeGridAsync(Series, DownloadHistory.ToList(), ct);
         }
         finally
         {
             IsLoading = false;
         }
+        _ = LoadOnlineDetailsAsync(ct);
     }
+
+    private async Task LoadOnlineDetailsAsync(CancellationToken ct)
+    {
+        DetailsStatus = "Loading details from MyAnimeList…";
+        try
+        {
+            await LoadMetadataAsync(ct);
+            DetailsStatus = Metadata == null ? "MyAnimeList isn't answering right now — details will show when it's back." : null;
+            if (Metadata == null) return;
+            // Spaced from the details request: the API allows a few requests a second.
+            await Task.Delay(400, ct);
+            await LoadRecommendationsAsync(ct);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            DetailsStatus = "Details couldn't be loaded: " + ex.Message;
+        }
+    }
+
+    private void BuildFamilyLine()
+    {
+        if (App.Services?.GetService(typeof(ITitleResolverService)) is not ITitleResolverService { IsReady: true } resolver) return;
+        var chain = resolver.GetSeasonChain(Series.MalId);
+        var mine = chain.ToList().FindIndex(a => a.MalId == Series.MalId);
+        if (chain.Count < 2 || mine < 0) return;
+
+        var seasons = Sentrychan.Core.Services.ReleaseMatcher.SeasonsOf(chain);
+        var line = $"Season {seasons[mine]} of {chain[0].CanonicalTitle}";
+        if (Sentrychan.Core.Services.ReleaseMatcher.AbsoluteForms(resolver, Series, 1) is [var first, ..])
+        {
+            _absoluteOffset = first.Number - 1;
+            line += Series.TotalEpisodes is > 0 and var total
+                ? $" · #{first.Number}–{first.Number + total - 1} counted straight through"
+                : $" · from #{first.Number} counted straight through";
+        }
+        FamilyLine = line;
+        this.RaisePropertyChanged(nameof(FamilyLine));
+    }
+
+    private int? _absoluteOffset;
 
     private async Task LoadMetadataAsync(CancellationToken ct)
     {
@@ -247,7 +340,20 @@ public class SeriesDetailViewModel : ViewModelBase
         
         WatchHistory.Clear();
         foreach (var entry in history) WatchHistory.Add(entry);
+        RaiseHistory();
     }
+
+    private void RaiseHistory()
+    {
+        this.RaisePropertyChanged(nameof(WatchHistoryShown));
+        this.RaisePropertyChanged(nameof(DownloadHistoryShown));
+        this.RaisePropertyChanged(nameof(HasMoreHistory));
+        this.RaisePropertyChanged(nameof(ShowAllHistoryText));
+    }
+
+    public ReactiveCommand<Unit, Unit> ShowAllHistoryCommand => _showAllHistoryCommand ??=
+        ReactiveCommand.Create(() => { ShowAllHistory = true; RaiseHistory(); });
+    private ReactiveCommand<Unit, Unit>? _showAllHistoryCommand;
 
     private async Task LoadDownloadHistoryAsync(CancellationToken ct)
     {
@@ -259,6 +365,7 @@ public class SeriesDetailViewModel : ViewModelBase
         
         DownloadHistory.Clear();
         foreach (var job in downloads) DownloadHistory.Add(job);
+        RaiseHistory();
     }
 
     private async Task LoadAliasesAsync(CancellationToken ct)
@@ -289,13 +396,13 @@ public class SeriesDetailViewModel : ViewModelBase
     /// </summary>
     private async Task PlayEpisodeAsync(int episode, CancellationToken ct)
     {
-        var total = Math.Min(Series.TotalEpisodes ?? Math.Max(Series.LastEpisodeNumber, episode), 200);
+        var total = Math.Min(Series.TotalEpisodes ?? Math.Max(Series.LastEpisodeNumber, episode), MaxEpisodes);
         var playlist = new List<PlaybackItem>();
         var start = -1;
+        var files = await _fileLocator.FindVideoFilesAsync(Series.Title, Math.Max(total, episode), ct);
         for (int ep = 1; ep <= Math.Max(total, episode); ep++)
         {
-            var path = await _fileLocator.FindVideoFileAsync(Series.Title, ep, ct);
-            if (path == null) continue;
+            if (!files.TryGetValue(ep, out var path)) continue;
             if (ep == episode) start = playlist.Count;
             playlist.Add(new PlaybackItem($"{Series.Title} · Episode {ep}", FilePath: path));
         }
@@ -309,11 +416,13 @@ public class SeriesDetailViewModel : ViewModelBase
         await PlayerLauncher.PlayAsync(playlist, start);
     }
 
+    /// <summary>The grid's upper bound: a 1,000-episode show would lay out a thousand tiles.</summary>
+    private const int MaxEpisodes = 500;
+
     private async Task BuildEpisodeGridAsync(Series series, List<DownloadJob> jobs, CancellationToken ct)
     {
-        EpisodeGrid.Clear();
         int total = series.TotalEpisodes ?? Math.Max(series.LastEpisodeNumber, 1);
-        total = Math.Min(total, 200);
+        total = Math.Min(total, MaxEpisodes);
 
         using var db = await _dbFactory.CreateDbContextAsync(ct);
         var manuallyMarked = await db.WatchHistory
@@ -321,39 +430,32 @@ public class SeriesDetailViewModel : ViewModelBase
             .Select(w => w.EpisodeNumber)
             .ToHashSetAsync(ct);
 
+        // Everything past the progress mark is looked up on disk once, not once per episode.
+        var onDisk = total > series.LastEpisodeNumber
+            ? await _fileLocator.FindVideoFilesAsync(series.Title, total, ct)
+            : new Dictionary<int, string>();
+        var jobByEpisode = jobs.GroupBy(j => j.EpisodeNumber).ToDictionary(g => g.Key, g => g.First());
+
+        var tiles = new List<EpisodeStatusVm>(total);
         for (int ep = 1; ep <= total; ep++)
         {
-            EpisodeStatus status;
-            if (ep <= series.LastEpisodeNumber)
-            {
-                status = EpisodeStatus.Watched;
-            }
-            else if (manuallyMarked.Contains(ep))
-            {
-                status = EpisodeStatus.Downloaded;
-            }
-            else
-            {
-                var job = jobs.FirstOrDefault(j => j.EpisodeNumber == ep);
-                if (job == null)
-                {
-                    status = EpisodeStatus.Missing;
-                }
-                else
-                {
-                    var filePath = await _fileLocator.FindVideoFileAsync(series.Title, ep, ct);
-                    status = filePath != null ? EpisodeStatus.Downloaded : EpisodeStatus.Pending;
-                }
-            }
+            jobByEpisode.TryGetValue(ep, out var job);
+            var status =
+                ep <= series.LastEpisodeNumber ? EpisodeStatus.Watched
+                : manuallyMarked.Contains(ep) || onDisk.ContainsKey(ep) ? EpisodeStatus.Downloaded
+                : job != null ? EpisodeStatus.Pending
+                : EpisodeStatus.Missing;
 
-            EpisodeGrid.Add(new EpisodeStatusVm
+            tiles.Add(new EpisodeStatusVm
             {
                 EpisodeNumber = ep,
                 Status = status,
                 IsCurrentEpisode = ep == series.LastEpisodeNumber,
-                DownloadedAt = jobs.FirstOrDefault(j => j.EpisodeNumber == ep)?.CompletedAt
+                DownloadedAt = job?.CompletedAt,
+                Absolute = _absoluteOffset is { } offset ? offset + ep : null,
             });
         }
+        EpisodeGrid = new ObservableCollection<EpisodeStatusVm>(tiles);
     }
 
     private async Task MarkEpisodeDownloadedAsync(int ep, CancellationToken ct)

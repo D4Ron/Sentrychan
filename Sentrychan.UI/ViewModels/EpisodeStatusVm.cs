@@ -42,6 +42,11 @@ public class EpisodeStatusVm : ViewModelBase
 
     public DateTime? DownloadedAt { get; set; }
 
+    /// <summary>The number groups counting straight through the show give it ("#50"), when it differs.</summary>
+    public int? Absolute { get; init; }
+
+    private string Label => Absolute is { } a ? $"Episode {EpisodeNumber} (#{a})" : $"Episode {EpisodeNumber}";
+
     public IBrush StatusBrush => (Application.Current!.Styles.TryGetResource(Status switch
     {
         EpisodeStatus.Watched    => "StatusGreenBrush",
@@ -52,9 +57,9 @@ public class EpisodeStatusVm : ViewModelBase
 
     public string TooltipText => Status switch
     {
-        EpisodeStatus.Watched    => $"Episode {EpisodeNumber}: Watched",
-        EpisodeStatus.Downloaded => $"Episode {EpisodeNumber}: Downloaded",
-        EpisodeStatus.Pending    => $"Episode {EpisodeNumber}: Downloading...",
-        _                        => $"Episode {EpisodeNumber}: Missing"
+        EpisodeStatus.Watched    => $"{Label}: Watched",
+        EpisodeStatus.Downloaded => $"{Label}: Downloaded",
+        EpisodeStatus.Pending    => $"{Label}: Downloading...",
+        _                        => $"{Label}: Missing"
     };
 }

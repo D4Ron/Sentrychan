@@ -35,24 +35,36 @@ public class VideoFileLocator : IVideoFileLocator
     }
 
     /// <summary>
-    /// The other ways a file of this episode may be named: the numbers groups counting straight
-    /// through give it ("Sono Bisque Doll - 18" for season 2's episode 6), and a matcher that
-    /// places any name on this series and episode. Empty when the series isn't in the library.
+    /// The other ways a file of these episodes may be named: the number groups counting straight
+    /// through give each ("Sono Bisque Doll - 18" for season 2's episode 6), and the matcher, which
+    /// places a name on this series' episode whatever its numbering. Empty when the series isn't in
+    /// the library.
     /// </summary>
-    private async Task<(HashSet<int> Numbers, Func<string, bool>? Placed)> AlternativesAsync(string seriesTitle, int episode, CancellationToken ct)
+    private async Task<(Dictionary<int, int> Absolute, Func<string, int?>? Placed)> AlternativesAsync(
+        string seriesTitle, IEnumerable<int> episodes, CancellationToken ct)
     {
-        var numbers = new HashSet<int> { episode };
-        if (_dbFactory == null || _resolver is not { IsReady: true } resolver) return (numbers, null);
+        var absolute = new Dictionary<int, int>();
+        if (_dbFactory == null || _resolver is not { IsReady: true } resolver) return (absolute, null);
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
             var series = await db.Series.AsNoTracking().FirstOrDefaultAsync(s => s.Title == seriesTitle, ct);
-            if (series is not { MalId: > 0 }) return (numbers, null);
-            foreach (var (_, n) in ReleaseMatcher.AbsoluteForms(resolver, series, episode)) numbers.Add(n);
-            return (numbers, name => ReleaseMatcher.Match(resolver, name, series) is (ReleaseVerdict.Yes, var e) && e == episode);
+            if (series is not { MalId: > 0 }) return (absolute, null);
+            foreach (var ep in episodes)
+                foreach (var (_, n) in ReleaseMatcher.AbsoluteForms(resolver, series, ep))
+                    absolute.TryAdd(n, ep);
+            var placed = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
+            return (absolute, name => placed.TryGetValue(name, out var known) ? known
+                : placed[name] = ReleaseMatcher.Match(resolver, name, series) is (ReleaseVerdict.Yes, var e) ? e : null);
         }
-        catch { return (numbers, null); }
+        catch { return (absolute, null); }
     }
+
+    public async Task<string?> FindVideoFileAsync(string seriesTitle, int episodeNumber, CancellationToken ct) =>
+        (await FindManyAsync(seriesTitle, [episodeNumber], ct)).GetValueOrDefault(episodeNumber);
+
+    public Task<IReadOnlyDictionary<int, string>> FindVideoFilesAsync(string seriesTitle, int maxEpisode, CancellationToken ct) =>
+        FindManyAsync(seriesTitle, Enumerable.Range(1, Math.Max(0, maxEpisode)).ToList(), ct);
 
     /// <summary>
     /// Finds an episode's file in the library — under any show folder that names this show
@@ -67,11 +79,23 @@ public class VideoFileLocator : IVideoFileLocator
     /// it missed everything already in the library and accepted any show's episode N: with
     /// "Youjo Senki S2 - 12" mid-download, Mushoku Tensei's episode 12 counted as present.
     /// </summary>
-    public async Task<string?> FindVideoFileAsync(string seriesTitle, int episodeNumber, CancellationToken ct)
+    private async Task<IReadOnlyDictionary<int, string>> FindManyAsync(string seriesTitle, IReadOnlyCollection<int> episodes, CancellationToken ct)
     {
+        var found = new Dictionary<int, string>();
+        if (episodes.Count == 0) return found;
+        var wanted = episodes.ToHashSet();
         var baseTitle = SeasonDetector.ExtractBaseTitle(seriesTitle);
         var season    = SeasonSearch.EffectiveSeason(seriesTitle, 1);
-        var (numbers, placed) = await AlternativesAsync(seriesTitle, episodeNumber, ct);
+        var (absolute, placed) = await AlternativesAsync(seriesTitle, wanted, ct);
+
+        // Earlier places win, as each episode's first file used to: its season folder, the rest of
+        // the show folder, then the downloads.
+        void Take(IEnumerable<(string File, IEnumerable<string> Names)> files, Func<string, int?> episodeOf)
+        {
+            foreach (var (file, names) in files)
+                foreach (var name in names)
+                    if (episodeOf(name) is { } ep && wanted.Contains(ep) && found.TryAdd(ep, file)) break;
+        }
 
         var libraryPath = await _configService.GetValueAsync("LibraryPath", string.Empty, ct);
         if (!string.IsNullOrWhiteSpace(libraryPath) && Directory.Exists(libraryPath))
@@ -80,20 +104,17 @@ public class VideoFileLocator : IVideoFileLocator
             foreach (var showDir in ShowFolders(libraryPath, baseTitle))
             {
                 // The season folder is already scoped to this show and season: the number is enough —
-                // this episode's own, or the one counted straight through.
+                // the episode's own, or the one counted straight through.
                 foreach (var seasonDir in new[] { $"Season {season}", $"Season {season:00}" }.Distinct())
-                {
-                    var hit = FirstEpisode(Path.Combine(showDir, seasonDir), numbers, _ => true, origins, recursive: false);
-                    if (hit != null) return hit;
-                }
+                    Take(Videos(Path.Combine(showDir, seasonDir), origins, recursive: false),
+                         name => EpisodeOf(name) is { } n ? (wanted.Contains(n) ? n : absolute.TryGetValue(n, out var e) ? e : (int?)null) : null);
 
                 // Anywhere else in the show folder (a custom template, files dropped in by hand) the
-                // name has to say which season it is — or be placed on this episode by the matcher.
-                var loose = FirstEpisode(showDir, new HashSet<int> { episodeNumber }, name => IsSeason(name, season), origins, recursive: true,
-                                         skipDir: d => SeasonFolder.Match(Path.GetFileName(d)) is { Success: true } m
-                                                       && int.Parse(m.Groups[1].Value) != season,
-                                         placed: placed);
-                if (loose != null) return loose;
+                // name has to say which season it is — or be placed on the episode by the matcher.
+                Take(Videos(showDir, origins, recursive: true,
+                            skipDir: d => SeasonFolder.Match(Path.GetFileName(d)) is { Success: true } m && int.Parse(m.Groups[1].Value) != season),
+                     name => (EpisodeOf(name) is { } n && IsSeason(name, season) ? n : (int?)null) ?? placed?.Invoke(name));
+                if (found.Count == wanted.Count) return found;
             }
         }
 
@@ -101,14 +122,13 @@ public class VideoFileLocator : IVideoFileLocator
         if (!string.IsNullOrWhiteSpace(downloadPath) && Directory.Exists(downloadPath))
         {
             // A shared folder full of other shows: the name must be this show and this season.
-            bool IsThisShow(string name) =>
-                _episodeNormalizer.MatchesTitle(name, baseTitle) && SeasonSearch.MatchesSeason(name, season);
-
-            return FirstEpisode(Path.Combine(downloadPath, InvalidFolderChars.Replace(seriesTitle, "_")), new HashSet<int> { episodeNumber }, IsThisShow, null, false, placed: placed)
-                ?? FirstEpisode(downloadPath, new HashSet<int> { episodeNumber }, IsThisShow, null, false, placed: placed);
+            int? ThisShow(string name) =>
+                (EpisodeOf(name) is { } n && _episodeNormalizer.MatchesTitle(name, baseTitle) && SeasonSearch.MatchesSeason(name, season) ? n : (int?)null)
+                ?? placed?.Invoke(name);
+            Take(Videos(Path.Combine(downloadPath, InvalidFolderChars.Replace(seriesTitle, "_")), null, false), ThisShow);
+            Take(Videos(downloadPath, null, false), ThisShow);
         }
-
-        return null;
+        return found;
     }
 
     /// <summary>Library folders for this show, the old exact-title folder first.</summary>
@@ -147,26 +167,20 @@ public class VideoFileLocator : IVideoFileLocator
         return map;
     }
 
-    /// <param name="numbers">The numbers the file may carry: the episode's own, and straight-through ones where they apply.</param>
+    /// <summary>The videos in a folder, each with its name and, for a renamed file, the name it downloaded as.</summary>
     /// <param name="skipDir">In a recursive search, folders whose files can't be the one (another season's).</param>
-    /// <param name="placed">The matcher's say: true when a name is this series' episode whatever its numbering.</param>
-    private string? FirstEpisode(string dir, IReadOnlySet<int> numbers, Func<string, bool> accept,
-        Dictionary<string, string>? origins, bool recursive, Func<string, bool>? skipDir = null, Func<string, bool>? placed = null)
+    private static IEnumerable<(string File, IEnumerable<string> Names)> Videos(string dir,
+        Dictionary<string, string>? origins, bool recursive, Func<string, bool>? skipDir = null)
     {
-        if (!Directory.Exists(dir)) return null;
-
-        bool Is(string name) =>
-            (EpisodeOf(name) is { } n && numbers.Contains(n) && accept(name)) || placed?.Invoke(name) == true;
-
+        if (!Directory.Exists(dir)) yield break;
         foreach (var file in Directory.EnumerateFiles(dir, "*", recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
         {
             if (!VideoExtensions.Contains(Path.GetExtension(file))) continue;
             if (skipDir != null && skipDir(Path.GetDirectoryName(file)!)) continue;
-            if (Is(Path.GetFileNameWithoutExtension(file))) return file;
-            if (origins != null && origins.TryGetValue(file, out var original) && Is(Path.GetFileNameWithoutExtension(original)))
-                return file;
+            var names = new List<string> { Path.GetFileNameWithoutExtension(file) };
+            if (origins != null && origins.TryGetValue(file, out var original)) names.Add(Path.GetFileNameWithoutExtension(original));
+            yield return (file, names);
         }
-        return null;
     }
 
     private int? EpisodeOf(string name)

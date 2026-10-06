@@ -36,6 +36,10 @@
                     <StackPanel Spacing="4">
                         <TextBlock Text="{Binding Series.Title}" FontSize="24" FontWeight="Bold" TextWrapping="Wrap"/>
                         <TextBlock Text="{Binding Metadata.TitleJapanese}" FontSize="14" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+                        <!-- Where this season sits in its show, and its straight-through numbers. -->
+                        <TextBlock Text="{Binding FamilyLine}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AccentLightBrush}"
+                                   IsVisible="{Binding FamilyLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                     </StackPanel>
 
                     <!-- Monitoring Status Card -->
@@ -85,19 +89,22 @@
                 <StackPanel Spacing="16">
                     <TextBlock Text="Synopsis" FontSize="20" FontWeight="Bold"/>
                     <TextBlock Text="{Binding Metadata.Synopsis}" TextWrapping="Wrap" LineHeight="24" FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{Binding DetailsStatus}" FontSize="13" TextWrapping="Wrap" Foreground="{DynamicResource TextTertiaryBrush}"
+                               IsVisible="{Binding DetailsStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                 </StackPanel>
 
                 <!-- Section 2: Episode Progress -->
                 <StackPanel Spacing="16">
                     <TextBlock Text="Episode Progress" FontSize="20" FontWeight="Bold"/>
                     
-                    <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0 0 0 0">
-                        <Run Text="Currently at episode " />
-                        <Run Text="{Binding CurrentEpisode}" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}" />
-                        <Run Text=" of " />
-                        <Run Text="{Binding TotalEpisodesDisplay}" />
-                        <Run Text="  —  click a tile to update" Foreground="{DynamicResource TextTertiaryBrush}" />
-                    </TextBlock>
+                    <!-- Separate TextBlocks: inline Run bindings show nothing in this app. -->
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Currently at episode " FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="{Binding CurrentEpisode}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}"/>
+                        <TextBlock Text=" of " FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="{Binding TotalEpisodesDisplay}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="  —  click a tile to set your progress, right-click to play" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </StackPanel>
 
                     <ItemsControl ItemsSource="{Binding EpisodeGrid}">
                         <ItemsControl.ItemsPanel>
@@ -164,8 +171,8 @@
                     <!-- Section 3: Watch History -->
                     <StackPanel Grid.Column="0" Spacing="16" Margin="0,0,20,0">
                         <TextBlock Text="Watch History" FontSize="20" FontWeight="Bold"/>
-                        <ListBox ItemsSource="{Binding WatchHistory}" Background="Transparent">
-                            <ListBox.ItemTemplate>
+                        <ItemsControl ItemsSource="{Binding WatchHistoryShown}">
+                            <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Padding="12,8" Background="#08FFFFFF" CornerRadius="4" Margin="0,0,0,4">
                                         <Grid ColumnDefinitions="Auto, *, Auto">
@@ -175,15 +182,15 @@
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
 
                     <!-- Section 4: Download History -->
                     <StackPanel Grid.Column="1" Spacing="16" Margin="20,0,0,0">
                         <TextBlock Text="Download History" FontSize="20" FontWeight="Bold"/>
-                        <ListBox ItemsSource="{Binding DownloadHistory}" Background="Transparent">
-                            <ListBox.ItemTemplate>
+                        <ItemsControl ItemsSource="{Binding DownloadHistoryShown}">
+                            <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Padding="12,8" Background="#08FFFFFF" CornerRadius="4" Margin="0,0,0,4">
                                         <Grid ColumnDefinitions="*, Auto">
@@ -194,10 +201,12 @@
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Grid>
+                <Button Content="{Binding ShowAllHistoryText}" Classes="ghost" HorizontalAlignment="Left" Margin="0,-24,0,0"
+                        Command="{Binding ShowAllHistoryCommand}" IsVisible="{Binding HasMoreHistory}"/>
 
                 <!-- Section 5: RSS Match Aliases -->
                 <StackPanel Spacing="16">
@@ -268,12 +277,7 @@
                         <Grid ColumnDefinitions="*, *">
                             <StackPanel Grid.Column="0" Spacing="8">
                                 <TextBlock Text="QUALITY PREFERENCE" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
-                                <ComboBox SelectedItem="{Binding Series.QualityPreference}" HorizontalAlignment="Stretch">
-                                    <ComboBoxItem Content="Any"/>
-                                    <ComboBoxItem Content="1080p"/>
-                                    <ComboBoxItem Content="720p"/>
-                                    <ComboBoxItem Content="480p"/>
-                                </ComboBox>
+                                <ComboBox ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding QualityPreferenceChoice}" HorizontalAlignment="Stretch"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="8" Margin="24,0,0,0" VerticalAlignment="Center">
                                 <CheckBox IsChecked="{Binding Series.AutoCompleteEnabled}" Content="Auto-Complete Monitoring"/>
@@ -348,9 +352,8 @@
         </Border>
     </ScrollViewer>
         
-        <!-- Loading Overlay logic (Fix 1.1) -->
-        <Border Grid.ColumnSpan="2" Background="#80000000" IsVisible="{Binding IsLoading}" IsHitTestVisible="False">
-            <ProgressBar IsIndeterminate="True" VerticalAlignment="Top" Foreground="{DynamicResource AccentBrush}"/>
-        </Border>
+        <!-- A thin bar while the page's own data loads; nothing covers the page. -->
+        <ProgressBar Grid.ColumnSpan="2" IsIndeterminate="True" VerticalAlignment="Top" Height="3"
+                     IsVisible="{Binding IsLoading}" IsHitTestVisible="False" Foreground="{DynamicResource AccentBrush}"/>
     </Grid>
 </UserControl>
