@@ -209,6 +209,18 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-10-06 — **Season families (step 1 of 2: matching).** `SeasonFamilyService` links a show's seasons through MAL
+  sequel/prequel relations (Jikan `/anime/{id}/relations`, paced, `season-families.json`, refreshed from the monitor
+  in the background); without it, `TitleResolverService` walks the offline DB's `relatedAnime` links between entries
+  of the same type, keeping >2-episode entries named after the show, combined with the title chain.
+  `ReleaseMatcher` counts a straight-through number from the entry the release names, and a named season from
+  the entry its title names alone; parts share their season (`SeasonsOf`), a title stating its season wins.
+  Used by the monitor (+ `AbsoluteForms` catch-up queries), the downloads watcher, Latest's add, the library scan,
+  the episode locator and Fill Gaps. Regression over 869 real release/show pairs unchanged; real names checked
+  (straight-through third season, season split in parts, cours under an older series, a 170-episode show's sequel).
+  **Step 2 (open):** library season folders for parts (separate by default, per-show merge switch), a per-show
+  episode offset, both numbers shown.
+
 - 2026-10-06 — **Release-group rule; failing feeds back off instead of switching off.**
   - `ReleaseGroupPolicy` (Core): one preferred-groups list + a mode — **Prefer my groups** (default: wait
     up to 12 h for a preferred group, then take another), **Only my groups**, **Any group** — each overridable per
