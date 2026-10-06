@@ -73,6 +73,54 @@ public class SeriesDetailViewModel : ViewModelBase
         catch (Exception ex) { Console.WriteLine($"[SeriesDetail] library options not saved: {ex.Message}"); }
     }
 
+    // This show's own release-group rule; saved as soon as it changes. Empty/"Use my setting"
+    // follows Settings → General.
+    public const string GroupModeDefault = "Use my setting";
+    public string[] GroupModeOptions { get; } =
+        [GroupModeDefault, SettingsViewModel.GroupModePrefer, SettingsViewModel.GroupModeOnly, SettingsViewModel.GroupModeAny];
+
+    public string GroupMode
+    {
+        get => string.IsNullOrWhiteSpace(Series.GroupMode)
+            ? GroupModeDefault
+            : SettingsViewModel.GroupModeLabel(Sentrychan.Core.Services.ReleaseGroupPolicy.ParseMode(Series.GroupMode));
+        set
+        {
+            var stored = value == GroupModeDefault || string.IsNullOrEmpty(value)
+                ? null
+                : SettingsViewModel.GroupModeFromLabel(value).ToString();
+            if (Series.GroupMode == stored) return;
+            Series.GroupMode = stored;
+            this.RaisePropertyChanged();
+            _ = SaveGroupRuleAsync();
+        }
+    }
+
+    public string SeriesGroups
+    {
+        get => Series.PreferredGroups ?? string.Empty;
+        set
+        {
+            var stored = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            if (Series.PreferredGroups == stored) return;
+            Series.PreferredGroups = stored;
+            this.RaisePropertyChanged();
+            _ = SaveGroupRuleAsync();
+        }
+    }
+
+    private async Task SaveGroupRuleAsync()
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await db.Series.Where(s => s.Id == Series.Id).ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.GroupMode, Series.GroupMode)
+                .SetProperty(s => s.PreferredGroups, Series.PreferredGroups));
+        }
+        catch (Exception ex) { Console.WriteLine($"[SeriesDetail] release-group rule not saved: {ex.Message}"); }
+    }
+
     public int CurrentEpisode => Series.LastEpisodeNumber;
     public string TotalEpisodesDisplay => Series?.TotalEpisodes?.ToString() ?? "?";
 

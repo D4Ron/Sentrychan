@@ -209,6 +209,19 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-10-06 — **Release-group rule; failing feeds back off instead of switching off.**
+  - `ReleaseGroupPolicy` (Core): one preferred-groups list + a mode — **Prefer my groups** (default: wait
+    up to 12 h for a preferred group, then take another), **Only my groups**, **Any group** — each overridable per
+    series (`Series.GroupMode`, `Series.PreferredGroups`, migration `AddSeriesGroupRule`; the show page's "Release
+    Groups"). Applies to automatic downloads only (the feed monitor and its catch-up search), never to what the user
+    picks in Search or Latest. The first release seen from another group is stored with its link
+    (AppConfig `ReleaseGroupSightings`), so the fallback works after a busy feed has moved past it.
+    "Auto-download only from" (`AutoDownloadGroups`) is merged into the preferred list at startup and retired.
+    Latest has a "My groups only" view filter.
+  - `FeedBackoff`: a failing feed is retried after 30 min, 2 h, then 6 h — no longer switched off for good after 10
+    failures (a short outage left a main feed off for days). Feeds the old rule switched off are turned back on once.
+  - Logging: EF Core's per-command lines are overridden in Serilog (AddSerilog passes every category through).
+
 - 2026-10-05 — **First Mac tester's feedback.**
   - **All builds:** one sidebar toggle (a panel icon, not an arrow — the "‹" and the edge "⟩" were both on
     screen and read like "Back"). Sources import takes any shape (`SourcesInput`: the .scsources, it renamed or

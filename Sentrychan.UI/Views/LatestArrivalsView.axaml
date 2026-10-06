@@ -8,17 +8,21 @@
   <Grid>
     <DockPanel Margin="24">
         <!-- Header -->
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,20">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="0,0,0,20">
             <StackPanel Grid.Column="0">
                 <TextBlock Text="Latest" FontSize="22" FontWeight="Bold"/>
                 <TextBlock Text="Recent releases from your RSS sources" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="13"/>
             </StackPanel>
 
-            <ComboBox Grid.Column="1" Width="150" Margin="0,0,8,0" VerticalAlignment="Center"
+            <ToggleButton Grid.Column="1" Content="My groups only" IsChecked="{Binding MyGroupsOnly}"
+                          Margin="8,0,0,0" VerticalAlignment="Center"
+                          ToolTip.Tip="List only releases from your preferred groups (Settings → General). Anything listed downloads as usual."/>
+
+            <ComboBox Grid.Column="2" Width="150" Margin="0,0,8,0" VerticalAlignment="Center"
                       ItemsSource="{Binding BatchFilterOptions}" SelectedItem="{Binding SelectedBatchFilter}"
                       ToolTip.Tip="Filter episodes vs batch/complete releases"/>
 
-            <ComboBox Grid.Column="2" Width="200" Margin="0,0,8,0" VerticalAlignment="Center"
+            <ComboBox Grid.Column="3" Width="200" Margin="0,0,8,0" VerticalAlignment="Center"
                       ItemsSource="{Binding Feeds}" SelectedItem="{Binding SelectedFeed}">
                 <ComboBox.ItemTemplate>
                     <DataTemplate>
@@ -27,7 +31,7 @@
                 </ComboBox.ItemTemplate>
             </ComboBox>
 
-            <Button Grid.Column="3" Content="Refresh" Command="{Binding RefreshCommand}" Classes="ghost" IsEnabled="{Binding !IsLoading}" VerticalAlignment="Center"/>
+            <Button Grid.Column="4" Content="Refresh" Command="{Binding RefreshCommand}" Classes="ghost" IsEnabled="{Binding !IsLoading}" VerticalAlignment="Center"/>
         </Grid>
 
         <!-- Loading / Status -->

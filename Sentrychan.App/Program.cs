@@ -382,6 +382,26 @@ public static class Program
                 db.SaveChanges();
             }
 
+            // "Auto-download only from" was a second list beside the preferred groups, saying nearly
+            // the same thing. Its groups join the preferred list (after the ones already there, so the
+            // order — the priority — is kept) and the release-group mode does its job from now on.
+            var retired = db.AppConfigs.FirstOrDefault(c => c.Key == ReleaseGroupPolicy.RetiredAutoDownloadKey);
+            if (retired != null)
+            {
+                var preferredRow = db.AppConfigs.FirstOrDefault(c => c.Key == ReleaseGroupPolicy.GroupsKey);
+                var merged = ReleaseGroupPolicy.SplitGroups(preferredRow?.Value);
+                merged.AddRange(ReleaseGroupPolicy.SplitGroups(retired.Value)
+                    .Where(g => !merged.Contains(g, StringComparer.OrdinalIgnoreCase)));
+                if (merged.Count > 0)
+                {
+                    if (preferredRow == null) db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = ReleaseGroupPolicy.GroupsKey, Value = string.Join(",", merged) });
+                    else preferredRow.Value = string.Join(",", merged);
+                }
+                db.AppConfigs.Remove(retired);
+                db.SaveChanges();
+                Console.WriteLine($"[Program] Merged the auto-download groups into the preferred groups: {string.Join(", ", merged)}");
+            }
+
             // No feeds are seeded here. The app ships knowing no content site; default feeds,
             // if any, come from a loaded source pack (see SeedProviderDefaults).
         }

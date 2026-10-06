@@ -76,6 +76,22 @@ public class LatestArrivalsViewModel : ViewModelBase
         }
     }
 
+    private bool _myGroupsOnly;
+    /// <summary>
+    /// Lists only releases from the preferred groups. A view filter: anything listed still
+    /// downloads as picked — the group rule only governs automatic downloads.
+    /// </summary>
+    public bool MyGroupsOnly
+    {
+        get => _myGroupsOnly;
+        set
+        {
+            if (_myGroupsOnly == value) return;
+            this.RaiseAndSetIfChanged(ref _myGroupsOnly, value);
+            _ = LoadLatestAsync();
+        }
+    }
+
     // ── Poster lightbox ────────────────────────────────────────────
     private string? _previewImageUrl;
     public string? PreviewImageUrl
@@ -359,6 +375,14 @@ public class LatestArrivalsViewModel : ViewModelBase
                 "Batches only"  => entries.Where(e => e.IsBatch),
                 _               => entries
             };
+            if (MyGroupsOnly)
+            {
+                var groups = Sentrychan.Core.Services.ReleaseGroupPolicy.SplitGroups(
+                    (await db.AppConfigs.AsNoTracking().FirstOrDefaultAsync(
+                        c => c.Key == Sentrychan.Core.Services.ReleaseGroupPolicy.GroupsKey, ct))?.Value);
+                if (groups.Count > 0)
+                    filtered = filtered.Where(e => Sentrychan.Core.Services.ReleaseGroupPolicy.IsPreferred(e.Group, groups));
+            }
 
             _allEntries = filtered.ToList();
             _lastLoaded = DateTime.Now;

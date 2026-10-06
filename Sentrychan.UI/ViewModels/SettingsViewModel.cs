@@ -83,12 +83,43 @@ public class SettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _preferredReleaseGroups, value);
     }
 
-    private string _autoDownloadGroups = string.Empty;
-    public string AutoDownloadGroups
+    // How strictly automatic downloads keep to the preferred groups (ReleaseGroupPolicy).
+    public const string GroupModeAny = "Any group";
+    public const string GroupModePrefer = "Prefer my groups";
+    public const string GroupModeOnly = "Only my groups";
+    public string[] GroupModeOptions { get; } = [GroupModePrefer, GroupModeOnly, GroupModeAny];
+
+    private string _groupMode = GroupModePrefer;
+    public string GroupMode
     {
-        get => _autoDownloadGroups;
-        set => this.RaiseAndSetIfChanged(ref _autoDownloadGroups, value);
+        get => _groupMode;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _groupMode, value);
+            this.RaisePropertyChanged(nameof(GroupModeHint));
+        }
     }
+
+    public string GroupModeHint => GroupMode switch
+    {
+        GroupModeOnly => "New episodes download only from the groups above. Releases from other groups are ignored.",
+        GroupModeAny => "Any group. When several release the same episode, the one highest in the list wins; other groups' releases ask first on shows set to auto-download.",
+        _ => $"Waits up to {Sentrychan.Core.Services.ReleaseGroupPolicy.PreferWait.TotalHours:0} hours for one of the groups above, then takes another group's release.",
+    } + " Only automatic downloads follow this — what you pick yourself in Search or Latest always downloads. Each show can have its own rule (its page → Release groups).";
+
+    public static string GroupModeLabel(Sentrychan.Core.Services.GroupMode mode) => mode switch
+    {
+        Sentrychan.Core.Services.GroupMode.Any => GroupModeAny,
+        Sentrychan.Core.Services.GroupMode.Only => GroupModeOnly,
+        _ => GroupModePrefer,
+    };
+
+    public static Sentrychan.Core.Services.GroupMode GroupModeFromLabel(string? label) => label switch
+    {
+        GroupModeAny => Sentrychan.Core.Services.GroupMode.Any,
+        GroupModeOnly => Sentrychan.Core.Services.GroupMode.Only,
+        _ => Sentrychan.Core.Services.GroupMode.Prefer,
+    };
     
     private string _vlcPath = "vlc";
     public string VlcPath
@@ -630,7 +661,8 @@ public class SettingsViewModel : ViewModelBase
         WindowsNotifications = await GetConfig(db, Sentrychan.Core.Services.NotificationSettings.WindowsKey, "true", ct) == "true";
         WatchFolderMode = await GetConfig(db, "DownloadOrganizeMode", "Own", ct) == "Watch";
         PreferredReleaseGroups = await GetConfig(db, "PreferredReleaseGroups", "", ct);
-        AutoDownloadGroups = await GetConfig(db, "AutoDownloadGroups", "", ct);
+        GroupMode = GroupModeLabel(Sentrychan.Core.Services.ReleaseGroupPolicy.ParseMode(
+            await GetConfig(db, Sentrychan.Core.Services.ReleaseGroupPolicy.ModeKey, "", ct)));
         VlcPath = await GetConfig(db, "VlcPath", "vlc", ct);
         SelectedPlayer = await GetConfig(db, "SelectedPlayer", "Internal", ct);
         MalUsername = await GetConfig(db, "MalUsername", "", ct);
@@ -880,7 +912,7 @@ public class SettingsViewModel : ViewModelBase
             await SetConfig(db, "CheckIntervalMinutes", CheckInterval, ct);
             await SetConfig(db, "QualityPreference", QualityPreference, ct);
             await SetConfig(db, "PreferredReleaseGroups", PreferredReleaseGroups, ct);
-            await SetConfig(db, "AutoDownloadGroups", AutoDownloadGroups, ct);
+            await SetConfig(db, Sentrychan.Core.Services.ReleaseGroupPolicy.ModeKey, GroupModeFromLabel(GroupMode).ToString(), ct);
             await SetConfig(db, "VlcPath", VlcPath, ct);
             await SetConfig(db, "SelectedPlayer", SelectedPlayer, ct);
             await SetConfig(db, "MalUsername", MalUsername, ct);

@@ -283,6 +283,27 @@
                     </Border>
                 </StackPanel>
 
+                <!-- Section 7a: this show's release groups (automatic downloads only) -->
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Release Groups" FontSize="20" FontWeight="Bold"/>
+                    <Border Background="{DynamicResource CardBackgroundBrush}" Padding="20" CornerRadius="8">
+                        <Grid ColumnDefinitions="*, *">
+                            <StackPanel Grid.Column="0" Spacing="6">
+                                <TextBlock Text="New episodes" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <ComboBox ItemsSource="{Binding GroupModeOptions}" SelectedItem="{Binding GroupMode}" MinWidth="220"/>
+                                <TextBlock Text="For automatic downloads only. What you pick yourself in Search or Latest always downloads."
+                                           FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="6" Margin="24,0,0,0">
+                                <TextBlock Text="Groups for this show" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBox Text="{Binding SeriesGroups, UpdateSourceTrigger=LostFocus}" Watermark="Your preferred groups"/>
+                                <TextBlock Text="Leave empty to use your preferred groups. For a show only one other group subs, put that group here."
+                                           FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
                 <!-- Section 7b: Library naming exceptions -->
                 <StackPanel Spacing="16">
                     <TextBlock Text="Library Files" FontSize="20" FontWeight="Bold"/>

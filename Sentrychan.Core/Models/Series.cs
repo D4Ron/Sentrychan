@@ -50,6 +50,12 @@ public class Series
     /// <summary>"Keep full file names": files move into the naming template's folders but keep their release names.</summary>
     public bool KeepFileNames { get; set; }
 
+    /// <summary>This series' own release-group rule (Any / Prefer / Only); null follows the app's setting.</summary>
+    public string? GroupMode { get; set; }
+
+    /// <summary>This series' own preferred groups, comma separated; null uses the app's list.</summary>
+    public string? PreferredGroups { get; set; }
+
     public bool IsMovie => string.Equals(MediaType, "Movie", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>

@@ -188,18 +188,18 @@
                             </ctrls:SettingsSection>
 
                             <ctrls:SettingsSection Title="Release groups"
-                                                   Description="Which release wins when several groups put out the same episode.">
+                                                   Description="The groups you want new episodes from, and how strictly to keep to them.">
                                 <StackPanel Classes="fields">
                                     <StackPanel>
                                         <TextBlock Text="Preferred groups" Classes="label"/>
                                         <TextBox Text="{Binding PreferredReleaseGroups}"
                                                  Watermark="GroupA, GroupB — highest priority first"/>
                                     </StackPanel>
-                                    <StackPanel IsVisible="{Binding ShowAdvanced}">
-                                        <TextBlock Text="Auto-download only from" Classes="label"/>
-                                        <TextBox Text="{Binding AutoDownloadGroups}" Watermark="Any group"/>
-                                        <TextBlock Classes="hint"
-                                                   Text="For series with auto-download on. Releases from other groups wait for your confirmation."/>
+                                    <StackPanel>
+                                        <TextBlock Text="New episodes" Classes="label"/>
+                                        <ComboBox ItemsSource="{Binding GroupModeOptions}" SelectedItem="{Binding GroupMode}"
+                                                  HorizontalAlignment="Left" MinWidth="260"/>
+                                        <TextBlock Classes="hint" Text="{Binding GroupModeHint}"/>
                                     </StackPanel>
                                 </StackPanel>
                             </ctrls:SettingsSection>

@@ -214,9 +214,12 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
 
             var qualityPreference = await GetConfigValueAsync("QualityPreference", "1080p", ct);
 
-            // Group priority (which release to pick) + auto-download whitelist.
-            var preferredGroups = SplitGroups(await GetConfigValueAsync("PreferredReleaseGroups", "", ct));
-            var autoDownloadGroups = SplitGroups(await GetConfigValueAsync("AutoDownloadGroups", "", ct));
+            // Which groups the automatic downloads keep to (see ReleaseGroupPolicy).
+            var groupRule = new GroupRule(
+                ReleaseGroupPolicy.SplitGroups(await GetConfigValueAsync(ReleaseGroupPolicy.GroupsKey, "", ct)),
+                ReleaseGroupPolicy.ParseMode(await GetConfigValueAsync(ReleaseGroupPolicy.ModeKey, "", ct)),
+                ReleaseGroupPolicy.ReadSightings(await GetConfigValueAsync(ReleaseGroupPolicy.SightingsKey, "", ct)),
+                _logger);
 
             var priorityFeeds = feeds.Where(f => f.FeedType == ModelFeedType.Priority).ToList();
             var secondaryFeeds = feeds.Where(f => f.FeedType == ModelFeedType.Secondary).ToList();
@@ -237,7 +240,7 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                 }
 
                 var quality = feed.PreferredQuality ?? qualityPreference;
-                var found = await CheckFeedAsync(feed, seriesList, quality, foundKeys, preferredGroups, ct);
+                var found = await CheckFeedAsync(feed, seriesList, quality, foundKeys, groupRule, ct);
                 foreach (var ep in found)
                 {
                     var key = (ep.MalId, ep.EpisodeNumber);
@@ -255,7 +258,7 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                 }
 
                 var quality = feed.PreferredQuality ?? qualityPreference;
-                var found = await CheckFeedAsync(feed, seriesList, quality, foundKeys, preferredGroups, ct);
+                var found = await CheckFeedAsync(feed, seriesList, quality, foundKeys, groupRule, ct);
                 foreach (var ep in found)
                 {
                     var key = (ep.MalId, ep.EpisodeNumber);
@@ -272,7 +275,7 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                 // Skip if we already found Episode 1 for this series in the normal feeds
                 if (foundKeys.Any(k => k.MalId == series.MalId && k.EpisodeNumber <= 1)) continue;
 
-                var earlyEp = await SearchForEarlyEpisodeAsync(series, qualityPreference, ct);
+                var earlyEp = await SearchForEarlyEpisodeAsync(series, qualityPreference, groupRule, ct);
                 if (earlyEp != null)
                 {
                     var key = (earlyEp.MalId, earlyEp.EpisodeNumber);
@@ -282,6 +285,20 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                     }
                 }
             }
+
+            // "Prefer my groups": episodes no preferred group released within the wait. Their
+            // release was kept when first seen — the feed has long moved past it by now.
+            foreach (var (series, episode, sighting) in groupRule.WaitsOver(seriesList))
+            {
+                if (!foundKeys.Add((series.MalId, episode))) continue;
+                _logger.LogInformation("No preferred group released {Title} Ep {Ep} within {Hours} h — taking {Group}",
+                    series.Title, episode, ReleaseGroupPolicy.PreferWait.TotalHours, ExtractSourceGroup(sighting.Title));
+                newEpisodes.Add(new NewEpisodeFoundEvent(series.MalId, series.Title, episode, sighting.Link, sighting.Title, IsSecondary: false));
+            }
+            foreach (var ep in newEpisodes.Concat(pendingEpisodes)) groupRule.Done(ep.MalId, ep.EpisodeNumber);
+            groupRule.Forget(seriesList);
+            if (groupRule.Changed)
+                await SetConfigValueAsync(ReleaseGroupPolicy.SightingsKey, groupRule.SaveSightings(), ct);
 
             // ── Publish with AutoDownload / confirmation branching ─────────────
             // Load SkippedDownloads for all series that appear in newEpisodes
@@ -325,10 +342,14 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                     continue;
                 }
 
-                // Auto-download only when enabled AND (no group whitelist, or the
-                // release is from a whitelisted group). Otherwise fall to confirm.
+                // Auto-download only when enabled AND the release is one the series' group rule
+                // takes without asking: a preferred group, no list at all, or the fallback after the
+                // "Prefer" wait (the wait was the user's consent). "Any group" still asks about others.
                 var epGroup = ExtractSourceGroup(ep.RssTitle);
-                bool groupAllowed = autoDownloadGroups.Count == 0 || GroupInList(epGroup, autoDownloadGroups);
+                var (seriesGroups, seriesMode) = groupRule.For(series);
+                bool groupAllowed = seriesGroups.Count == 0
+                                    || ReleaseGroupPolicy.IsPreferred(epGroup, seriesGroups)
+                                    || seriesMode == GroupMode.Prefer;
 
                 if (series.AutoDownload && groupAllowed)
                 {
@@ -385,7 +406,7 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
         List<Series> seriesList,
         string qualityPreference,
         HashSet<(int MalId, int EpisodeNumber)> globalFoundKeys,
-        List<string> preferredGroups,
+        GroupRule groupRule,
         CancellationToken ct)
     {
         var results = new List<NewEpisodeFoundEvent>();
@@ -431,7 +452,9 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                     var key = (series.MalId, episodeNum.Value);
                     if (globalFoundKeys.Contains(key)) break;
 
-                    int rank = GroupRank(ExtractSourceGroup(title), preferredGroups);
+                    // The series' group rule: take it, wait for a preferred group, or leave it.
+                    var decision = groupRule.Decide(series, episodeNum.Value, title, link, out var rank);
+                    if (decision != GroupDecision.Take) break;
                     var evt = new NewEpisodeFoundEvent(
                         MalId: series.MalId,
                         SeriesTitle: series.Title,
@@ -471,30 +494,68 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
             .ToList();
     }
 
-    /// <summary>Priority rank of a release group: index in the preferred list (lower = better), or a large value if not listed.</summary>
-    private static int GroupRank(string group, List<string> preferredGroups)
+    /// <summary>
+    /// One check's view of the release-group rule: the app's list and mode, each series' own,
+    /// and the episodes waiting for a preferred group (persisted between checks).
+    /// </summary>
+    internal sealed class GroupRule(List<string> groups, GroupMode mode, Dictionary<string, GroupSighting> sightings, ILogger log)
     {
-        for (int i = 0; i < preferredGroups.Count; i++)
+        private readonly DateTime _now = DateTime.UtcNow;
+        public bool Changed { get; private set; }
+
+        public (List<string> Groups, GroupMode Mode) For(Series series) => ReleaseGroupPolicy.For(series, groups, mode);
+
+        public GroupDecision Decide(Series series, int episode, string title, string link, out int rank)
         {
-            if (group.Contains(preferredGroups[i], StringComparison.OrdinalIgnoreCase) ||
-                preferredGroups[i].Contains(group, StringComparison.OrdinalIgnoreCase))
-                return i;
+            var (seriesGroups, seriesMode) = For(series);
+            var group = ExtractSourceGroup(title);
+            rank = ReleaseGroupPolicy.Rank(group, seriesGroups);
+            var key = ReleaseGroupPolicy.Key(series.MalId, episode);
+            sightings.TryGetValue(key, out var seen);
+            var decision = ReleaseGroupPolicy.Decide(seriesMode, group, seriesGroups, seen?.FirstSeen, _now);
+            if (decision == GroupDecision.Wait && seen == null)
+            {
+                sightings[key] = new GroupSighting(_now, title, link);
+                Changed = true;
+                log.LogInformation("{Title} Ep {Ep} is out from {Group}, not a preferred group — waiting until {Until:u} for one",
+                    series.Title, episode, group, ReleaseGroupPolicy.WaitEnds(_now));
+            }
+            return decision;
         }
-        return 10_000;
+
+        /// <summary>Waiting episodes whose wait is over and that the series still needs.</summary>
+        public IEnumerable<(Series Series, int Episode, GroupSighting Sighting)> WaitsOver(List<Series> seriesList)
+        {
+            foreach (var (key, sighting) in sightings.ToList())
+            {
+                if (_now - sighting.FirstSeen < ReleaseGroupPolicy.PreferWait) continue;
+                var parts = key.Split(':');
+                if (parts.Length != 2 || !int.TryParse(parts[0], out var malId) || !int.TryParse(parts[1], out var ep)) continue;
+                var series = seriesList.FirstOrDefault(s => s.MalId == malId);
+                if (series == null || ep <= series.LastEpisodeNumber || For(series).Mode != GroupMode.Prefer) continue;
+                yield return (series, ep, sighting);
+            }
+        }
+
+        /// <summary>An episode is being downloaded: stop waiting for it.</summary>
+        public void Done(int malId, int episode) => Changed |= sightings.Remove(ReleaseGroupPolicy.Key(malId, episode));
+
+        /// <summary>Drops waits for episodes the series already has (or series no longer monitored).</summary>
+        public void Forget(List<Series> seriesList)
+        {
+            foreach (var key in sightings.Keys.ToList())
+            {
+                var parts = key.Split(':');
+                var series = parts.Length == 2 && int.TryParse(parts[0], out var malId) ? seriesList.FirstOrDefault(s => s.MalId == malId) : null;
+                if (series == null || (int.TryParse(parts[1], out var ep) && ep <= series.LastEpisodeNumber))
+                    Changed |= sightings.Remove(key);
+            }
+        }
+
+        public string SaveSightings() => ReleaseGroupPolicy.WriteSightings(sightings, _now);
     }
 
-    private static List<string> SplitGroups(string raw) =>
-        raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-
-    private static bool GroupInList(string group, List<string> groups)
-    {
-        if (groups.Count == 0) return false;
-        return groups.Any(g =>
-            group.Contains(g, StringComparison.OrdinalIgnoreCase) ||
-            g.Contains(group, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private async Task<NewEpisodeFoundEvent?> SearchForEarlyEpisodeAsync(Series series, string qualityPreference, CancellationToken ct)
+    private async Task<NewEpisodeFoundEvent?> SearchForEarlyEpisodeAsync(Series series, string qualityPreference, GroupRule groupRule, CancellationToken ct)
     {
         // Needs a release provider, which only a loaded source pack supplies.
         if (!_releases.HasSearch) return null;
@@ -513,7 +574,9 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
             foreach (var query in queries)
                 results.AddRange(await _releases.SearchAsync(query, quality: null, secretMode: false, ct));
 
-            foreach (var result in results)
+            // Preferred groups first, then the rule decides (a non-preferred one may have to wait).
+            var seriesGroups = groupRule.For(series).Groups;
+            foreach (var result in results.OrderBy(r => ReleaseGroupPolicy.Rank(ExtractSourceGroup(r.Title), seriesGroups)))
             {
                 var title = result.Title;
                 var link = result.DownloadLink;
@@ -522,6 +585,7 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                 var (matched, episodeNum) = MatchRelease(title, series);
                 if (!matched) continue;
                 if (episodeNum == null || episodeNum <= series.LastEpisodeNumber) continue;
+                if (groupRule.Decide(series, episodeNum.Value, title, link, out _) != GroupDecision.Take) continue;
 
                 _logger.LogInformation("Targeted search found early episode: {Title} Ep {Ep} from {Source}", series.Title, episodeNum.Value, ExtractSourceGroup(title));
 
@@ -631,6 +695,22 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
     {
         var match = SourceGroupPattern.Match(title);
         return match.Success ? match.Groups[1].Value : "Unknown";
+    }
+
+    private async Task SetConfigValueAsync(string key, string value, CancellationToken ct)
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            var row = await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == key, ct);
+            if (row == null) db.AppConfigs.Add(new AppConfig { Key = key, Value = value });
+            else row.Value = value;
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Couldn't save {Key}", key);
+        }
     }
 
     private async Task<T> GetConfigValueAsync<T>(
