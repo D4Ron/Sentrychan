@@ -183,9 +183,16 @@ public class TitleResolverService : ITitleResolverService
                 }
             }
 
+            if (entry.RelatedAnime is { Count: > 0 } related)
+            {
+                var ids = related.Select(u => ExtractMalId([u])).Where(id => id > 0).Distinct().ToArray();
+                entry.RelatedMal = ids.Length > 0 ? ids : null;
+            }
+
             // Only indexing reads these; together they were most of the strings the app held.
             entry.Sources = null;
             entry.Synonyms = null;
+            entry.RelatedAnime = null;
             if (entry.Type != null) entry.Type = Shared(labels, entry.Type);
             if (entry.Status != null) entry.Status = Shared(labels, entry.Status);
             if (entry.AnimeSeason?.Season != null) entry.AnimeSeason.Season = Shared(labels, entry.AnimeSeason.Season);
@@ -367,12 +374,74 @@ public class TitleResolverService : ITitleResolverService
     public ResolvedAnime? GetByMalId(int malId) =>
         IsReady && _byMalId.TryGetValue(malId, out var idx) ? ToResolved(_entries[idx]) : null;
 
+    /// <summary>
+    /// A show's seasons as MAL links them (sequel/prequel, see SeasonFamilyService), when known.
+    /// They join seasons whose titles share nothing ("Jujutsu Kaisen" → "… Shimetsu Kaiyuu - Zenpen",
+    /// "Enen no Shouboutai" → "… Ni no Shou"), which the title chain can't. Unknown → the title chain.
+    /// </summary>
+    public Func<int, IReadOnlyList<int>?>? Families { get; set; }
+
     public IReadOnlyList<ResolvedAnime> GetSeasonChain(int malId)
     {
         if (!IsReady) return [];
-        if (_chainByMalId.TryGetValue(malId, out var chain)) return chain.Select(i => ToResolved(_entries[i])).ToList();
+        if (Families?.Invoke(malId) is { Count: > 1 } family)
+        {
+            var members = family.Select(GetByMalId).OfType<ResolvedAnime>()
+                .Where(a => a.Type is { } t && (t.Equals("TV", StringComparison.OrdinalIgnoreCase) || t.Equals("ONA", StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(a => a.Year ?? int.MaxValue).ThenBy(a => SeasonRank(a.AnimeSeason)).ThenBy(a => a.MalId)
+                .ToList();
+            if (members.Count > 1 && members.Any(m => m.MalId == malId)) return members;
+        }
+
+        // Without them: the offline database's own links, combined with the title chain.
+        var ids = new HashSet<int>(OfflineFamily(malId));
+        if (_chainByMalId.TryGetValue(malId, out var chain))
+            foreach (var i in chain) ids.Add(_entries[i].MalId);
+        if (ids.Count > 1)
+            return ids.Select(GetByMalId).OfType<ResolvedAnime>()
+                .OrderBy(a => a.Year ?? int.MaxValue).ThenBy(a => SeasonRank(a.AnimeSeason)).ThenBy(a => a.MalId)
+                .ToList();
         return GetByMalId(malId) is { } self ? [self] : [];
     }
+
+    /// <summary>
+    /// The entries the offline database links to this one, followed link to link — only between
+    /// entries of the same kind (TV with TV, ONA with ONA). Its links carry no relation type, so a
+    /// show's chibi shorts (ONA) or films would join a TV series otherwise.
+    /// </summary>
+    private IEnumerable<int> OfflineFamily(int malId)
+    {
+        if (!_byMalId.TryGetValue(malId, out var start)) return [];
+        var type = _entries[start].Type;
+        if (!string.Equals(type, "TV", StringComparison.OrdinalIgnoreCase) && !string.Equals(type, "ONA", StringComparison.OrdinalIgnoreCase))
+            return [];
+
+        var seen = new HashSet<int> { malId };
+        var queue = new Queue<int>([malId]);
+        while (queue.Count > 0 && seen.Count <= SeasonFamilyService.MaxMembers)
+        {
+            if (!_byMalId.TryGetValue(queue.Dequeue(), out var i) || _entries[i].RelatedMal is not { } related) continue;
+            foreach (var id in related)
+                if (_byMalId.TryGetValue(id, out var j) && string.Equals(_entries[j].Type, type, StringComparison.OrdinalIgnoreCase) && seen.Add(id))
+                    queue.Enqueue(id);
+        }
+        // A franchise this big links far more than one show's seasons: leave it to the titles.
+        if (seen.Count > SeasonFamilyService.MaxMembers) return [];
+
+        // Links are walked through anything of the same kind, but only seasons are kept: not a
+        // one- or two-episode special or collab, and named after the show — its title starts, word
+        // for word, with the show's base name (the shortest family title this one starts with:
+        // "Enen no Shouboutai" for "… San no Shou"), not a spin-off with a title of its own.
+        var keys = seen.ToDictionary(id => id, id => ChainKey(_entries[_byMalId[id]].Title ?? ""));
+        var own = keys[malId];
+        var root = keys.Values.Where(k => IsWordPrefix(k, own)).OrderBy(k => k.Length).FirstOrDefault() ?? own;
+        return seen.Where(id =>
+            id == malId ||
+            (_entries[_byMalId[id]].Episodes is not (> 0 and <= 2) && IsWordPrefix(root, keys[id])));
+    }
+
+    private static bool IsWordPrefix(string prefix, string of) =>
+        prefix.Length > 0 && of.StartsWith(prefix, StringComparison.Ordinal) && (of.Length == prefix.Length || of[prefix.Length] == ' ');
 
     // ── Season chains ─────────────────────────────────────────────
 
@@ -632,8 +701,15 @@ public class TitleResolverService : ITitleResolverService
         [JsonPropertyName("animeSeason")]
         public OfflineAnimeSeason? AnimeSeason { get; set; }
 
+        [JsonPropertyName("relatedAnime")]
+        public List<string>? RelatedAnime { get; set; }
+
         [JsonIgnore]
         public int MalId { get; set; }
+
+        /// <summary>MAL ids of the related entries (any relation: sequel, side story, film…).</summary>
+        [JsonIgnore]
+        public int[]? RelatedMal { get; set; }
     }
 
     private class OfflineAnimeSeason

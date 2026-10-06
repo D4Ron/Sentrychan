@@ -35,6 +35,10 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
     // Release-index access for the early-episode search. Empty unless a source pack is loaded.
     private readonly IReleaseProviders _releases;
 
+    // Links each show's seasons through MAL's relations (see ReleaseMatcher); filled in as checks run.
+    private readonly SeasonFamilyService? _families;
+    private Task _familyRefresh = Task.CompletedTask;
+
     public RssMonitorService(
         IDbContextFactory<AppDbContext> dbFactory,
         IMediator mediator,
@@ -42,7 +46,8 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
         IEpisodeNormalizer normalizer,
         ITitleResolverService titleResolver,
         IReleaseProviders releases,
-        ILogger<RssMonitorService> logger)
+        ILogger<RssMonitorService> logger,
+        SeasonFamilyService? families = null)
     {
         _dbFactory = dbFactory;
         _mediator = mediator;
@@ -51,6 +56,7 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
         _titleResolver = titleResolver;
         _releases = releases;
         _logger = logger;
+        _families = families;
     }
 
     // ── BackgroundService ──────────────────────────────────────────
@@ -181,6 +187,15 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
             var seriesList = await db.Series
                 .Where(s => s.MonitoringState == MonitoringState.Active)
                 .ToListAsync(ct);
+
+            // Shows whose seasons aren't linked yet (just added, or gone stale) get linked in the
+            // background — a few paced requests, never holding up the check.
+            if (_families != null && _familyRefresh.IsCompleted)
+            {
+                var ids = await db.Series.Select(s => s.MalId).Where(id => id > 0).ToListAsync(ct);
+                if (ids.Any(_families.NeedsFetch))
+                    _familyRefresh = Task.Run(() => _families.RefreshAsync(ids, CancellationToken.None));
+            }
 
             var pausedCount = await db.Series.CountAsync(s => s.MonitoringState != MonitoringState.Active, ct);
             if (pausedCount > 0)
@@ -564,10 +579,10 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
         {
             var targetEp = Math.Max(1, series.LastEpisodeNumber + 1); // We look for 1 if it's -1 or 0
             var queries = new List<string> { $"{series.Title} {targetEp:D2}" };
-            // A later cour is usually released under the show's first title, numbered straight through.
-            if (ReleaseMatcher.AbsoluteEpisode(_titleResolver, series, targetEp) is { } absolute &&
-                _titleResolver.GetSeasonChain(series.MalId) is [var first, ..])
-                queries.Insert(0, $"{first.CanonicalTitle} {absolute:D2}");
+            // A later season is often released under an earlier title, numbered straight through
+            // ("Jujutsu Kaisen - 50", "Bleach - Sennen Kessen Hen - 48").
+            foreach (var (title, absolute) in ReleaseMatcher.AbsoluteForms(_titleResolver, series, targetEp))
+                queries.Insert(0, $"{title} {absolute:D2}");
 
             _logger.LogInformation("Performing targeted search for {Title} Ep {Ep}", series.Title, targetEp);
             var results = new List<ReleaseResult>();

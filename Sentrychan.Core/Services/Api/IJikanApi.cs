@@ -20,6 +20,11 @@ public interface IJikanApi
         int malId,
         CancellationToken ct = default);
 
+    [Get("/anime/{malId}/relations")]
+    Task<JikanResponse<List<AnimeRelation>>> GetAnimeRelationsAsync(
+        int malId,
+        CancellationToken ct = default);
+
     [Get("/anime/{malId}/characters")]
     Task<JikanResponse<List<AnimeCharacter>>> GetAnimeCharactersAsync(
         int malId,

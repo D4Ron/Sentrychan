@@ -218,6 +218,10 @@ public static class Program
                 services.AddSingleton<Sentrychan.Core.Library.LibraryTidyService>();
                 services.AddSingleton<Sentrychan.Core.Sources.SourcesTransferService>();
                 services.AddSingleton<Sentrychan.Core.Sources.SourcesChecker>();
+                services.AddSingleton(sp => new SeasonFamilyService(
+                    async (malId, ct) => (await sp.GetRequiredService<Sentrychan.Core.Services.Api.IJikanApi>().GetAnimeRelationsAsync(malId, ct)).Data,
+                    sp.GetRequiredService<ITitleResolverService>(),
+                    sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SeasonFamilyService>>()));
                 services.AddSingleton<PluginSourceLoader>();
                 services.AddSingleton<Sentrychan.Core.Sources.ISourcePackHost>(sp => sp.GetRequiredService<PluginSourceLoader>());
                 services.AddSingleton<Sentrychan.Core.Vault.VaultService>();

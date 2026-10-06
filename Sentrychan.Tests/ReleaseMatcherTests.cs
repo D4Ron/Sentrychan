@@ -67,10 +67,10 @@ public class ReleaseMatcherTests
 
     [Theory]
     // Counted straight through under the first cour's title.
-    [InlineData("[SubsPlease] Bleach - Sennen Kessen Hen - 48 (1080p) [F6CC4D70].mkv", "No", "No", "No", "ep8")]
-    [InlineData("[SubsPlease] Bleach - Sennen Kessen Hen - 41 (1080p).mkv", "No", "No", "No", "ep1")]
-    [InlineData("[SubsPlease] Bleach - Sennen Kessen Hen - 07 (1080p).mkv", "ep7", "No", "No", "No")]
-    [InlineData("[SubsPlease] Bleach - Sennen Kessen Hen - 20 (1080p).mkv", "No", "ep7", "No", "No")]
+    [InlineData("[Grp] Bleach - Sennen Kessen Hen - 48 (1080p) [F6CC4D70].mkv", "No", "No", "No", "ep8")]
+    [InlineData("[Grp] Bleach - Sennen Kessen Hen - 41 (1080p).mkv", "No", "No", "No", "ep1")]
+    [InlineData("[Grp] Bleach - Sennen Kessen Hen - 07 (1080p).mkv", "ep7", "No", "No", "No")]
+    [InlineData("[Grp] Bleach - Sennen Kessen Hen - 20 (1080p).mkv", "No", "ep7", "No", "No")]
     // "S01E45": season 1 by name, numbered straight through.
     [InlineData("[Grp] BLEACH Thousand-Year Blood War S01E45 1080p WEB-DL.mkv", "No", "No", "No", "ep5")]
     // Named after its cour and numbered within it.
@@ -89,7 +89,7 @@ public class ReleaseMatcherTests
     public void An_unknown_earlier_length_is_never_guessed()
     {
         var r = Bleach(cour2: A(53998, "Bleach: Sennen Kessen-hen - Ketsubetsu-tan", null));
-        Assert.Equal("No", Verdict(r, "[SubsPlease] Bleach - Sennen Kessen Hen - 48 (1080p).mkv", Cour4));
+        Assert.Equal("No", Verdict(r, "[Grp] Bleach - Sennen Kessen Hen - 48 (1080p).mkv", Cour4));
         Assert.Null(ReleaseMatcher.AbsoluteEpisode(r, S(Cour4), 8));
     }
 
@@ -125,8 +125,8 @@ public class ReleaseMatcherTests
             .Name("Re Zero kara Hajimeru Isekai Seikatsu 3rd Season", s3);
         var all = new[] { s1, s2, s2p2, s3 };
 
-        Assert.Equal(["No", "No", "No", "ep1"], all.Select(a => Verdict(r, "[SubsPlease] Re Zero kara Hajimeru Isekai Seikatsu - 51 (1080p).mkv", a)));
-        Assert.Equal(["No", "No", "No", "ep1"], all.Select(a => Verdict(r, "[SubsPlease] Re Zero kara Hajimeru Isekai Seikatsu S3 - 01 (1080p).mkv", a)));
+        Assert.Equal(["No", "No", "No", "ep1"], all.Select(a => Verdict(r, "[Grp] Re Zero kara Hajimeru Isekai Seikatsu - 51 (1080p).mkv", a)));
+        Assert.Equal(["No", "No", "No", "ep1"], all.Select(a => Verdict(r, "[Grp] Re Zero kara Hajimeru Isekai Seikatsu S3 - 01 (1080p).mkv", a)));
         Assert.Equal(51, ReleaseMatcher.AbsoluteEpisode(r, S(s3), 1));
     }
 
@@ -145,6 +145,71 @@ public class ReleaseMatcherTests
     {
         var r = Bleach();
         Assert.Equal(ReleaseVerdict.Unknown, ReleaseMatcher.Match(r, "[Grp] Something Else Entirely - 03 [1080p].mkv", S(Cour4)).Verdict);
+    }
+
+    // ── Families linked by MAL's sequel/prequel relations ───────────
+
+    [Fact]
+    public void With_the_original_series_in_the_family_numbers_still_count_from_the_title_named()
+    {
+        var original = A(269, "Bleach", 366);
+        var r = new FakeResolver([original, Cour1, Cour2, Cour3, Cour4])
+            .Name("Bleach - Sennen Kessen Hen", Cour1)
+            .Name("BLEACH Thousand-Year Blood War", Cour1)
+            .Name("Bleach", original);
+        var all = new[] { original, Cour1, Cour2, Cour3, Cour4 };
+
+        Assert.Equal(["No", "No", "No", "No", "ep8"], all.Select(a => Verdict(r, "[Grp] Bleach - Sennen Kessen Hen - 48 (1080p).mkv", a)));
+        Assert.Equal(["No", "No", "No", "No", "ep8"], all.Select(a => Verdict(r, "[Grp] BLEACH Thousand-Year Blood War S04E08 [1080p].mkv", a)));
+        Assert.Equal(["ep366", "No", "No", "No", "No"], all.Select(a => Verdict(r, "[Grp] Bleach - 366 (1080p).mkv", a)));
+    }
+
+    [Fact]
+    public void A_season_with_its_own_title_is_found_by_its_straight_through_number()
+    {
+        var s1 = A(40748, "Jujutsu Kaisen", 24);
+        var s2 = A(51009, "Jujutsu Kaisen 2nd Season", 23);
+        var s3 = A(57658, "Jujutsu Kaisen: Shimetsu Kaiyuu - Zenpen", 12);
+        var s4 = new ResolvedAnime(63824, "Jujutsu Kaisen: Shimetsu Kaiyuu - Kouhen", 1, null, null, 2026, "FALL", "UPCOMING", "TV");
+        var r = new FakeResolver([s1, s2, s3, s4]).Name("Jujutsu Kaisen", s1);
+        var all = new[] { s1, s2, s3, s4 };
+
+        Assert.Equal(["No", "No", "ep3", "No"], all.Select(a => Verdict(r, "[Grp] Jujutsu Kaisen - 50 (1080p).mkv", a)));
+        Assert.Equal(["No", "No", "ep12", "No"], all.Select(a => Verdict(r, "[Grp] Jujutsu Kaisen - 59 (1080p).mkv", a)));
+        Assert.Equal(["No", "No", "No", "ep1"], all.Select(a => Verdict(r, "[Grp] Jujutsu Kaisen - 60 (1080p).mkv", a)));
+        Assert.Equal(["ep24", "No", "No", "No"], all.Select(a => Verdict(r, "[Grp] Jujutsu Kaisen - 24 (1080p).mkv", a)));
+        Assert.Contains(("Jujutsu Kaisen", 50), ReleaseMatcher.AbsoluteForms(r, S(s3), 3));
+    }
+
+    [Fact]
+    public void A_season_split_in_parts_counts_on_through_them()
+    {
+        var s1 = A(38671, "Enen no Shouboutai", 24);
+        var s2 = A(40956, "Enen no Shouboutai: Ni no Shou", 24);
+        var s3 = A(51818, "Enen no Shouboutai: San no Shou", 12);
+        var s3p2 = A(59229, "Enen no Shouboutai: San no Shou Part 2", 13);
+        var r = new FakeResolver([s1, s2, s3, s3p2]).Name("Enen no Shouboutai", s1);
+        var all = new[] { s1, s2, s3, s3p2 };
+
+        Assert.Equal(["No", "No", "No", "ep2"], all.Select(a => Verdict(r, "[Grp] Enen no Shouboutai S3 - 14 (1080p).mkv", a)));
+        Assert.Equal(["No", "No", "ep5", "No"], all.Select(a => Verdict(r, "[Grp] Enen no Shouboutai S3 - 05 (1080p).mkv", a)));
+        Assert.Equal(["ep14", "No", "No", "No"], all.Select(a => Verdict(r, "[Grp] Enen no Shouboutai - 14 (1080p).mkv", a)));
+    }
+
+    [Fact]
+    public void Later_parts_share_their_seasons_number()
+    {
+        ResolvedAnime T(string title) => A(1, title, 12);
+        Assert.Equal([1, 1, 2, 2, 3], ReleaseMatcher.SeasonsOf(
+        [
+            T("Mushoku Tensei: Isekai Ittara Honki Dasu"),
+            T("Mushoku Tensei: Isekai Ittara Honki Dasu Part 2"),
+            T("Mushoku Tensei II: Isekai Ittara Honki Dasu"),
+            T("Mushoku Tensei II: Isekai Ittara Honki Dasu Part 2"),
+            T("Mushoku Tensei III: Isekai Ittara Honki Dasu"),
+        ]));
+        Assert.Equal([1, 2, 3, 3], ReleaseMatcher.SeasonsOf(
+            [T("Enen no Shouboutai"), T("Enen no Shouboutai: Ni no Shou"), T("Enen no Shouboutai: San no Shou"), T("Enen no Shouboutai: San no Shou Part 2")]));
     }
 
     [Theory]
