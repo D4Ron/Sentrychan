@@ -220,8 +220,14 @@ _Newest first. Date, phase, what's done, what's next, and anything that needs ch
   - Show page (`d3a51f8`): opens at once on long shows (episode grid from the DB first, one folder pass for all
     episodes, details load in the background with a status line instead of a spinner over the page).
   - Dry run on the real library: only straight-through names in an already-right season folder are renamed
-    (13–24 → S02E01–12); already-tidied shows don't move. **Not done:** a per-show episode offset override and
-    showing both numbers.
+    (13–24 → S02E01–12); already-tidied shows don't move.
+  - **Per-show numbering (`09af89c`):** `Series.EpisodeNumberOffset` (migration `AddEpisodeNumberOffset`; show page →
+    Release Groups → "Groups release episode 1 as", empty = automatic, 1 = groups restart). When set,
+    `ReleaseMatcher` uses it instead of the chain: a release named after an earlier season (or, with seasons the
+    database doesn't link, the same show's title) counts straight through; one named after this season is its
+    own number unless past the season's length. Also `AbsoluteForms` (catch-up/Fill Gaps queries, the locator),
+    the monitor's title-match fallback (`WithUserOffset`) and Tidy (`TidySeries.NumberingOffset`, for rows
+    with and without a season chain). Episode tiles show "#N" under their number; the progress line too.
 
 - 2026-10-06 — **Season families (step 1 of 2: matching).** `SeasonFamilyService` links a show's seasons through MAL
   sequel/prequel relations (Jikan `/anime/{id}/relations`, paced, `season-families.json`, refreshed from the monitor
