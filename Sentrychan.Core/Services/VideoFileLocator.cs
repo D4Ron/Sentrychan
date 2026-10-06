@@ -40,24 +40,29 @@ public class VideoFileLocator : IVideoFileLocator
     /// places a name on this series' episode whatever its numbering. Empty when the series isn't in
     /// the library.
     /// </summary>
-    private async Task<(Dictionary<int, int> Absolute, Func<string, int?>? Placed)> AlternativesAsync(
+    private async Task<(Dictionary<int, int> Absolute, Func<string, int?>? Placed, SeasonPlacement? Placement)> AlternativesAsync(
         string seriesTitle, IEnumerable<int> episodes, CancellationToken ct)
     {
         var absolute = new Dictionary<int, int>();
-        if (_dbFactory == null || _resolver is not { IsReady: true } resolver) return (absolute, null);
+        if (_dbFactory == null || _resolver is not { IsReady: true } resolver) return (absolute, null, null);
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
             var series = await db.Series.AsNoTracking().FirstOrDefaultAsync(s => s.Title == seriesTitle, ct);
-            if (series is not { MalId: > 0 }) return (absolute, null);
+            if (series is not { MalId: > 0 }) return (absolute, null, null);
+            var placement = SeasonLayout.Place(resolver, series.MalId, series.Title, series.SeparateParts);
             foreach (var ep in episodes)
+            {
                 foreach (var (_, n) in ReleaseMatcher.AbsoluteForms(resolver, series, ep))
                     absolute.TryAdd(n, ep);
+                // A later part filed in its season continues the season's numbers (S02E14 for its episode 2).
+                if (placement is { EpisodeOffset: > 0 and var offset }) absolute.TryAdd(offset + ep, ep);
+            }
             var placed = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
             return (absolute, name => placed.TryGetValue(name, out var known) ? known
-                : placed[name] = ReleaseMatcher.Match(resolver, name, series) is (ReleaseVerdict.Yes, var e) ? e : null);
+                : placed[name] = ReleaseMatcher.Match(resolver, name, series) is (ReleaseVerdict.Yes, var e) ? e : null, placement);
         }
-        catch { return (absolute, null); }
+        catch { return (absolute, null, null); }
     }
 
     public async Task<string?> FindVideoFileAsync(string seriesTitle, int episodeNumber, CancellationToken ct) =>
@@ -85,8 +90,10 @@ public class VideoFileLocator : IVideoFileLocator
         if (episodes.Count == 0) return found;
         var wanted = episodes.ToHashSet();
         var baseTitle = SeasonDetector.ExtractBaseTitle(seriesTitle);
-        var season    = SeasonSearch.EffectiveSeason(seriesTitle, 1);
-        var (absolute, placed) = await AlternativesAsync(seriesTitle, wanted, ct);
+        var (absolute, placed, placement) = await AlternativesAsync(seriesTitle, wanted, ct);
+        var season    = placement?.Season ?? SeasonSearch.EffectiveSeason(seriesTitle, 1);
+        // A later part's season folder starts at an offset: its own numbers there are offset + e.
+        var ownInFolder = placement is { EpisodeOffset: > 0 } ? (Func<int, bool>)(_ => false) : wanted.Contains;
 
         // Earlier places win, as each episode's first file used to: its season folder, the rest of
         // the show folder, then the downloads.
@@ -107,7 +114,7 @@ public class VideoFileLocator : IVideoFileLocator
                 // the episode's own, or the one counted straight through.
                 foreach (var seasonDir in new[] { $"Season {season}", $"Season {season:00}" }.Distinct())
                     Take(Videos(Path.Combine(showDir, seasonDir), origins, recursive: false),
-                         name => EpisodeOf(name) is { } n ? (wanted.Contains(n) ? n : absolute.TryGetValue(n, out var e) ? e : (int?)null) : null);
+                         name => EpisodeOf(name) is { } n ? (ownInFolder(n) ? n : absolute.TryGetValue(n, out var e) ? e : (int?)null) : null);
 
                 // Anywhere else in the show folder (a custom template, files dropped in by hand) the
                 // name has to say which season it is — or be placed on the episode by the matcher.
@@ -131,16 +138,19 @@ public class VideoFileLocator : IVideoFileLocator
         return found;
     }
 
-    /// <summary>Library folders for this show, the old exact-title folder first.</summary>
+    /// <summary>
+    /// Library folders for this show, the old exact-title folder first. A cour's own older folder
+    /// ("… - Kashin-tan") still counts beside the show's ("Bleach: Sennen Kessen-hen (2022)").
+    /// </summary>
     private static IEnumerable<string> ShowFolders(string libraryPath, string baseTitle)
     {
         var legacy = LibraryFiling.LegacyShowFolder(baseTitle);
-        var key = LibraryShows.Key(baseTitle);
+        var keys = new[] { LibraryShows.Key(baseTitle), LibraryShows.ShowKey(baseTitle) };
         return Directory.EnumerateDirectories(libraryPath)
             .Where(d =>
             {
                 var name = Path.GetFileName(d);
-                return !name.StartsWith('_') && !name.StartsWith('.') && LibraryShows.FolderKeys(name).Contains(key);
+                return !name.StartsWith('_') && !name.StartsWith('.') && LibraryShows.FolderKeys(name).Any(keys.Contains);
             })
             .OrderBy(d => string.Equals(Path.GetFileName(d), legacy, StringComparison.OrdinalIgnoreCase) ? 0 : 1);
     }

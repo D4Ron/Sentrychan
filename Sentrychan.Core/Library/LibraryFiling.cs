@@ -42,6 +42,20 @@ public static class LibraryFiling
         if (parsed.IsSpecial) season = 0;
         var n = new EpisodeNaming(show.Title, show.YearOr(null), season, null, ext, parsed.Group, parsed.Resolution, parsed.Version);
 
+        // Placed by its season family: its own season, and its episode continued through the parts
+        // before it in that season. The episode is the series' own (what the download was for, or
+        // what the matcher makes of the name — it may count straight through the whole show).
+        if (me.Placement is { } place && !parsed.IsSpecial && !parsed.IsEpisodeRange)
+        {
+            n = n with { Season = place.Season };
+            var own = episode is > 0 ? episode
+                : SeasonLayout.Resolver is { IsReady: true } r && ReleaseMatcher.Match(r, fileName, series) is (ReleaseVerdict.Yes, { } matched) ? matched
+                : null;
+            return own is { } e && place.EpisodeOffset is { } offset
+                ? Keep(naming, n with { Episode = offset + e }, fileName, series.KeepFileNames)
+                : (Path.Combine(naming.RenderFolder(n), fileName), false);
+        }
+
         var ep = episode is > 0 ? episode : parsed.Episode;
         if (ep is not { } number || parsed.IsEpisodeRange)
             return (Path.Combine(naming.RenderFolder(n), fileName), false);

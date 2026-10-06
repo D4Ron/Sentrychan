@@ -420,6 +420,8 @@ public static class Program
 
         // Hand service provider to Avalonia
         Sentrychan.UI.App.SetServiceProvider(host.Services);
+        // The library layout of split shows reads their season chains.
+        Sentrychan.Core.Library.SeasonLayout.Resolver = host.Services.GetRequiredService<ITitleResolverService>();
         Sentrychan.UI.App.Restart = RestartApp;
 
         // Logs and Windows notifications ask this before naming anything.

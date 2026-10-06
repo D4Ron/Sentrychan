@@ -31,14 +31,32 @@ public sealed class TidyPlanner
     /// Top-level folder names the user asked tidying to skip. "Don't tidy" needs a series record;
     /// this covers folders the app doesn't track, and whatever the naming rules get wrong.
     /// </param>
+    /// <param name="place">
+    /// Which tracked season of a show a file is, and its episode in that season's own numbering —
+    /// whatever numbering the name uses (see ReleaseMatcher). Null: the name and folder decide.
+    /// </param>
     public TidyPlanner(NamingTemplate naming, Func<string, string?>? skipReason = null, Func<string, int?>? resolveMalId = null,
-        IEnumerable<string>? leaveAlone = null)
+        IEnumerable<string>? leaveAlone = null, Func<string, LibraryShow, (TidySeries Row, int Episode)?>? place = null)
     {
         _naming = naming;
         _skipReason = skipReason ?? (_ => null);
         _resolveMalId = resolveMalId;
         _leaveAlone = new HashSet<string>(leaveAlone ?? [], StringComparer.OrdinalIgnoreCase);
+        _place = place;
     }
+
+    private readonly Func<string, LibraryShow, (TidySeries Row, int Episode)?>? _place;
+
+    /// <summary>The usual <c>place</c>: the matcher, over the show's tracked seasons that have a family layout.</summary>
+    public static Func<string, LibraryShow, (TidySeries Row, int Episode)?>? MatcherPlacement(Interfaces.ITitleResolverService? resolver) =>
+        resolver is not { IsReady: true } r ? null : (fileName, show) =>
+        {
+            foreach (var row in show.Seasons.Where(s => s.Placement != null && !s.IsMovie))
+                if (Services.ReleaseMatcher.Match(r, fileName, new Models.Series { MalId = row.MalId, Title = row.Title })
+                        is (Services.ReleaseVerdict.Yes, { } episode))
+                    return (row, episode);
+            return null;
+        };
 
     public TidyPlan Build(string libraryPath, IReadOnlyList<TidySeries> series)
     {
@@ -142,6 +160,36 @@ public sealed class TidyPlanner
         if (parsed.IsExtra)
         {
             plan.Items.Add(Unsure(video, folder.Name, null, "bonus material (an opening, ending or preview)"));
+            return;
+        }
+
+        // A season of a split show: the matcher knows which tracked season the file is and its
+        // episode there; the layout says which folder and where that season's numbers start.
+        if (show != null && !parsed.IsSpecial && !parsed.IsEpisodeRange
+            && _place?.Invoke(Path.GetFileName(video), show) is { } placed)
+        {
+            var (placedRow, own) = placed;
+            if (placedRow.Excluded)
+            {
+                plan.Items.Add(new TidyItem
+                {
+                    Source = video, ShowFolder = folder.Name, SeriesId = placedRow.Id,
+                    Status = TidyItemStatus.Skipped, Note = "\"Don't tidy\" is set for this season",
+                });
+                return;
+            }
+            if (placedRow.EpisodeOffset is not { } offset)
+            {
+                plan.Items.Add(Unsure(video, folder.Name, placedRow.Id,
+                    "a later part whose season's earlier parts aren't finished, so its number in the season isn't known yet"));
+                return;
+            }
+            var placedNaming = new EpisodeNaming(title, year, placedRow.EffectiveSeason, offset + own, Path.GetExtension(video),
+                parsed.Group, parsed.Resolution, parsed.Version);
+            AddMove(plan, claimed, video, folder.Name, placedRow.Id, placedNaming, placedRow.KeepFileNames,
+                note: parsed.Episode != offset + own || parsed.Season != placedRow.EffectiveSeason
+                    ? $"episode {parsed.Episode} → S{placedRow.EffectiveSeason:00}E{offset + own:00} ({placedRow.Title})"
+                    : null);
             return;
         }
 

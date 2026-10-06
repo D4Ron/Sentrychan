@@ -65,8 +65,18 @@ public sealed record TidySeries(
     bool KeepFileNames = false)
 {
     public bool IsMovie => string.Equals(MediaType, "Movie", StringComparison.OrdinalIgnoreCase);
-    public int EffectiveSeason => Services.SeasonSearch.EffectiveSeason(Title, SeasonNumber);
+
+    /// <summary>Its place in the show's folder from the season family (SeasonLayout), when known.</summary>
+    public SeasonPlacement? Placement { get; init; }
+
+    public int EffectiveSeason => Placement?.Season ?? Services.SeasonSearch.EffectiveSeason(Title, SeasonNumber);
+
+    /// <summary>Where its episodes start in its season: 0 for a season's first part; null when not known.</summary>
+    public int? EpisodeOffset => Placement is { } p ? p.EpisodeOffset : 0;
 
     public static TidySeries From(Models.Series s) => new(
-        s.Id, s.MalId, s.Title, s.Year, s.MediaType, s.SeasonNumber, s.TotalEpisodes, s.TidyExcluded, s.KeepFileNames);
+        s.Id, s.MalId, s.Title, s.Year, s.MediaType, s.SeasonNumber, s.TotalEpisodes, s.TidyExcluded, s.KeepFileNames)
+    {
+        Placement = SeasonLayout.For(s),
+    };
 }

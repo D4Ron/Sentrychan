@@ -72,8 +72,9 @@ public class LibraryScanService : ILibraryScanService
 
         for (int i = 0; i < allSeries.Count; i++)
         {
-            var key = Library.LibraryShows.Key(SeasonDetector.ExtractBaseTitle(allSeries[i].Title));
-            foreach (var dir in topLevelDirs.Where(d => Library.LibraryShows.FolderKeys(d.Name).Contains(key)))
+            // The show's folder, and a cour's own older folder ("… - Kashin-tan") from before cours shared one.
+            var keys = new[] { Library.LibraryShows.ShowKey(allSeries[i].Title), Library.LibraryShows.Key(SeasonDetector.ExtractBaseTitle(allSeries[i].Title)) };
+            foreach (var dir in topLevelDirs.Where(d => Library.LibraryShows.FolderKeys(d.Name).Any(keys.Contains)))
             {
                 claimed.TryAdd(dir.Name, i);
                 (foldersBySeries.TryGetValue(i, out var list) ? list : foldersBySeries[i] = []).Add(dir);
@@ -111,7 +112,8 @@ public class LibraryScanService : ILibraryScanService
             var dirs = foldersBySeries.TryGetValue(i, out var found) ? found : [];
 
             var episodes = new List<int>();
-            var mySeason = SeasonSearch.EffectiveSeason(series.Title, series.SeasonNumber);
+            var layout = Library.TidySeries.From(series);
+            var mySeason = layout.EffectiveSeason;
             foreach (var dir in dirs)
             {
                 try
@@ -139,6 +141,10 @@ public class LibraryScanService : ILibraryScanService
                             ep = (_titleResolver.IsReady ? _titleResolver.ParseRelease(name).Episode : null)
                                  ?? _normalizer.ExtractEpisodeNumber(name)
                                  ?? Library.ReleaseNameParser.Parse(name).Episode;
+                            // A later part's season folder continues the season's numbers; another part's
+                            // files there aren't this one's episodes.
+                            if (ep is { } n && layout.EpisodeOffset is > 0 and var offset) ep = n > offset ? n - offset : null;
+                            if (ep > series.TotalEpisodes && series.TotalEpisodes > 0 && layout.Placement != null) ep = null;
                         }
                         if (ep.HasValue && !episodes.Contains(ep.Value))
                             episodes.Add(ep.Value);

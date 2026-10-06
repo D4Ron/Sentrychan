@@ -119,4 +119,41 @@ public sealed class SeriesDetailSmokeTests : IDisposable
         }
         window.Close();
     }
+
+    [AvaloniaFact]
+    public async Task The_parts_switch_shows_only_for_a_show_with_parts_and_saves_at_once()
+    {
+        var factory = new Factory(Path.Combine(_root, "p.db"));
+        Series part2, plain;
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Database.Migrate();
+            part2 = new Series { Title = SeasonLayoutTests.Mushoku[1].CanonicalTitle, MalId = 2 };
+            plain = new Series { Title = "Plain Show", MalId = 99 };
+            db.Series.AddRange(part2, plain);
+            await db.SaveChangesAsync();
+        }
+
+        var before = Sentrychan.Core.Library.SeasonLayout.Resolver;
+        Sentrychan.Core.Library.SeasonLayout.Resolver = new SeasonLayoutTests.Chain(SeasonLayoutTests.Mushoku);
+        try
+        {
+            SeriesDetailViewModel Vm(Series s) => new(s, Stub<ISeriesService>.Create(), Stub<IAnimeApiService>.Create(), factory,
+                Stub<ITitleAliasService>.Create(), Stub<IRssMonitorService>.Create(), Stub<IVideoFileLocator>.Create());
+            Assert.False(Vm(plain).HasParts);
+
+            var vm = Vm(part2);
+            Assert.True(vm.HasParts);
+            vm.SeparateParts = true;
+            for (var i = 0; i < 100; i++)
+            {
+                await Task.Delay(10);
+                Dispatcher.UIThread.RunJobs();
+                await using var db = factory.CreateDbContext();
+                if (db.Series.Single(s => s.Id == part2.Id).SeparateParts) return;
+            }
+            Assert.Fail("the switch wasn't saved");
+        }
+        finally { Sentrychan.Core.Library.SeasonLayout.Resolver = before; }
+    }
 }

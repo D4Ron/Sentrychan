@@ -312,7 +312,7 @@
                 <StackPanel Spacing="16">
                     <TextBlock Text="Library Files" FontSize="20" FontWeight="Bold"/>
                     <Border Background="{DynamicResource CardBackgroundBrush}" Padding="20" CornerRadius="8">
-                        <Grid ColumnDefinitions="*, *">
+                        <Grid ColumnDefinitions="*, *" RowDefinitions="Auto, Auto">
                             <StackPanel Grid.Column="0" Spacing="4">
                                 <CheckBox IsChecked="{Binding TidyExcluded}" Content="Don't tidy"/>
                                 <TextBlock Text="Tidy library leaves this series alone, and new episodes keep the old Title / Season N layout with their release names."
@@ -321,6 +321,11 @@
                             <StackPanel Grid.Column="1" Spacing="4" Margin="24,0,0,0">
                                 <CheckBox IsChecked="{Binding KeepFileNames}" Content="Keep full file names"/>
                                 <TextBlock Text="Files go into the naming template's folders but keep their release names."
+                                           FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="32,-4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4" Margin="0,16,0,0" IsVisible="{Binding HasParts}">
+                                <CheckBox IsChecked="{Binding SeparateParts}" Content="Separate seasons for parts"/>
+                                <TextBlock Text="Each part or cour gets its own season folder, numbered from 1. Off: parts continue their season (Part 2 of season 1 is S01E13 on)."
                                            FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="32,-4,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Grid>

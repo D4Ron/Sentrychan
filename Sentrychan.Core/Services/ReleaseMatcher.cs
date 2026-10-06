@@ -91,14 +91,14 @@ public static partial class ReleaseMatcher
     }
 
     /// <summary>The season a title names itself, with "Part N"/"Cour N" taken out (a part isn't a season).</summary>
-    private static int? OwnSeason(string title)
+    internal static int? OwnSeason(string title)
     {
         var withoutPart = PartPattern().Replace(title, " ");
         var s = SeasonDetector.DetectSeason(withoutPart);
         return s > 1 ? s : null;
     }
 
-    private static bool IsLaterPart(string title) =>
+    internal static bool IsLaterPart(string title) =>
         PartPattern().Match(title) is { Success: true } m && m.Groups["n"].Value is var n && n != "1" && !n.Equals("I", StringComparison.OrdinalIgnoreCase);
 
     [GeneratedRegex(@"\b(?:Part|Cour)\s+(?<n>\d+|II|III|IV|V|VI)\b|\b(?<n>2)nd\s+(?:Part|Cour)\b", RegexOptions.IgnoreCase)]

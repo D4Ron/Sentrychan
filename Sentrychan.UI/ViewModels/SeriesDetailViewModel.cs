@@ -3,6 +3,7 @@ using Sentrychan.Core.Interfaces;
 using Sentrychan.Core.Models;
 using Sentrychan.Core.Models.Api;
 using Sentrychan.Core.Data;
+using Sentrychan.Core.Library;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -33,6 +34,8 @@ public class SeriesDetailViewModel : ViewModelBase
             this.RaiseAndSetIfChanged(ref _series, value);
             this.RaisePropertyChanged(nameof(CurrentEpisode));
             this.RaisePropertyChanged(nameof(TotalEpisodesDisplay));
+            this.RaisePropertyChanged(nameof(SeparateParts));
+            this.RaisePropertyChanged(nameof(HasParts));
         }
     }
 
@@ -48,6 +51,22 @@ public class SeriesDetailViewModel : ViewModelBase
             _ = SaveLibraryOptionsAsync();
         }
     }
+
+    public bool SeparateParts
+    {
+        get => Series.SeparateParts;
+        set
+        {
+            if (Series.SeparateParts == value) return;
+            Series.SeparateParts = value;
+            this.RaisePropertyChanged();
+            _ = SaveLibraryOptionsAsync();
+        }
+    }
+
+    /// <summary>Only a show whose parts/cours share a season has anything to keep apart.</summary>
+    public bool HasParts => SeasonLayout.Resolver is { IsReady: true } r && Series is { MalId: > 0 } s
+        && SeasonLayout.Place(r, s.MalId, s.Title, false) != SeasonLayout.Place(r, s.MalId, s.Title, true);
 
     public bool KeepFileNames
     {
@@ -68,7 +87,8 @@ public class SeriesDetailViewModel : ViewModelBase
             await using var db = await _dbFactory.CreateDbContextAsync();
             await db.Series.Where(s => s.Id == Series.Id).ExecuteUpdateAsync(u => u
                 .SetProperty(s => s.TidyExcluded, Series.TidyExcluded)
-                .SetProperty(s => s.KeepFileNames, Series.KeepFileNames));
+                .SetProperty(s => s.KeepFileNames, Series.KeepFileNames)
+                .SetProperty(s => s.SeparateParts, Series.SeparateParts));
         }
         catch (Exception ex) { Console.WriteLine($"[SeriesDetail] library options not saved: {ex.Message}"); }
     }

@@ -88,7 +88,8 @@ public sealed class LibraryTidyService
         var skip = await SkipCheckAsync(db, ct);
         var planner = new TidyPlanner(naming, skip,
             _resolver.IsReady ? name => _resolver.ResolveTitle(name)?.MalId : null,
-            await ReadLeftAloneAsync(db, ct));
+            await ReadLeftAloneAsync(db, ct),
+            TidyPlanner.MatcherPlacement(_resolver));
 
         var plan = await Task.Run(() => planner.Build(library, series.Select(TidySeries.From).ToList()), ct);
         if (InstanceGuard.PausedForOtherInstance)

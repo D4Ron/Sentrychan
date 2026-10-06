@@ -50,6 +50,12 @@ public class Series
     /// <summary>"Keep full file names": files move into the naming template's folders but keep their release names.</summary>
     public bool KeepFileNames { get; set; }
 
+    /// <summary>
+    /// "Separate seasons for parts": each part or cour of this show gets a season folder of its own,
+    /// instead of continuing its season's numbers (the default, see SeasonLayout).
+    /// </summary>
+    public bool SeparateParts { get; set; }
+
     /// <summary>This series' own release-group rule (Any / Prefer / Only); null follows the app's setting.</summary>
     public string? GroupMode { get; set; }
 

@@ -13,14 +13,15 @@ public sealed class LibraryShow
     public required string Key { get; init; }
     public required IReadOnlyList<TidySeries> Seasons { get; init; }
 
-    /// <summary>The base title, from the earliest tracked season.</summary>
-    public string Title => SeasonDetector.ExtractBaseTitle(First.Title);
+    /// <summary>The show's title, from the earliest tracked season.</summary>
+    public string Title => LibraryShows.ShowTitle(First.Title);
 
     /// <summary>
     /// The show's year is its first season's. A later season's own year would name the folder
     /// wrongly, so without a season-1 record it comes from the existing folder name, if any.
     /// </summary>
-    public int? YearOr(int? folderYear) => First.EffectiveSeason <= 1 && First.Year is { } y ? y : folderYear;
+    public int? YearOr(int? folderYear) =>
+        First.Placement?.ShowYear ?? (First.EffectiveSeason <= 1 && First.Year is { } y ? y : folderYear);
 
     public bool IsMovie => Seasons.Count > 0 && Seasons.All(s => s.IsMovie);
 
@@ -29,11 +30,18 @@ public sealed class LibraryShow
     public TidySeries? ForSeason(int season) =>
         Seasons.Where(s => !s.IsMovie && s.EffectiveSeason == season).OrderBy(s => s.Id).FirstOrDefault();
 
-    /// <summary>Episodes per season where exactly one tracked record says so.</summary>
+    /// <summary>
+    /// Episodes per season where the tracked records say: one record's length, or for a season of
+    /// several parts, where its last tracked part ends (its offset plus its length).
+    /// </summary>
     public IReadOnlyDictionary<int, int?> Totals =>
         Seasons.Where(s => !s.IsMovie)
                .GroupBy(s => s.EffectiveSeason)
-               .ToDictionary(g => g.Key, g => g.Count() == 1 ? g.First().TotalEpisodes : null);
+               .ToDictionary(g => g.Key, g => g.Count() == 1 && g.First().EpisodeOffset is null or 0
+                   ? g.First().TotalEpisodes
+                   : g.All(s => s.EpisodeOffset is not null && s.TotalEpisodes is not null)
+                       ? g.Max(s => s.EpisodeOffset!.Value + s.TotalEpisodes!.Value)
+                       : (int?)null);
 }
 
 public static class LibraryShows
@@ -48,7 +56,21 @@ public static class LibraryShows
         return sb.ToString();
     }
 
-    public static string KeyOf(TidySeries s) => Key(SeasonDetector.ExtractBaseTitle(s.Title));
+    public static string KeyOf(TidySeries s) => ShowKey(s.Title);
+
+    /// <summary>
+    /// The show a title belongs to, as a folder sees it: its base title without a cour's subtitle
+    /// after " - " — "Bleach: Sennen Kessen-hen - Kashin-tan" is filed with "Bleach: Sennen
+    /// Kessen-hen" (each cour used to get a folder of its own).
+    /// </summary>
+    public static string ShowTitle(string title)
+    {
+        var t = SeasonDetector.ExtractBaseTitle(title);
+        var dash = t.IndexOf(" - ", StringComparison.Ordinal);
+        return dash > 0 ? t[..dash].Trim() : t;
+    }
+
+    public static string ShowKey(string title) => Key(ShowTitle(title));
 
     public static List<LibraryShow> Group(IEnumerable<TidySeries> series) =>
         series.GroupBy(KeyOf)
