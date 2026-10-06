@@ -194,6 +194,16 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
 
             var feeds = await feedsQuery.ToListAsync(ct);
 
+            // A feed that keeps failing waits longer between tries; asking by hand checks it anyway.
+            if (!isManual && !singleFeedId.HasValue)
+            {
+                var now = DateTime.UtcNow;
+                foreach (var resting in feeds.Where(f => !FeedBackoff.IsDue(f, now)))
+                    _logger.LogInformation("Feed {Url} failed {Count} time(s) in a row — next try after {Wait}",
+                        resting.Url, resting.ConsecutiveFailures, FeedBackoff.Wait(resting.ConsecutiveFailures));
+                feeds = feeds.Where(f => FeedBackoff.IsDue(f, now)).ToList();
+            }
+
             if (seriesList.Count == 0 || feeds.Count == 0)
             {
                 _logger.LogInformation("Nothing to check — no series or matching feeds configured");
@@ -546,6 +556,8 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
 
             if (success)
             {
+                if (feed.ConsecutiveFailures >= FeedBackoff.NoticeAfter)
+                    _logger.LogInformation("Feed answering again after {Count} failed checks: {Url}", feed.ConsecutiveFailures, feed.Url);
                 feed.ConsecutiveFailures = 0;
                 feed.LastError = null;
                 feed.LastSuccessAt = DateTime.UtcNow;
@@ -555,16 +567,13 @@ public class RssMonitorService : BackgroundService, IRssMonitorService
                 feed.ConsecutiveFailures++;
                 feed.LastError = error;
 
-                // Auto-disable feed after 10 consecutive failures
-                if (feed.ConsecutiveFailures >= 10)
+                // Never switched off (see FeedBackoff): said once, then tried less often until it's back.
+                if (feed.ConsecutiveFailures == FeedBackoff.NoticeAfter)
                 {
-                    feed.IsEnabled = false;
-                    _logger.LogWarning(
-                        "Feed auto-disabled after 10 failures: {Url}", feed.Url);
-
+                    _logger.LogWarning("Feed failing for a while, now checked less often: {Url} — {Error}", feed.Url, error);
                     await _mediator.Publish(new MonitorStatusEvent(
                         MonitorStatus.Error,
-                        ErrorMessage: $"Feed auto-disabled after repeated failures: {feed.Url}"), ct);
+                        ErrorMessage: $"{new Uri(feed.Url).Host} hasn't answered properly for a while. Sentrychan keeps trying, less often, and picks it up again once it's back."), ct);
                 }
             }
 

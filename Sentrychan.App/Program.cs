@@ -292,6 +292,10 @@ public static class Program
                     // Test builds log in detail: a tester's log is the only view of their machine.
                     var serilog = new Serilog.LoggerConfiguration()
                         .MinimumLevel.Is(BuildInfo.IsTestBuild ? Serilog.Events.LogEventLevel.Debug : Serilog.Events.LogEventLevel.Information)
+                        // AddSerilog passes every category through to Serilog, so these go here, not
+                        // in logging filters: EF Core logged each SQL command (~0.9 MB a day).
+                        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning)
+                        .MinimumLevel.Override("System.Net.Http.HttpClient", Serilog.Events.LogEventLevel.Warning)
                         .WriteTo.File(
                             Path.Combine(_logDir, "sentrychan-.log"),
                             rollingInterval: Serilog.RollingInterval.Day,
@@ -303,9 +307,6 @@ public static class Program
                     logging.SetMinimumLevel(BuildInfo.IsTestBuild
                         ? Microsoft.Extensions.Logging.LogLevel.Debug
                         : Microsoft.Extensions.Logging.LogLevel.Information);
-                    // EF Core's per-query lines would bury everything else.
-                    logging.AddFilter("Microsoft.EntityFrameworkCore", Microsoft.Extensions.Logging.LogLevel.Warning);
-                    logging.AddFilter("System.Net.Http.HttpClient", Microsoft.Extensions.Logging.LogLevel.Warning);
                 });
             });
 
@@ -364,6 +365,20 @@ public static class Program
             if (badFeeds.Count > 0)
             {
                 foreach (var f in badFeeds) f.PreferredQuality = null;
+                db.SaveChanges();
+            }
+
+            // Up to 1.0.5 a feed was switched off for good after 10 failed checks in a row, so a short
+            // outage left it off (FeedBackoff now slows retries instead). Turn those back on, once.
+            const string feedsRestoredKey = "AutoDisabledFeedsRestored";
+            if (!db.AppConfigs.Any(c => c.Key == feedsRestoredKey))
+            {
+                foreach (var f in db.RssFeeds.Where(f => !f.IsEnabled && f.ConsecutiveFailures >= 10 && f.LastError != null))
+                {
+                    f.IsEnabled = true;
+                    Console.WriteLine($"[Program] Turned back on a feed the old failure rule switched off: {f.Url}");
+                }
+                db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = feedsRestoredKey, Value = "true" });
                 db.SaveChanges();
             }
 
