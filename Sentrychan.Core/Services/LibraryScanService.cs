@@ -111,6 +111,7 @@ public class LibraryScanService : ILibraryScanService
             var dirs = foldersBySeries.TryGetValue(i, out var found) ? found : [];
 
             var episodes = new List<int>();
+            var mySeason = SeasonSearch.EffectiveSeason(series.Title, series.SeasonNumber);
             foreach (var dir in dirs)
             {
                 try
@@ -121,9 +122,24 @@ public class LibraryScanService : ILibraryScanService
                         if (!VideoExtensions.Contains(Path.GetExtension(file))) continue;
 
                         var name = Path.GetFileNameWithoutExtension(file);
-                        var ep = (_titleResolver.IsReady ? _titleResolver.ParseRelease(name).Episode : null)
+                        int? ep;
+                        // A show's seasons share its folder, and names may count straight through
+                        // ("Season 02/… - 18" is season 2's episode 6): the matcher says whose episode a
+                        // file is, and which, in this series' own numbering.
+                        var (verdict, matched) = _titleResolver.IsReady
+                            ? ReleaseMatcher.Match(_titleResolver, name, series)
+                            : (ReleaseVerdict.Unknown, null);
+                        if (verdict == ReleaseVerdict.No) continue;
+                        if (verdict == ReleaseVerdict.Yes) ep = matched;
+                        else
+                        {
+                            // A name that says nothing of the show (the Minimal preset's bare "05"):
+                            // its season folder tells.
+                            if (SeasonFolderNumber(file) is { } folderSeason && folderSeason != mySeason) continue;
+                            ep = (_titleResolver.IsReady ? _titleResolver.ParseRelease(name).Episode : null)
                                  ?? _normalizer.ExtractEpisodeNumber(name)
-                                 ?? Library.ReleaseNameParser.Parse(name).Episode; // the Minimal preset's bare "05"
+                                 ?? Library.ReleaseNameParser.Parse(name).Episode;
+                        }
                         if (ep.HasValue && !episodes.Contains(ep.Value))
                             episodes.Add(ep.Value);
                     }
@@ -182,10 +198,29 @@ public class LibraryScanService : ILibraryScanService
     public async Task<int> ApplyProgressAdvancesAsync(LibraryScanReport report, CancellationToken ct = default)
     {
         var advances = report.ProgressAdvances;
-        if (advances.Count == 0) return 0;
-
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         int changed = 0;
+
+        // Progress past a finished season's length can only come from a number counted straight
+        // through the show ("Sono Bisque Doll - 24" read as season 2's episode 24, before the
+        // matcher knew better): it's the last episode, not 24. Never touches an airing season.
+        var ids = report.Series.Select(s => s.SeriesId).ToList();
+        foreach (var s in await db.Series.Where(s => ids.Contains(s.Id)).ToListAsync(ct))
+        {
+            if (s.TotalEpisodes is > 0 and var total && s.LastEpisodeNumber > total
+                && AiringStatusNormalizer.Normalize(s.AiringStatus) is "Finished Airing")
+            {
+                _logger.LogInformation("[LibraryScan] {Title}: progress {Old} is past its {Total} episodes — set to {Total}",
+                    s.Title, s.LastEpisodeNumber, total, total);
+                s.LastEpisodeNumber = total;
+                changed++;
+            }
+        }
+        if (advances.Count == 0)
+        {
+            if (changed > 0) await db.SaveChangesAsync(ct);
+            return changed;
+        }
 
         foreach (var result in advances)
         {
@@ -209,4 +244,11 @@ public class LibraryScanService : ILibraryScanService
 
     private static string SanitizeFolderName(string name) =>
         InvalidFolderCharsPattern.Replace(name, string.Empty).Trim();
+
+    private static readonly Regex SeasonFolderPattern = new(@"^Season\s*0*(\d{1,2})$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>The N of the "Season N" folder a file sits in, if it does.</summary>
+    private static int? SeasonFolderNumber(string file) =>
+        SeasonFolderPattern.Match(Path.GetFileName(Path.GetDirectoryName(file)) ?? "") is { Success: true } m
+            ? int.Parse(m.Groups[1].Value) : null;
 }
