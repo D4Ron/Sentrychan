@@ -17,6 +17,7 @@ public class FillGapsService : IFillGapsService
     private readonly IConfigService _config;
     private readonly ILogger<FillGapsService> _logger;
     private readonly Microsoft.EntityFrameworkCore.IDbContextFactory<Data.AppDbContext>? _dbFactory;
+    private readonly ITitleResolverService? _resolver;
 
     public FillGapsService(
         IVideoFileLocator fileLocator,
@@ -24,9 +25,11 @@ public class FillGapsService : IFillGapsService
         ISecretModeService secretMode,
         IConfigService config,
         ILogger<FillGapsService> logger,
-        Microsoft.EntityFrameworkCore.IDbContextFactory<Data.AppDbContext>? dbFactory = null)
+        Microsoft.EntityFrameworkCore.IDbContextFactory<Data.AppDbContext>? dbFactory = null,
+        ITitleResolverService? resolver = null)
     {
         _dbFactory = dbFactory;
+        _resolver = resolver;
         _fileLocator = fileLocator;
         _releases = releases;
         _secretMode = secretMode;
@@ -93,7 +96,16 @@ public class FillGapsService : IFillGapsService
             ReleaseResult? best = null;
             if (repairTorrent == null)
             {
-                var results = await _releases.FindEpisodeAsync(new EpisodeQuery(searchTitle, i) { Season = season }, ct);
+                var results = Placed(series, i, await _releases.FindEpisodeAsync(new EpisodeQuery(searchTitle, i) { Season = season }, ct));
+                // Nothing under the season's own title: groups may name it by an earlier title and
+                // count straight through ("Jujutsu Kaisen - 50" for its third season's episode 3).
+                if (results.Count == 0 && _resolver is { IsReady: true })
+                    foreach (var (title, number) in ReleaseMatcher.AbsoluteForms(_resolver, series, i))
+                    {
+                        results = Placed(series, i, await _releases.FindEpisodeAsync(
+                            new EpisodeQuery(SeasonSearch.StripSeason(title), number) { Season = 1 }, ct));
+                        if (results.Count > 0) break;
+                    }
                 // A group's 720p can outrank its 1080p on seeders alone; honour the setting first.
                 best = results.FirstOrDefault(r => string.Equals(r.Resolution, quality, StringComparison.OrdinalIgnoreCase))
                     ?? results.FirstOrDefault();
@@ -111,6 +123,21 @@ public class FillGapsService : IFillGapsService
         }
 
         return missing;
+    }
+
+    /// <summary>
+    /// Keeps the results the matcher places on this series' episode (or can't judge): a search
+    /// for "Show 13" also finds another season's 13, and a straight-through search finds neighbours.
+    /// </summary>
+    private List<ReleaseResult> Placed(Series series, int episode, List<ReleaseResult> results)
+    {
+        if (_resolver is not { IsReady: true } resolver) return results;
+        return results.Where(r => ReleaseMatcher.Match(resolver, r.Title, series) switch
+        {
+            (ReleaseVerdict.Yes, var e) => e == episode,
+            (ReleaseVerdict.No, _) => false,
+            _ => true,
+        }).ToList();
     }
 
     /// <summary>
