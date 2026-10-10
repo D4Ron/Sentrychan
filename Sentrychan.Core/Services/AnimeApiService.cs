@@ -11,9 +11,15 @@ using Sentrychan.Core.Services.Api;
 
 namespace Sentrychan.Core.Services;
 
+/// <summary>
+/// Show details, search, seasons and recommendations: from AniList first (current, and quick), with
+/// Jikan (MyAnimeList) behind it for when AniList can't answer. Characters and a MyAnimeList user's
+/// list only exist on Jikan.
+/// </summary>
 public class AnimeApiService : IAnimeApiService
 {
     private readonly IJikanApi _jikan;
+    private readonly AniList.AniListShows? _aniList;
     private readonly IMemoryCache _memoryCache;
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly ILogger<AnimeApiService> _logger;
@@ -32,9 +38,11 @@ public class AnimeApiService : IAnimeApiService
         IMemoryCache memoryCache,
         IDbContextFactory<AppDbContext> dbFactory,
         IHttpClientFactory httpClientFactory,
-        ILogger<AnimeApiService> logger)
+        ILogger<AnimeApiService> logger,
+        AniList.AniListShows? aniList = null)
     {
         _jikan = jikan;
+        _aniList = aniList;
         _memoryCache = memoryCache;
         _dbFactory = dbFactory;
         _httpClientFactory = httpClientFactory;
@@ -57,6 +65,13 @@ public class AnimeApiService : IAnimeApiService
         {
             _memoryCache.Set(cacheKey, persistent, MemoryCacheTtl);
             return persistent;
+        }
+
+        if (await AniListSearchAsync(query, status, limit, ct) is { Count: > 0 } fromAniList)
+        {
+            await SetPersistentCacheAsync(cacheKey, fromAniList, ct, TimeSpan.FromDays(1));
+            _memoryCache.Set(cacheKey, fromAniList, MemoryCacheTtl);
+            return fromAniList;
         }
 
         try
@@ -106,6 +121,44 @@ public class AnimeApiService : IAnimeApiService
         }
     }
 
+    /// <summary>AniList's search, ranked like Jikan's results were; empty when it can't answer.</summary>
+    private async Task<List<AnimeResult>> AniListSearchAsync(string query, string? status, int limit, CancellationToken ct)
+    {
+        if (_aniList == null) return [];
+        try
+        {
+            var aniListStatus = status?.ToLowerInvariant() switch
+            {
+                "airing" => "RELEASING",
+                "complete" => "FINISHED",
+                "upcoming" => "NOT_YET_RELEASED",
+                _ => null,
+            };
+            var media = await _aniList.Client.SearchAsync(query, 25, aniListStatus, ct: ct);
+            return ToResults(media)
+                .Select(r => (Result: r, Score: ScoreMatch(r, query)))
+                .OrderByDescending(x => x.Score)
+                .ThenByDescending(x => x.Result.Members)
+                .Select(x => x.Result)
+                .Take(limit)
+                .ToList();
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("AniList search for {Query} unavailable, asking MyAnimeList: {Message}", query, ex.Message);
+            return [];
+        }
+    }
+
+    /// <summary>AniList shows as results; one that can't be tied to a MyAnimeList id can't be added, so it's left out.</summary>
+    private List<AnimeResult> ToResults(IEnumerable<AniList.AniListMedia> media) =>
+        media.Select(m => (Media: m, Mal: _aniList!.MalIdFor(m)))
+            .Where(x => x.Mal is > 0)
+            .DistinctBy(x => x.Mal)
+            .Select(x => AniList.AniListMapper.ToAnimeResult(x.Media, x.Mal!.Value, _aniList!.MalIdFor))
+            .ToList();
+
     // Score how well a result matches the query — boosts English title matches
     private static double ScoreMatch(AnimeResult result, string query)
     {
@@ -128,6 +181,35 @@ public class AnimeApiService : IAnimeApiService
     public async Task<AnimeResult?> GetAnimeByIdAsync(
         int malId, CancellationToken ct = default)
     {
+        var aniListKey = $"al_anime_{malId}";
+        if (_memoryCache.TryGetValue(aniListKey, out AnimeResult? fresh) && fresh != null)
+            return fresh;
+        if (await GetFromPersistentCacheAsync<AnimeResult>(aniListKey, ct) is { } stored)
+        {
+            _memoryCache.Set(aniListKey, stored, MemoryCacheTtl);
+            return stored;
+        }
+        if (_aniList != null)
+        {
+            try
+            {
+                if (await _aniList.ForMalIdAsync(malId, null, ct: ct) is { } media)
+                {
+                    var result = AniList.AniListMapper.ToAnimeResult(media, malId, _aniList.MalIdFor);
+                    // A show that's airing changes week to week; a finished one doesn't.
+                    var ttl = result.Status == AiringStatusNormalizer.Finished ? PersistentCacheTtl : TimeSpan.FromHours(12);
+                    await SetPersistentCacheAsync(aniListKey, result, ct, ttl);
+                    _memoryCache.Set(aniListKey, result, MemoryCacheTtl);
+                    return result;
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("AniList details for {MalId} unavailable, asking MyAnimeList: {Message}", malId, ex.Message);
+            }
+        }
+
         var cacheKey = $"anime_{malId}";
 
         if (_memoryCache.TryGetValue(cacheKey, out AnimeResult? cached) && cached != null)
@@ -204,6 +286,23 @@ public class AnimeApiService : IAnimeApiService
             return persistent;
         }
 
+        if (_aniList != null)
+        {
+            try
+            {
+                var media = await _aniList.Client.SeasonAsync(year, season, ct: ct);
+                var fromAniList = ToResults(media);
+                if (fromAniList.Count > 0)
+                {
+                    await SetPersistentCacheAsync(cacheKey, fromAniList, ct, TimeSpan.FromDays(1));
+                    _memoryCache.Set(cacheKey, fromAniList, MemoryCacheTtl);
+                    return fromAniList;
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) { _logger.LogWarning("AniList season {Season} {Year} unavailable: {Message}", season, year, ex.Message); }
+        }
+
         try
         {
             var response = await _jikan.GetSeasonalAnimeAsync(year, season.ToLower(), ct);
@@ -269,6 +368,23 @@ public class AnimeApiService : IAnimeApiService
         {
             _memoryCache.Set(cacheKey, persistent, MemoryCacheTtl);
             return persistent;
+        }
+
+        if (_aniList != null)
+        {
+            try
+            {
+                var id = _aniList.AniListIdFor(malId) ?? (await _aniList.ForMalIdAsync(malId, null, ct: ct))?.Id;
+                if (id is { } aniListId)
+                {
+                    var fromAniList = ToResults(await _aniList.Client.RecommendationsAsync(aniListId, ct));
+                    await SetPersistentCacheAsync(cacheKey, fromAniList, ct);
+                    _memoryCache.Set(cacheKey, fromAniList, MemoryCacheTtl);
+                    return fromAniList;
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) { _logger.LogWarning("AniList recommendations for {MalId} unavailable: {Message}", malId, ex.Message); }
         }
 
         try
@@ -363,8 +479,9 @@ public class AnimeApiService : IAnimeApiService
     }
 
     private async Task SetPersistentCacheAsync<T>(
-        string key, T data, CancellationToken ct) where T : class
+        string key, T data, CancellationToken ct, TimeSpan? ttl = null) where T : class
     {
+        var lifetime = ttl ?? PersistentCacheTtl;
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -376,7 +493,7 @@ public class AnimeApiService : IAnimeApiService
             {
                 existing.Payload = payload;
                 existing.CachedAt = DateTime.UtcNow;
-                existing.ExpiresAt = DateTime.UtcNow.Add(PersistentCacheTtl);
+                existing.ExpiresAt = DateTime.UtcNow.Add(lifetime);
             }
             else
             {
@@ -385,7 +502,7 @@ public class AnimeApiService : IAnimeApiService
                     CacheKey = key,
                     Payload = payload,
                     CachedAt = DateTime.UtcNow,
-                    ExpiresAt = DateTime.UtcNow.Add(PersistentCacheTtl)
+                    ExpiresAt = DateTime.UtcNow.Add(lifetime)
                 });
             }
 

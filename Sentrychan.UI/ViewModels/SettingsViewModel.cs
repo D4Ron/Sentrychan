@@ -222,6 +222,35 @@ public class SettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _malImportResult, value);
     }
 
+    private string _showInfoStatus = string.Empty;
+    public string ShowInfoStatus
+    {
+        get => _showInfoStatus;
+        set => this.RaiseAndSetIfChanged(ref _showInfoStatus, value);
+    }
+
+    private ReactiveCommand<Unit, Unit>? _refreshShowInfoCommand;
+    /// <summary>Re-checks every library show's airing status and episode count now, instead of at the next twice-daily pass.</summary>
+    public ReactiveCommand<Unit, Unit> RefreshShowInfoCommand => _refreshShowInfoCommand ??= ReactiveCommand.CreateFromTask(async () =>
+    {
+        if (App.Services?.GetService(typeof(Sentrychan.Core.Services.AiringStatusRefreshService))
+                is not Sentrychan.Core.Services.AiringStatusRefreshService refresher)
+            return;
+        ShowInfoStatus = "Checking…";
+        try
+        {
+            var report = await refresher.RefreshAsync(CancellationToken.None);
+            var changes = report.Refreshed + report.Corrected;
+            ShowInfoStatus = changes == 0
+                ? $"All {report.Checked} shows are up to date."
+                : $"{report.Checked} shows checked: {report.Refreshed} airing statuses and {report.Corrected} episode counts updated.";
+            if (changes > 0 && Avalonia.Application.Current?.ApplicationLifetime
+                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime { MainWindow.DataContext: MainWindowViewModel main })
+                await main.LoadSeriesAsync();
+        }
+        catch (Exception ex) { ShowInfoStatus = "Couldn't check: " + ex.Message; }
+    });
+
     public string StatusMessage
     {
         get => _statusMessage;
@@ -444,6 +473,7 @@ public class SettingsViewModel : ViewModelBase
         nameof(MalImportResult), nameof(UpdateStatus), nameof(IsCheckingUpdate), nameof(UpdateAvailable),
         nameof(ConfirmingReset), nameof(ShowSaveBar), nameof(NamingExample), nameof(IsCustomNaming),
         nameof(SelectedTab), nameof(SourcesFileMessage), nameof(ShowAdvanced), nameof(OpenAtLogin),
+        nameof(ShowInfoStatus),
     ];
 
     public const string ShowAdvancedKey = "ShowAdvancedSettings";

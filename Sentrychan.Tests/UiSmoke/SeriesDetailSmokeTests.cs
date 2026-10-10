@@ -105,7 +105,7 @@ public sealed class SeriesDetailSmokeTests : IDisposable
             await Task.Delay(10);
             Dispatcher.UIThread.RunJobs();
         }
-        Assert.Contains("isn't answering", vm.DetailsStatus);
+        Assert.Contains("answering right now", vm.DetailsStatus);
 
         var window = new Window { Width = 1300, Height = 1000, Content = new SeriesDetailView { DataContext = vm } };
         window.Show();

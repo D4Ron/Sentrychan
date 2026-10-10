@@ -306,7 +306,11 @@ public class SeriesDetailViewModel : ViewModelBase
             await LoadAliasesAsync(ct);
         });
 
-        RefreshMetadataCommand = ReactiveCommand.CreateFromTask(async ct => await LoadMetadataAsync(ct));
+        RefreshMetadataCommand = ReactiveCommand.CreateFromTask(async ct =>
+        {
+            await LoadMetadataAsync(ct);
+            await RefreshSeriesInfoAsync(ct);
+        });
 
         MarkEpisodeDownloadedCommand = ReactiveCommand.CreateFromTask<int>(MarkEpisodeDownloadedAsync);
         MarkEpisodeMissingCommand = ReactiveCommand.CreateFromTask<int>(MarkEpisodeMissingAsync);
@@ -344,8 +348,9 @@ public class SeriesDetailViewModel : ViewModelBase
         try
         {
             await LoadMetadataAsync(ct);
-            DetailsStatus = Metadata == null ? "MyAnimeList isn't answering right now — details will show when it's back." : null;
+            DetailsStatus = Metadata == null ? "Neither AniList nor MyAnimeList is answering right now — details will show when one is back." : null;
             if (Metadata == null) return;
+            await RefreshSeriesInfoAsync(ct);
             // Spaced from the details request: the API allows a few requests a second.
             await Task.Delay(400, ct);
             await LoadRecommendationsAsync(ct);
@@ -388,6 +393,35 @@ public class SeriesDetailViewModel : ViewModelBase
 
     private int? _absoluteOffset;
     private int? _automaticFirst;
+
+    /// <summary>
+    /// Brings this show's stored status and episode count up to date (the library pass does it twice
+    /// a day; this page shouldn't show a "1 episode" placeholder in the meantime), and redraws what
+    /// depends on them.
+    /// </summary>
+    private async Task RefreshSeriesInfoAsync(CancellationToken ct)
+    {
+        if (App.Services?.GetService(typeof(Sentrychan.Core.Services.AiringStatusRefreshService))
+                is not Sentrychan.Core.Services.AiringStatusRefreshService refresher)
+            return;
+        try
+        {
+            var report = await refresher.RefreshAsync(ct, [Series.Id]);
+            if (report.Refreshed + report.Corrected == 0) return;
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            if (await db.Series.AsNoTracking().FirstOrDefaultAsync(s => s.Id == Series.Id, ct) is not { } fresh) return;
+            Series.AiringStatus = fresh.AiringStatus;
+            Series.TotalEpisodes = fresh.TotalEpisodes;
+            Series.Year = fresh.Year;
+            Series.MediaType = fresh.MediaType;
+            this.RaisePropertyChanged(nameof(Series));
+            this.RaisePropertyChanged(nameof(TotalEpisodesDisplay));
+            BuildFamilyLine();
+            await BuildEpisodeGridAsync(Series, DownloadHistory.ToList(), ct);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Console.WriteLine($"[SeriesDetail] show info not refreshed: {ex.Message}"); }
+    }
 
     private async Task LoadMetadataAsync(CancellationToken ct)
     {

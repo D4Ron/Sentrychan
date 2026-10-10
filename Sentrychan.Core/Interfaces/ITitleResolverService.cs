@@ -29,7 +29,7 @@ public record ResolvedAnime(
 /// Anime name recognition: parses release names into structured fields
 /// (AnitomySharp) and maps titles to canonical anime entries using the
 /// manami-project anime-offline-database (all synonyms, MAL ids, posters —
-/// fully offline after the initial download).
+/// fully offline after the initial download), topped up from AniList for what came after it.
 /// </summary>
 public interface ITitleResolverService
 {
@@ -70,4 +70,13 @@ public interface ITitleResolverService
     /// search endpoint. Returns up to <paramref name="limit"/> results.
     /// </summary>
     List<ResolvedAnime> Search(string query, int limit = 20);
+
+    /// <summary>The AniList id of a MyAnimeList entry, when the database knows it. Null when not.</summary>
+    int? AniListIdForMal(int malId) => null;
+
+    /// <summary>
+    /// The MyAnimeList id an AniList show is, checked: AniList gives a split show's later parts the
+    /// first part's id, so its own <c>idMal</c> is only taken when nothing else claims that id.
+    /// </summary>
+    int? MalIdFor(Services.AniList.AniListMedia media) => media.IdMal is > 0 ? media.IdMal : null;
 }

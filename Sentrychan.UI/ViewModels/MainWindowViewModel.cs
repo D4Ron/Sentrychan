@@ -1318,14 +1318,19 @@ public class MainWindowViewModel : ViewModelBase,
             catch (Exception ex) { Console.WriteLine($"[LibraryScan] startup scan failed: {ex.Message}"); }
         });
 
-        // Re-check airing statuses against MAL shortly after startup — a show that
-        // finished airing since it was added moves to Completed on its own instead
-        // of sitting in Currently Airing forever. Delayed so it never competes with
-        // the startup burst (poster loads, RSS check) for Jikan's rate limit.
-        _ = Task.Delay(TimeSpan.FromSeconds(45)).ContinueWith(async _ =>
+        // Re-check the library's show info (airing status, episode counts) shortly after startup
+        // and twice a day after that — the app lives in the tray for days, and a show that
+        // finished airing should move to Completed on its own. Delayed so it never competes with
+        // the startup burst (poster loads, RSS check) for the APIs' rate limits.
+        _ = Task.Run(async () =>
         {
-            try { await RefreshAiringStatusesAsync(); }
-            catch { }
+            await Task.Delay(TimeSpan.FromSeconds(45));
+            while (true)
+            {
+                try { await RefreshAiringStatusesAsync(); }
+                catch { }
+                await Task.Delay(TimeSpan.FromHours(12));
+            }
         });
 
         // Check followed manga for new chapters a bit later, so it never competes with
@@ -1364,7 +1369,7 @@ public class MainWindowViewModel : ViewModelBase,
         if (refresher == null) return;
 
         var report = await refresher.RefreshAsync(CancellationToken.None);
-        if (report.Refreshed == 0 && report.AutoRemoved.Count == 0) return;
+        if (report.Refreshed == 0 && report.Corrected == 0 && report.AutoRemoved.Count == 0) return;
 
         await LoadSeriesAsync(); // re-reads the DB and rebuilds the section lists
 

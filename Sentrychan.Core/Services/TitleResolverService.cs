@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Sentrychan.Core.Interfaces;
+using Sentrychan.Core.Services.AniList;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
@@ -13,24 +14,40 @@ namespace Sentrychan.Core.Services;
 ///  1. AnitomySharp — a real anime-release tokenizer (title/episode/season/group)
 ///     instead of homegrown regexes.
 ///  2. manami-project anime-offline-database — ~40k anime with EVERY synonym,
-///     cross-linked MAL ids and poster URLs. Downloaded once, refreshed weekly,
-///     indexed in memory: exact normalized-synonym match first, fuzzy fallback.
+///     cross-linked MAL ids and poster URLs. Downloaded once, indexed in memory:
+///     exact normalized-synonym match first, fuzzy fallback.
+///  3. AniList, for everything after the database: its project was archived in 2026 (last
+///     update 4 July), so shows that started later were missing or stuck as "upcoming" with no
+///     length. <see cref="AniListCatalog"/> fetches what's aired or announced since, daily, and
+///     <see cref="ApplySupplement"/> merges it in.
 /// Resolution is fully offline and instant after the first download.
 /// </summary>
 public class TitleResolverService : ITitleResolverService
 {
-    private static readonly string[] DatabaseUrls =
-    [
-        "https://raw.githubusercontent.com/manami-project/anime-offline-database/master/anime-offline-database-minified.json",
-        "https://github.com/manami-project/anime-offline-database/releases/latest/download/anime-offline-database-minified.json"
-    ];
+    // The repository's own copy has been gone since the files moved to releases (2025).
+    private const string DatabaseUrl =
+        "https://github.com/manami-project/anime-offline-database/releases/latest/download/anime-offline-database-minified.json";
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromDays(7);
+    private static readonly TimeSpan CatalogInterval = TimeSpan.FromHours(12);
 
     private readonly ILogger<TitleResolverService> _logger;
     private readonly HttpClient _http;
-    private readonly string _dbFilePath;
+    private string _dbFilePath;
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    private readonly AniListCatalog? _catalog;
+    private readonly object _supplementLock = new();
+
+    // AniList ↔ MyAnimeList, from the database's sources and then from merged AniList data.
+    private Dictionary<int, int> _aniListByMal = new();
+    private Dictionary<int, int> _malByAniList = new();
+    private Dictionary<int, int> _entryByAniList = new();
+
+    /// <summary>The offline database's last update: AniList fills in from a while before it.</summary>
+    public DateTime? SnapshotDate { get; private set; }
+
+    /// <summary>AniList ids of the entries the database still had as airing, upcoming or unknown when it froze.</summary>
+    public IReadOnlyCollection<int> UnsettledAniListIds { get; private set; } = [];
 
     // normalized title/synonym → entry index
     private Dictionary<string, int> _exactIndex = new();
@@ -48,9 +65,10 @@ public class TitleResolverService : ITitleResolverService
 
     public bool IsReady { get; private set; }
 
-    public TitleResolverService(ILogger<TitleResolverService> logger)
+    public TitleResolverService(ILogger<TitleResolverService> logger, AniListCatalog? catalog = null)
     {
         _logger = logger;
+        _catalog = catalog;
         _http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("Sentrychan/2.0");
 
@@ -80,8 +98,14 @@ public class TitleResolverService : ITitleResolverService
 
             IsReady = true;
             _logger.LogInformation(
-                "[TitleResolver] Ready — {Entries} anime, {Keys} title keys indexed",
-                _entries.Count, _exactIndex.Count);
+                "[TitleResolver] Ready — {Entries} anime, {Keys} title keys indexed (database of {Date:yyyy-MM-dd})",
+                _entries.Count, _exactIndex.Count, SnapshotDate);
+
+            if (_catalog != null)
+            {
+                if (_catalog.Items.Count > 0) ApplySupplement(_catalog.Items);
+                _ = Task.Run(() => KeepCatalogFreshAsync(CancellationToken.None));
+            }
         }
         catch (Exception ex)
         {
@@ -101,14 +125,20 @@ public class TitleResolverService : ITitleResolverService
 
         if (fresh) return;
 
-        foreach (var url in DatabaseUrls)
+        try
         {
-            try
+            using var response = await _http.GetAsync(DatabaseUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("[TitleResolver] Downloading offline database: {Url}", url);
-                using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-                if (!response.IsSuccessStatusCode) continue;
+                // The project is archived: the file hasn't changed in months. Same size → the copy
+                // here is it; don't fetch 60 MB again to find out.
+                if (info.Exists && response.Content.Headers.ContentLength == info.Length)
+                {
+                    File.SetLastWriteTimeUtc(_dbFilePath, DateTime.UtcNow);
+                    return;
+                }
 
+                _logger.LogInformation("[TitleResolver] Downloading offline database: {Url}", DatabaseUrl);
                 var tmpPath = _dbFilePath + ".tmp";
                 await using (var fs = File.Create(tmpPath))
                 {
@@ -116,17 +146,19 @@ public class TitleResolverService : ITitleResolverService
                 }
 
                 var size = new FileInfo(tmpPath).Length;
-                if (size < 1_000_000) { File.Delete(tmpPath); continue; }
-
-                File.Move(tmpPath, _dbFilePath, overwrite: true);
-                _logger.LogInformation("[TitleResolver] Database downloaded ({Mb:F1} MB)", size / 1_048_576.0);
-                return;
+                if (size >= 1_000_000)
+                {
+                    File.Move(tmpPath, _dbFilePath, overwrite: true);
+                    _logger.LogInformation("[TitleResolver] Database downloaded ({Mb:F1} MB)", size / 1_048_576.0);
+                    return;
+                }
+                File.Delete(tmpPath);
             }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[TitleResolver] Download failed from {Url}", url);
-            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[TitleResolver] Download failed from {Url}", DatabaseUrl);
         }
 
         if (info.Exists)
@@ -143,6 +175,14 @@ public class TitleResolverService : ITitleResolverService
         if (root?.Data == null || root.Data.Count == 0)
             throw new InvalidOperationException("Offline database parsed empty");
 
+        SnapshotDate = DateTime.TryParse(root.LastUpdate, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var updated)
+            ? updated : File.GetLastWriteTimeUtc(_dbFilePath);
+        var aniListByMal = new Dictionary<int, int>();
+        var malByAniList = new Dictionary<int, int>();
+        var entryByAniList = new Dictionary<int, int>();
+        var unsettled = new List<int>();
+
         var exact = new Dictionary<string, int>(root.Data.Count * 3);
         var keyRank = new Dictionary<string, int>(root.Data.Count * 3);
         var fuzzy = new List<(string, int, string[])>(root.Data.Count * 3);
@@ -155,6 +195,16 @@ public class TitleResolverService : ITitleResolverService
         {
             var entry = root.Data[i];
             entry.MalId = ExtractMalId(entry.Sources);
+            if (ExtractId(entry.Sources, "anilist.co/anime/") is > 0 and var aniList)
+            {
+                entryByAniList.TryAdd(aniList, i);
+                if (!string.Equals(entry.Status, "FINISHED", StringComparison.OrdinalIgnoreCase)) unsettled.Add(aniList);
+                if (entry.MalId > 0)
+                {
+                    aniListByMal.TryAdd(entry.MalId, aniList);
+                    malByAniList.TryAdd(aniList, entry.MalId);
+                }
+            }
 
             var canonicalKey = Normalize(entry.Title ?? string.Empty);
 
@@ -207,6 +257,10 @@ public class TitleResolverService : ITitleResolverService
         _chainByMalId = BuildChains(root.Data);
         _exactIndex = exact;
         _fuzzyKeys = fuzzy;
+        _aniListByMal = aniListByMal;
+        _malByAniList = malByAniList;
+        _entryByAniList = entryByAniList;
+        UnsettledAniListIds = unsettled;
     }
 
     private static int KeyRank(OfflineAnimeEntry entry, bool isCanonicalTitle)
@@ -228,14 +282,16 @@ public class TitleResolverService : ITitleResolverService
             if (!string.IsNullOrWhiteSpace(s)) yield return s;
     }
 
-    private static int ExtractMalId(List<string>? sources)
+    private static int ExtractMalId(List<string>? sources) => ExtractId(sources, "myanimelist.net/anime/");
+
+    private static int ExtractId(List<string>? sources, string prefix)
     {
         if (sources == null) return 0;
         foreach (var s in sources)
         {
-            var idx = s.IndexOf("myanimelist.net/anime/", StringComparison.OrdinalIgnoreCase);
+            var idx = s.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
             if (idx < 0) continue;
-            var tail = s[(idx + "myanimelist.net/anime/".Length)..].TrimEnd('/');
+            var tail = s[(idx + prefix.Length)..].TrimEnd('/');
             if (int.TryParse(tail, out var id)) return id;
         }
         return 0;
@@ -374,6 +430,208 @@ public class TitleResolverService : ITitleResolverService
     public ResolvedAnime? GetByMalId(int malId) =>
         IsReady && _byMalId.TryGetValue(malId, out var idx) ? ToResolved(_entries[idx]) : null;
 
+    /// <summary>Indexes a database file directly (tests).</summary>
+    internal void LoadFile(string path)
+    {
+        _dbFilePath = path;
+        LoadAndIndex();
+        IsReady = true;
+    }
+
+    // ── AniList top-up ────────────────────────────────────────────
+
+    public int? AniListIdForMal(int malId) => _aniListByMal.TryGetValue(malId, out var id) ? id : null;
+
+    public int? MalIdFor(AniList.AniListMedia media)
+    {
+        if (_malByAniList.TryGetValue(media.Id, out var known)) return known;
+        return media.IdMal is > 0 and var claimed && (!_aniListByMal.TryGetValue(claimed, out var other) || other == media.Id)
+            ? claimed : null;
+    }
+
+    /// <summary>
+    /// Fetches what AniList knows since the database's snapshot, now if the copy on disk is stale and
+    /// then every <see cref="CatalogInterval"/>, merging each new copy in.
+    /// </summary>
+    private async Task KeepCatalogFreshAsync(CancellationToken ct)
+    {
+        if (_catalog == null) return;
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                if (await _catalog.RefreshAsync(CatalogSince, UnsettledAniListIds, ct)) ApplySupplement(_catalog.Items);
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("[TitleResolver] AniList top-up failed: {Message}", ex.Message);
+            }
+            await Task.Delay(CatalogInterval, ct);
+        }
+    }
+
+    /// <summary>
+    /// From a season before the snapshot: the database caught the shows that had just started then
+    /// with a placeholder length and "ongoing", so they need AniList's word too.
+    /// </summary>
+    public DateTime CatalogSince => (SnapshotDate ?? DateTime.UtcNow).Date.AddDays(-90);
+
+    /// <summary>
+    /// Merges AniList's shows into the index: each one updates the entry it already is (status,
+    /// length, season, extra names, sequel/prequel links), or is added when the database never had
+    /// it. Which entry it is: the database's own AniList link first, then AniList's MyAnimeList id
+    /// when nothing else claims it, then — for the shows AniList links wrongly or not at all — a
+    /// MyAnimeList-only entry of the same kind and year whose names match closely. A show with no
+    /// MyAnimeList id at all can't be a library series, so it only refreshes an entry it already has.
+    /// Safe to repeat; readers see the old index until the new one is swapped in.
+    /// </summary>
+    public int ApplySupplement(IReadOnlyList<AniList.AniListMedia> media)
+    {
+        if (!IsReady || media.Count == 0) return 0;
+        lock (_supplementLock)
+        {
+            var entries = new List<OfflineAnimeEntry>(_entries);
+            var exact = new Dictionary<string, int>(_exactIndex);
+            var fuzzy = new List<(string Key, int EntryIdx, string[] Tokens)>(_fuzzyKeys);
+            var byMal = new Dictionary<int, int>(_byMalId);
+            var aniListByMal = new Dictionary<int, int>(_aniListByMal);
+            var malByAniList = new Dictionary<int, int>(_malByAniList);
+            var entryByAniList = new Dictionary<int, int>(_entryByAniList);
+
+            // An id AniList gives to several shows in this batch is right for at most one of them.
+            var shared = media.Where(m => m.IdMal is > 0).GroupBy(m => m.IdMal!.Value)
+                .Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
+            var orphans = new Lazy<List<(int EntryIdx, string[] Tokens)>>(() => MalOnlyNames(entries, fuzzy, aniListByMal));
+
+            int updated = 0, added = 0, linked = 0;
+            foreach (var m in media)
+            {
+                int? mal = malByAniList.TryGetValue(m.Id, out var known) ? known : null;
+                if (mal == null && m.IdMal is > 0 and var claimed && !shared.Contains(claimed)
+                    && (!aniListByMal.TryGetValue(claimed, out var other) || other == m.Id))
+                    mal = claimed;
+                if (mal == null && MatchByNames(m, entries, orphans.Value) is { } byName && !aniListByMal.ContainsKey(byName))
+                {
+                    mal = byName;
+                    linked++;
+                }
+
+                int idx;
+                if (mal is { } id && byMal.TryGetValue(id, out var existing)) idx = existing;
+                else if (entryByAniList.TryGetValue(m.Id, out var aniListOnly)) idx = aniListOnly;
+                else if (mal is { } newId)
+                {
+                    idx = entries.Count;
+                    entries.Add(new OfflineAnimeEntry { Title = m.Title.Romaji ?? m.Title.English ?? m.Title.Native, MalId = newId });
+                    added++;
+                }
+                else continue;
+
+                var e = entries[idx];
+                if (mal is { } link)
+                {
+                    if (e.MalId <= 0) e.MalId = link;
+                    byMal.TryAdd(link, idx);
+                    aniListByMal.TryAdd(link, m.Id);
+                    malByAniList.TryAdd(m.Id, link);
+                }
+                entryByAniList.TryAdd(m.Id, idx);
+                Refresh(e, m);
+                updated++;
+
+                foreach (var name in m.AllTitles())
+                {
+                    var key = Normalize(name);
+                    if (key.Length < 2 || exact.ContainsKey(key)) continue;
+                    exact[key] = idx;
+                    fuzzy.Add((key, idx, key.Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray()));
+                }
+
+                var seasons = (m.Relations?.Edges ?? [])
+                    .Where(r => r.RelationType is "SEQUEL" or "PREQUEL" && r.Node is { Type: "ANIME" })
+                    .Select(r => malByAniList.TryGetValue(r.Node!.Id, out var n) ? n
+                        : r.Node.IdMal is > 0 and var nodeMal && !shared.Contains(nodeMal) ? nodeMal : 0)
+                    .Where(n => n > 0 && n != e.MalId)
+                    .ToArray();
+                if (seasons.Length > 0) e.SeasonMal = (e.SeasonMal ?? []).Union(seasons).ToArray();
+            }
+
+            _entries = entries;
+            _byMalId = byMal;
+            _exactIndex = exact;
+            _fuzzyKeys = fuzzy;
+            _aniListByMal = aniListByMal;
+            _malByAniList = malByAniList;
+            _entryByAniList = entryByAniList;
+            _chainByMalId = BuildChains(entries);
+            _resolveCache.Clear();
+            _logger.LogInformation("[TitleResolver] AniList top-up: {Updated} shows refreshed, {Added} added, {Linked} linked by name",
+                updated, added, linked);
+            return updated;
+        }
+    }
+
+    private static void Refresh(OfflineAnimeEntry e, AniList.AniListMedia m)
+    {
+        // A length the database already had for a finished show is MAL's, and may follow MAL's
+        // split where AniList's doesn't; the matcher counts on it. Only placeholders are replaced.
+        if (m.Episodes is > 0 && (e.Status != "FINISHED" || e.Episodes <= 0)) e.Episodes = m.Episodes.Value;
+        e.Status = AniList.AniListMapper.CatalogStatus(m.Status);
+        if (string.IsNullOrEmpty(e.Type) || e.Type == "UNKNOWN") e.Type = AniList.AniListMapper.CatalogType(m.Format);
+        if (m.Year is { } year)
+            e.AnimeSeason = new OfflineAnimeSeason { Year = year, Season = m.Season ?? e.AnimeSeason?.Season };
+        e.Picture ??= m.CoverImage?.Large;
+        e.Title ??= m.Title.Romaji ?? m.Title.English;
+    }
+
+    /// <summary>The names of the entries that have a MyAnimeList id but no AniList link — recent ones only.</summary>
+    private static List<(int EntryIdx, string[] Tokens)> MalOnlyNames(List<OfflineAnimeEntry> entries,
+        List<(string Key, int EntryIdx, string[] Tokens)> fuzzy, Dictionary<int, int> aniListByMal)
+    {
+        var since = DateTime.UtcNow.Year - 3;
+        return fuzzy
+            .Where(k => entries[k.EntryIdx] is { MalId: > 0 } e && !aniListByMal.ContainsKey(e.MalId)
+                        && (e.AnimeSeason?.Year ?? since) >= since)
+            .Select(k => (k.EntryIdx, k.Tokens))
+            .ToList();
+    }
+
+    /// <summary>
+    /// The MyAnimeList-only entry this AniList show is, by its names: the same kind (TV/ONA…) and a
+    /// year apart at most, no season number that disagrees, and names sharing most of their words
+    /// — clearly better than any other candidate.
+    /// </summary>
+    private static int? MatchByNames(AniList.AniListMedia m, List<OfflineAnimeEntry> entries, List<(int EntryIdx, string[] Tokens)> candidates)
+    {
+        var kind = AniList.AniListMapper.CatalogType(m.Format);
+        var names = m.AllTitles().Select(Normalize).Where(n => n.Length >= 2)
+            .Select(n => (Tokens: n.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(), Season: SeasonDetector.DetectSeason(n)))
+            .ToList();
+        if (names.Count == 0) return null;
+
+        var best = new Dictionary<int, double>();
+        foreach (var (entryIdx, tokens) in candidates)
+        {
+            var e = entries[entryIdx];
+            if (!string.Equals(e.Type, kind, StringComparison.OrdinalIgnoreCase)) continue;
+            if (m.Year is { } y && e.AnimeSeason?.Year is { } ey && Math.Abs(y - ey) > 1) continue;
+            var keySeason = SeasonDetector.DetectSeason(string.Join(' ', tokens));
+            foreach (var (nameTokens, season) in names)
+            {
+                if (season != keySeason) continue;
+                var common = tokens.Count(nameTokens.Contains);
+                var score = (double)common / (tokens.Length + nameTokens.Count - common);
+                if (!best.TryGetValue(e.MalId, out var prev) || score > prev) best[e.MalId] = score;
+            }
+        }
+
+        var ranked = best.OrderByDescending(kv => kv.Value).Take(2).ToList();
+        if (ranked.Count == 0 || ranked[0].Value < 0.75) return null;
+        if (ranked.Count > 1 && ranked[1].Value > ranked[0].Value - 0.1) return null;
+        return ranked[0].Key;
+    }
+
     /// <summary>
     /// A show's seasons as MAL links them (sequel/prequel, see SeasonFamilyService), when known.
     /// They join seasons whose titles share nothing ("Jujutsu Kaisen" → "… Shimetsu Kaiyuu - Zenpen",
@@ -417,27 +675,32 @@ public class TitleResolverService : ITitleResolverService
             return [];
 
         var seen = new HashSet<int> { malId };
+        var confirmed = new HashSet<int>();
         var queue = new Queue<int>([malId]);
         while (queue.Count > 0 && seen.Count <= SeasonFamilyService.MaxMembers)
         {
-            if (!_byMalId.TryGetValue(queue.Dequeue(), out var i) || _entries[i].RelatedMal is not { } related) continue;
-            foreach (var id in related)
+            if (!_byMalId.TryGetValue(queue.Dequeue(), out var i)) continue;
+            var e = _entries[i];
+            foreach (var id in (e.RelatedMal ?? []).Concat(e.SeasonMal ?? []))
                 if (_byMalId.TryGetValue(id, out var j) && string.Equals(_entries[j].Type, type, StringComparison.OrdinalIgnoreCase) && seen.Add(id))
                     queue.Enqueue(id);
+            foreach (var id in e.SeasonMal ?? []) confirmed.Add(id);
         }
         // A franchise this big links far more than one show's seasons: leave it to the titles.
         if (seen.Count > SeasonFamilyService.MaxMembers) return [];
 
         // Links are walked through anything of the same kind, but only seasons are kept: not a
-        // one- or two-episode special or collab, and named after the show — its title starts, word
-        // for word, with the show's base name (the shortest family title this one starts with:
-        // "Enen no Shouboutai" for "… San no Shou"), not a spin-off with a title of its own.
+        // one- or two-episode special or collab (unless AniList calls it a sequel or prequel — a
+        // one-episode first part, "Steel Ball Run - 1st STAGE", is counted by the groups), and named
+        // after the show — its title starts, word for word, with the show's base name (the shortest
+        // family title this one starts with: "Enen no Shouboutai" for "… San no Shou"), not a
+        // spin-off with a title of its own.
         var keys = seen.ToDictionary(id => id, id => ChainKey(_entries[_byMalId[id]].Title ?? ""));
         var own = keys[malId];
         var root = keys.Values.Where(k => IsWordPrefix(k, own)).OrderBy(k => k.Length).FirstOrDefault() ?? own;
         return seen.Where(id =>
             id == malId ||
-            (_entries[_byMalId[id]].Episodes is not (> 0 and <= 2) && IsWordPrefix(root, keys[id])));
+            ((confirmed.Contains(id) || _entries[_byMalId[id]].Episodes is not (> 0 and <= 2)) && IsWordPrefix(root, keys[id])));
     }
 
     private static bool IsWordPrefix(string prefix, string of) =>
@@ -646,7 +909,7 @@ public class TitleResolverService : ITitleResolverService
     /// Aggressive normalization so "Re:ZERO -Starting Life-", "re zero starting life"
     /// and "Re Zero: Starting Life" all produce the same key.
     /// </summary>
-    private static string Normalize(string s)
+    internal static string Normalize(string s)
     {
         if (string.IsNullOrWhiteSpace(s)) return string.Empty;
 
@@ -668,6 +931,9 @@ public class TitleResolverService : ITitleResolverService
 
     private class OfflineDatabaseRoot
     {
+        [JsonPropertyName("lastUpdate")]
+        public string? LastUpdate { get; set; }
+
         [JsonPropertyName("data")]
         public List<OfflineAnimeEntry> Data { get; set; } = [];
     }
@@ -710,6 +976,10 @@ public class TitleResolverService : ITitleResolverService
         /// <summary>MAL ids of the related entries (any relation: sequel, side story, film…).</summary>
         [JsonIgnore]
         public int[]? RelatedMal { get; set; }
+
+        /// <summary>MAL ids AniList calls this entry's sequel or prequel — a relation the database's links don't name.</summary>
+        [JsonIgnore]
+        public int[]? SeasonMal { get; set; }
     }
 
     private class OfflineAnimeSeason

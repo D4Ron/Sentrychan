@@ -379,6 +379,15 @@
                                 </StackPanel>
                             </ctrls:SettingsSection>
 
+                            <ctrls:SettingsSection Title="Show info"
+                                                   Description="Airing status and episode counts come from AniList, with MyAnimeList as a backup. They're checked when the app starts and twice a day.">
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Button Content="Refresh now" Classes="ghost pill" Command="{Binding RefreshShowInfoCommand}"/>
+                                    <TextBlock Text="{Binding ShowInfoStatus}" VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </ctrls:SettingsSection>
+
                             <ctrls:SettingsSection Title="MyAnimeList import"
                                                    Description="Add everything on your MAL watching list to the library.">
                                 <StackPanel Classes="fields">

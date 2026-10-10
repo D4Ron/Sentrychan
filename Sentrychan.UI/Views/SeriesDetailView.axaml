@@ -252,7 +252,7 @@
                                 <TextBlock Text="{Binding Series.MalId}" FontSize="14"/>
                             </StackPanel>
                             <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,16">
-                                <TextBlock Text="JIKAN STATUS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="STATUS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"/>
                                 <TextBlock Text="{Binding Metadata.Status}" FontSize="14"/>
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,16">

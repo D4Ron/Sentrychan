@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Sentrychan.Core.Interfaces;
 
@@ -5,19 +6,22 @@ namespace Sentrychan.Core.Services;
 
 /// <summary>
 /// The app's schedule. Uses a source-pack schedule when one is loaded and returns
-/// something; otherwise falls back to MAL broadcast data, so the Airing Today panel
-/// works on a build with no pack installed.
+/// something; otherwise AniList's airing times, then MAL broadcast data, so the Airing
+/// Today panel works on a build with no pack installed.
 /// </summary>
 public sealed class AiringScheduleRouter : IAiringScheduleService, IAiringScheduleRegistry
 {
     private readonly JikanAiringScheduleService _fallback;
+    private readonly AniListAiringScheduleService? _aniList;
     private readonly ILogger<AiringScheduleRouter> _logger;
     private readonly List<IAiringScheduleService> _providers = [];
     private readonly object _gate = new();
 
-    public AiringScheduleRouter(JikanAiringScheduleService fallback, ILogger<AiringScheduleRouter> logger)
+    public AiringScheduleRouter(JikanAiringScheduleService fallback, ILogger<AiringScheduleRouter> logger,
+        AniListAiringScheduleService? aniList = null)
     {
         _fallback = fallback;
+        _aniList = aniList;
         _logger = logger;
     }
 
@@ -45,8 +49,98 @@ public sealed class AiringScheduleRouter : IAiringScheduleService, IAiringSchedu
                 _logger.LogWarning(ex, "[Schedule] source-pack schedule failed; falling back to MAL");
             }
         }
+        if (_aniList != null && await _aniList.GetTodayAsync(ct) is { Count: > 0 } fromAniList) return fromAniList;
         return await _fallback.GetTodayAsync(ct);
     }
+}
+
+/// <summary>
+/// Today's airings from AniList: the actual time of each episode, already in UTC, so the local
+/// day is simply asked for — no JST weekday arithmetic. The most-followed shows only, as MAL's
+/// schedule was (it listed 25 a day); adult ones never.
+/// </summary>
+public sealed class AniListAiringScheduleService : IAiringScheduleService
+{
+    private const int MaxShows = 30;
+
+    private readonly AniList.AniListShows _shows;
+    private readonly IDbContextFactory<Data.AppDbContext>? _dbFactory;
+    private readonly ILogger<AniListAiringScheduleService> _logger;
+    private List<AiringScheduleEntry>? _cache;
+    private DateTime _cacheDay = DateTime.MinValue;
+    private DateTime _cachedAt = DateTime.MinValue;
+    private readonly SemaphoreSlim _fetchGate = new(1, 1);
+
+    public AniListAiringScheduleService(AniList.AniListShows shows, ILogger<AniListAiringScheduleService> logger,
+        IDbContextFactory<Data.AppDbContext>? dbFactory = null)
+    {
+        _shows = shows;
+        _dbFactory = dbFactory;
+        _logger = logger;
+    }
+
+    public async Task<List<AiringScheduleEntry>> GetTodayAsync(CancellationToken ct = default)
+    {
+        if (Cached() is { } hit) return hit;
+        await _fetchGate.WaitAsync(ct);
+        try
+        {
+            if (Cached() is { } again) return again;
+            var today = DateTime.Today;
+            var from = new DateTimeOffset(today);
+            var airings = await _shows.Client.AiringBetweenAsync(from, from.AddDays(1), ct);
+            var library = await LibraryMalIdsAsync(ct);
+            var entries = airings
+                .Where(a => a.Media is { IsAdult: false })
+                .GroupBy(a => a.Media!.Id).Select(g => g.First())
+                .Select(a => (At: DateTimeOffset.FromUnixTimeSeconds(a.AiringAt).ToLocalTime(), Airing: a, Mal: _shows.MalIdFor(a.Media!) ?? 0))
+                // Everything airs on AniList's schedule — five-minute shorts, and the Chinese
+                // schedule as well as the Japanese one; MAL's listed the Japanese season. Kept
+                // either way when it's in the library.
+                .Where(x => library.Contains(x.Mal) || (x.Airing.Media!.CountryOfOrigin is null or "JP" && x.Airing.Media.Format != "TV_SHORT"))
+                .OrderByDescending(x => library.Contains(x.Mal))
+                .ThenByDescending(x => x.Airing.Media!.Popularity ?? 0)
+                .Take(MaxShows)
+                .OrderBy(x => x.At)
+                .Select(x => new AiringScheduleEntry(
+                    x.Airing.Media!.Title.Romaji ?? x.Airing.Media.Title.English ?? "",
+                    x.Airing.Media.CoverImage?.Large ?? "",
+                    x.At.ToString("HH:mm"),
+                    x.Mal > 0 ? $"https://myanimelist.net/anime/{x.Mal}" : $"https://anilist.co/anime/{x.Airing.Media.Id}",
+                    x.Mal))
+                .ToList();
+            if (entries.Count > 0)
+            {
+                _cache = entries;
+                _cacheDay = today;
+                _cachedAt = DateTime.UtcNow;
+            }
+            _logger.LogInformation("[Schedule] AniList: {Count} shows airing {Day}", entries.Count, today.DayOfWeek);
+            return entries;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("[Schedule] AniList schedule unavailable: {Message}", ex.Message);
+            return [];
+        }
+        finally { _fetchGate.Release(); }
+    }
+
+    /// <summary>The library's shows always make the list, however few people follow them.</summary>
+    private async Task<HashSet<int>> LibraryMalIdsAsync(CancellationToken ct)
+    {
+        if (_dbFactory == null) return [];
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            return (await db.Series.Where(s => s.MalId > 0).Select(s => s.MalId).ToListAsync(ct)).ToHashSet();
+        }
+        catch { return []; }
+    }
+
+    private List<AiringScheduleEntry>? Cached() =>
+        _cache != null && _cacheDay == DateTime.Today && DateTime.UtcNow - _cachedAt < TimeSpan.FromMinutes(30) ? _cache : null;
 }
 
 /// <summary>

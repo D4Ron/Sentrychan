@@ -209,6 +209,37 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-10-10 — **AniList as the anime-info source; the library's show info refreshed.**
+  - **Why:** the offline anime database's project was archived (last update 2026-07-04), so shows that started
+    after it were missing or stuck as "upcoming" with a one-episode placeholder; and Jikan's requests were timing
+    out (15 s) by the dozen a day. Show details, search and new-show matching all suffered.
+  - `Core/Services/AniList/`: `AniListClient` (GraphQL, one gate for the whole app: reads `X-RateLimit-*`, waits out
+    a 429 up to 3 times, foreground requests go ahead of background ones; limit is 30/min while AniList is degraded),
+    `AniListMapper` (to Jikan's `AnimeResult` and status words, and to the database's vocabulary), `AniListCatalog`
+    (everything started since the snapshot − 90 days, everything airing, what finished since, and — by AniList id —
+    the ~900 entries the database still had as airing/upcoming; ~1,200 shows, ~70 requests, background, at most twice
+    a day, `anilist-catalog.json`; finished ones are carried over instead of re-asked), `AniListShows` (MAL id ↔
+    AniList show: database links, then AniList's `idMal` when nothing else claims it, then a title search checked by
+    name similarity, learned links in `anilist-links.json`).
+  - **AniList's MAL ids aren't always right**: it gives a split show's later parts the first part's id. The resolver
+    trusts an `idMal` only when the database doesn't tie that MAL id to another AniList show and the batch doesn't
+    share it; otherwise it matches the show to a MAL-only entry of the same kind and year by names (Jaccard ≥ 0.75,
+    seasons agree, clear margin).
+  - `TitleResolverService.ApplySupplement` merges the catalog into the index (status, placeholder lengths — a finished
+    length from the database is kept, it may be MAL's split —, season, extra names, new entries), on copies swapped in
+    whole. AniList's SEQUEL/PREQUEL links (`SeasonMal`) join season families even for a one-episode first part (the
+    ≤2-episode filter is for the database's untyped links). The database is no longer re-downloaded when unchanged.
+  - `AnimeApiService`: details, search, seasons and recommendations from AniList first, Jikan behind it. Schedule:
+    `AniListAiringScheduleService` (exact airing times; library shows first, then the most popular; Japanese, not
+    shorts, unless in the library) before the MAL schedule. Season families: AniList relations first.
+  - **Library refresh** (`AiringStatusRefreshService`): the whole library in one or two AniList requests, at startup,
+    every 12 h, from Settings → Library → Show info → Refresh now, and on opening a show page. Status always; episode
+    count unless the show was already finished with a count; year and kind only when never set (they name folders).
+  - Real data (copies): all 13 library shows placed; the airing 3rd season of a long show went 1 → 12 episodes and
+    "Not yet aired" → airing; a two-part ONA whose AniList entry carries the first part's MAL id was linked by name and
+    its releases ("… - 04", counted from the one-episode first part) now match. 869-pair regression unchanged with and
+    without the top-up. 297 tests.
+
 - 2026-10-06 — **Season families (step 2: library layout) + the show page.**
   - `Library/SeasonLayout` places a series in its show's folder: parts ("Part 2", or a cour sharing the
     chain key) **continue their season** (offset = the earlier FINISHED parts of that season; an unknown length →

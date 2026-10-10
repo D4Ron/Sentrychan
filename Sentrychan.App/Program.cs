@@ -183,11 +183,17 @@ public static class Program
                 services.AddSingleton<IThemeService, ThemeService>();
                 services.AddSingleton<ISecretModeService>(sp => (ISecretModeService)sp.GetRequiredService<IThemeService>());
                 services.AddSingleton<IVideoFileLocator, VideoFileLocator>();
+                // AniList: show details, search, airing times and the title index's top-up (the
+                // offline database stopped updating in July 2026); Jikan stays behind it.
+                services.AddSingleton<Sentrychan.Core.Services.AniList.AniListClient>();
+                services.AddSingleton<Sentrychan.Core.Services.AniList.AniListCatalog>();
+                services.AddSingleton<Sentrychan.Core.Services.AniList.AniListShows>();
                 services.AddSingleton<ITitleResolverService, TitleResolverService>();
                 services.AddSingleton<ILibraryScanService, LibraryScanService>();
                 services.AddSingleton<Sentrychan.Core.Services.AiringStatusRefreshService>();
                 // MAL-backed schedule by default; a loaded source pack may register an override.
                 services.AddSingleton<JikanAiringScheduleService>();
+                services.AddSingleton<AniListAiringScheduleService>();
                 services.AddSingleton<AiringScheduleRouter>();
                 services.AddSingleton<IAiringScheduleService>(sp => sp.GetRequiredService<AiringScheduleRouter>());
                 services.AddSingleton<IAiringScheduleRegistry>(sp => sp.GetRequiredService<AiringScheduleRouter>());
@@ -219,7 +225,19 @@ public static class Program
                 services.AddSingleton<Sentrychan.Core.Sources.SourcesTransferService>();
                 services.AddSingleton<Sentrychan.Core.Sources.SourcesChecker>();
                 services.AddSingleton(sp => new SeasonFamilyService(
-                    async (malId, ct) => (await sp.GetRequiredService<Sentrychan.Core.Services.Api.IJikanApi>().GetAnimeRelationsAsync(malId, ct)).Data,
+                    async (malId, ct) =>
+                    {
+                        // AniList knows the links of new seasons; Jikan is the fallback.
+                        var aniList = sp.GetRequiredService<Sentrychan.Core.Services.AniList.AniListShows>();
+                        try
+                        {
+                            if (await aniList.ForMalIdAsync(malId, null, background: true, ct) is { } media)
+                                return Sentrychan.Core.Services.AniList.AniListMapper.ToAnimeResult(media, malId, aniList.MalIdFor).Relations;
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                        catch (Exception) { /* ask MyAnimeList */ }
+                        return (await sp.GetRequiredService<Sentrychan.Core.Services.Api.IJikanApi>().GetAnimeRelationsAsync(malId, ct)).Data;
+                    },
                     sp.GetRequiredService<ITitleResolverService>(),
                     sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SeasonFamilyService>>()));
                 services.AddSingleton<PluginSourceLoader>();
