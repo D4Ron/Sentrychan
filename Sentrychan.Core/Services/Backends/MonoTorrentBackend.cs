@@ -56,6 +56,30 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
     private readonly ConcurrentDictionary<string, (double Progress, DateTime At)> _progressWatermark =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // ── Recovery ──────────────────────────────────────────────────
+    // After a sleep, a network change, or a day or two of running, the engine could stop
+    // making connections at all: every torrent sat still with a frozen peer count, and only
+    // restarting the app brought it back (three times in one Mac tester's logs; each time the
+    // stuck downloads finished within minutes of the restart). So a stalled torrent is first
+    // restarted on its own, and when nothing at all moves, the engine is rebuilt — new
+    // sockets, a fresh port mapping, fresh announces — and every download resumes from its
+    // fast-resume data.
+    private static readonly TimeSpan EngineRestartGap = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan SleepGap = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan NetworkSettle = TimeSpan.FromSeconds(60);
+    private const int MaxRestartsWithoutProgress = 3;
+
+    private DateTime _lastEngineRestart = DateTime.MinValue;
+    private DateTime? _engineStartedAt;
+    private DateTime _lastTick = DateTime.UtcNow;
+    private DateTime _lastProgressAnywhere = DateTime.UtcNow;
+    private DateTime? _networkChangedAt;
+    private int _restartsWithoutProgress;
+    /// <summary>Handles whose torrent was already restarted on its own during the current stall.</summary>
+    private readonly ConcurrentDictionary<string, byte> _kicked = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Handles the user paused: a rebuilt engine must not start them again.</summary>
+    private readonly ConcurrentDictionary<string, byte> _paused = new(StringComparer.OrdinalIgnoreCase);
+
     public string Name => "MonoTorrent (Built-in)";
     public string BackendType => "MonoTorrent";
 
@@ -82,6 +106,9 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
         };
         _httpClient.DefaultRequestHeaders.UserAgent
             .ParseAdd("Sentrychan/2.0 (MonoTorrent)");
+
+        try { System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) => _networkChangedAt = DateTime.UtcNow; }
+        catch (Exception ex) { _logger.LogDebug(ex, "[MonoTorrent] Network change notifications unavailable"); }
     }
 
     public Task<bool> IsAvailableAsync(CancellationToken ct = default)
@@ -316,17 +343,22 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
     public async Task PauseAsync(string handle, CancellationToken ct = default)
     {
         if (_managers.TryGetValue(handle, out var manager))
+        {
+            _paused[handle] = 0;
             await manager.PauseAsync();
+        }
     }
 
     public async Task ResumeAsync(string handle, CancellationToken ct = default)
     {
+        _paused.TryRemove(handle, out _);
         if (_managers.TryGetValue(handle, out var manager))
             await manager.StartAsync();
     }
 
     public async Task RemoveAsync(string handle, bool deleteData, CancellationToken ct = default)
     {
+        _paused.TryRemove(handle, out _);
         if (!_managers.TryRemove(handle, out var manager)) return;
 
         await manager.StopAsync();
@@ -447,6 +479,7 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
             }.ToSettings();
 
             _engine = new ClientEngine(settings);
+            _engineStartedAt = DateTime.UtcNow;
             _logger.LogInformation(
                 "[MonoTorrent] Engine initialized, cache: {Cache} (down {Down}, up {Up}, " +
                 "port {Port}, forwarding on)",
@@ -475,12 +508,27 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
     private async Task PollLoopAsync(CancellationToken ct)
     {
         _logger.LogDebug("[MonoTorrent] Poll loop started ({Count} active)", _managers.Count);
+        _lastTick = _lastProgressAnywhere = DateTime.UtcNow;
 
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 await Task.Delay(2_000, ct);
+
+                // A tick that comes far later than 2 s means the computer slept: the engine's
+                // sockets, port mapping and peer list are from before it.
+                var now = DateTime.UtcNow;
+                var gap = now - _lastTick;
+                _lastTick = now;
+                if (gap > SleepGap && await RestartEngineAsync($"the computer was asleep for {gap.TotalMinutes:F0} min"))
+                    continue;
+                if (_networkChangedAt is { } changed && now - changed > NetworkSettle)
+                {
+                    _networkChangedAt = null;
+                    if (now - _lastProgressAnywhere > NetworkSettle && await RestartEngineAsync("the network changed and nothing has moved since"))
+                        continue;
+                }
 
                 // Drain completed managers from the engine to free resources
                 while (_completedManagers.TryTake(out var completed))
@@ -498,6 +546,7 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
                 }
 
                 // Snapshot to avoid modifying while iterating
+                var stalled = new List<(string Handle, TorrentManager Manager)>();
                 foreach (var (handle, manager) in _managers.ToArray())
                 {
                     switch (manager.State)
@@ -522,9 +571,19 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
                             // Metadata for a bare magnet resolves after the add, so the
                             // first registration attempt may have had no file list yet.
                             RegisterActivePaths(manager);
-                            CheckForStall(handle, manager);
+                            if (CheckForStall(handle, manager)) stalled.Add((handle, manager));
                             break;
                     }
+                }
+
+                // A stalled torrent is first restarted on its own (a fresh announce and fresh
+                // connections). Stalled again with nothing else moving either: the engine itself.
+                foreach (var (handle, manager) in stalled)
+                {
+                    if (_kicked.TryAdd(handle, 0)) await RestartTorrentAsync(handle, manager);
+                    else if (DateTime.UtcNow - _lastProgressAnywhere >= StallTimeout &&
+                             await RestartEngineAsync($"no download has moved for {(DateTime.UtcNow - _lastProgressAnywhere).TotalMinutes:F0} min"))
+                        break;
                 }
 
                 // Stop poll loop when nothing is active
@@ -583,7 +642,8 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
     /// so the UI can show it as stuck instead of the download silently rotting in
     /// the download folder with no completion event ever firing.
     /// </summary>
-    private void CheckForStall(string handle, TorrentManager manager)
+    /// <returns>True when the torrent has just been found stalled.</returns>
+    private bool CheckForStall(string handle, TorrentManager manager)
     {
         var now      = DateTime.UtcNow;
         var progress = manager.Progress;
@@ -591,26 +651,43 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
         if (!_progressWatermark.TryGetValue(handle, out var mark))
         {
             _progressWatermark[handle] = (progress, now);
-            return;
+            return false;
         }
 
         // Any forward movement resets the clock.
         if (progress > mark.Progress)
         {
             _progressWatermark[handle] = (progress, now);
-            return;
+            _lastProgressAnywhere = now;
+            _restartsWithoutProgress = 0;
+            _kicked.TryRemove(handle, out _);
+            return false;
         }
 
-        if (now - mark.At < StallTimeout) return;
+        if (now - mark.At < StallTimeout) return false;
 
-        var peers = 0;
-        try { peers = manager.Peers.Available; } catch { /* best effort */ }
+        int peers = 0, open = 0, seeds = 0, leechers = 0;
+        try
+        {
+            peers = manager.Peers.Available;
+            open = manager.OpenConnections;
+            seeds = manager.Peers.Seeds;
+            leechers = manager.Peers.Leechs;
+        }
+        catch { /* best effort */ }
+        string dht;
+        try { dht = _engine is { } e ? $"{e.Dht.State}, {e.Dht.NodeCount} nodes" : "no engine"; }
+        catch { dht = "unknown"; }
 
+        // Connected vs. merely known peers is what tells a dead engine or a blocked network
+        // (0 open with a hundred known) from a swarm with nobody seeding (connected, no seeds).
         _logger.LogWarning(
             "[MonoTorrent] STALLED {Handle} at {Progress:F1}% for {Mins:F0} min " +
-            "({Peers} peers available): {Name}",
+            "({Peers} peers available, {Open} connected: {Seeds} seeds, {Leechers} leechers; DHT {Dht}; engine up {Uptime}): {Name}",
             handle[..Math.Min(12, handle.Length)], progress,
-            (now - mark.At).TotalMinutes, peers, Vault.Privacy.Name(manager.Torrent?.Name, handle));
+            (now - mark.At).TotalMinutes, peers, open, seeds, leechers, dht,
+            _engineStartedAt is { } started ? $"{(now - started).TotalHours:F1} h" : "?",
+            Vault.Privacy.Name(manager.Torrent?.Name, handle));
 
         DownloadStalled?.Invoke(new BackendStallEvent
         {
@@ -625,6 +702,78 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
         // Re-arm so we warn again only after another full StallTimeout, rather
         // than spamming every poll tick.
         _progressWatermark[handle] = (progress, now);
+        return true;
+    }
+
+    /// <summary>Stops and starts one torrent: it announces again and dials peers afresh.</summary>
+    private async Task RestartTorrentAsync(string handle, TorrentManager manager)
+    {
+        _logger.LogInformation("[MonoTorrent] Restarting stalled torrent {Handle}", handle[..Math.Min(12, handle.Length)]);
+        try
+        {
+            await manager.StopAsync().WaitAsync(TimeSpan.FromSeconds(20));
+            await manager.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("[MonoTorrent] Restarting {Handle} failed: {Message}", handle[..Math.Min(12, handle.Length)], ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the engine and resumes every unfinished download from its saved state. At most
+    /// once per <see cref="EngineRestartGap"/>, and not over and over when restarting changes
+    /// nothing (a swarm nobody seeds stays stalled whatever the engine does).
+    /// </summary>
+    /// <returns>True when the engine was rebuilt.</returns>
+    private async Task<bool> RestartEngineAsync(string why)
+    {
+        if (_managers.IsEmpty || _engine == null) return false;
+        var now = DateTime.UtcNow;
+        if (now - _lastEngineRestart < EngineRestartGap || _restartsWithoutProgress >= MaxRestartsWithoutProgress) return false;
+        _lastEngineRestart = now;
+        _restartsWithoutProgress++;
+
+        var paused = _paused.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _logger.LogWarning("[MonoTorrent] Restarting the engine: {Why}. {Count} download(s) will resume where they were",
+            why, _managers.Count);
+
+        await _engineLock.WaitAsync();
+        try
+        {
+            var managers = _managers.ToArray();
+            _managers.Clear();
+            while (_completedManagers.TryTake(out _)) { }
+            foreach (var (handle, manager) in managers)
+            {
+                ReleaseActivePaths(manager);
+                _progressWatermark.TryRemove(handle, out _);
+                _kicked.TryRemove(handle, out _);
+            }
+            if (_engine != null)
+            {
+                // Stopping saves each torrent's fast-resume data, so nothing is downloaded twice.
+                try { await Task.WhenAll(managers.Select(m => m.Value.StopAsync())).WaitAsync(TimeSpan.FromSeconds(30)); }
+                catch (Exception ex) { _logger.LogDebug(ex, "[MonoTorrent] Stopping torrents for the restart"); }
+                try { await _engine.StopAllAsync(); } catch { /* disposed below either way */ }
+                try { _engine.Dispose(); } catch { /* the sockets go with the process at worst */ }
+                _engine = null;
+            }
+        }
+        finally { _engineLock.Release(); }
+
+        try
+        {
+            await RestoreAsync(CancellationToken.None);
+            foreach (var handle in paused)
+                if (_managers.TryGetValue(handle, out var manager)) await manager.PauseAsync();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[MonoTorrent] Resuming downloads after the engine restart failed");
+            return true;
+        }
     }
 
     private async Task OnTorrentSeedingAsync(string handle, TorrentManager manager)
@@ -654,6 +803,7 @@ public class MonoTorrentBackend : IDownloadBackend, IAsyncDisposable
         // Remove from active tracking first to prevent duplicate events
         if (!_managers.TryRemove(handle, out _)) return;
         _rechecked.TryRemove(handle, out _);
+        _paused.TryRemove(handle, out _);
 
         string? filePath = manager.Files.Count == 1
             ? manager.Files[0].FullPath

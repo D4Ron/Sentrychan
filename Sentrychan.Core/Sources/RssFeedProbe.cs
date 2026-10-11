@@ -83,7 +83,11 @@ public static class RssFeedProbe
 
     private static bool Mentions(string text) =>
         text.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase) ||
-        text.Contains(".torrent", StringComparison.OrdinalIgnoreCase);
+        text.Contains(".torrent", StringComparison.OrdinalIgnoreCase) ||
+        // Some feeds link a torrent as ".../view/123/torrent", with no extension — the app
+        // downloads those fine, so the check mustn't call the feed useless.
+        (Uri.TryCreate(text.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" &&
+         uri.AbsolutePath.TrimEnd('/').EndsWith("/torrent", StringComparison.OrdinalIgnoreCase));
 
     private static bool LooksLikeHtml(string body)
     {

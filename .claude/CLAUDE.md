@@ -209,6 +209,21 @@ checks on Windows, filter support inside the external source pack, and a visual 
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
 
+- 2026-10-11 — **Downloads that stop for good: the torrent engine now recovers by itself.**
+  - **Found in a Mac tester's report:** three times the same pattern — every torrent sat still (0–99%) with a
+    frozen "peers available" count for hours, and restarting the app finished them within minutes. The last time
+    the engine had been up 2½ days across sleeps; new torrents never left 0% while the feeds were still read fine.
+  - `MonoTorrentBackend`: a stalled torrent (5 min without progress) is restarted on its own; stalled again while
+    no download anywhere has moved, the engine is rebuilt (`RestartEngineAsync`: stop all — saving fast-resume —,
+    dispose, new engine, `RestoreAsync` re-adds every unfinished job, paused ones re-paused). Also rebuilt after a
+    sleep (a poll tick > 90 s late) and after a network change with nothing moving for 60 s. At most once per
+    15 min, and not more than 3 times in a row without progress (a swarm nobody seeds stays stalled).
+    The STALLED log line now says connected peers, seeds/leechers, DHT state and engine uptime.
+  - Live check on Windows (a public, well-seeded installer image): 18% at ~6 MB/s → engine rebuilt → resumed from
+    18%, back to ~6 MB/s within 15 s. The sleep/network triggers need checking on a Mac.
+  - `RssFeedProbe`: a link ending in `/torrent` (no extension) counts as a download link — the check called a
+    working feed useless.
+
 - 2026-10-10 — **AniList as the anime-info source; the library's show info refreshed.**
   - **Why:** the offline anime database's project was archived (last update 2026-07-04), so shows that started
     after it were missing or stuck as "upcoming" with a one-episode placeholder; and Jikan's requests were timing

@@ -40,3 +40,5 @@ Sentrychan.App/Assets/frpc.exe
 # addresses and a source pack, so it must never be published. Never remove this rule.
 /my-sources/
 *.scsources
+# Testers' problem reports: their logs, paths and library. Private.
+/Feedback and logs/

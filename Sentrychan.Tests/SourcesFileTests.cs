@@ -99,11 +99,12 @@ public sealed class SourcesFileTests : IDisposable
               <item><title>Show - 01</title><link>https://example.test/download/1.torrent</link></item>
               <item><title>Show - 02</title><enclosure url="https://example.test/d/2" type="application/x-bittorrent"/></item>
               <item><title>Show - 03</title><description>magnet:?xt=urn:btih:abc</description></item>
+              <item><title>Show - 04</title><link>https://example.test/view/4/torrent</link></item>
             </channel></rss>
             """);
         Assert.True(check.IsUsable);
-        Assert.Equal(3, check.Items);
-        Assert.Equal(3, check.Downloadable);
+        Assert.Equal(4, check.Items);
+        Assert.Equal(4, check.Downloadable);
     }
 
     [Fact]
