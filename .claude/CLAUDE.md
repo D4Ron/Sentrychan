@@ -16,6 +16,11 @@ into a library. This file is the brief. Read all of it before changing anything,
   that can be tested headlessly must be: parsers, planners, renamers, API clients (against recorded
   responses), migrations. The UI can't be run here; say in the log what needs a visual check on Windows.
 - **Small, reviewable commits**, each building. Message style: a plain summary line, then *why*.
+- **Every user-visible change gets a line in `Sentrychan.UI/Assets/changelog.json`** (newest entry on top; id =
+  the date, `2026-10-11b` for a second one that day; `"preview": true` for preview-only features). The app shows
+  the new notes once, on the first start after an update (`Core/Updates/Changelog`, AppConfig `ChangelogSeen`), and
+  all of them from Settings → About → What's new. Plain language for users, no site names. A test checks the file
+  parses and stays in order.
 - **Comments explain why, not what.** Match the density of the surrounding code.
 - **Never move/rewrite .cs files through anything that re-encodes them**; files are UTF-8.
 
@@ -208,6 +213,11 @@ checks on Windows, filter support inside the external source pack, and a visual 
 ## Progress log
 
 _Newest first. Date, phase, what's done, what's next, and anything that needs checking on Windows._
+
+- 2026-10-11 — **"What's new" after updates.** `Assets/changelog.json` + `Core/Updates/Changelog` (which notes are
+  new: ids newer than AppConfig `ChangelogSeen`; a fresh install remembers the newest and shows nothing; an install
+  used before the notes existed sees the latest few) + `WhatsNewDialog`, shown once at startup after the first-run
+  steps, and on demand from Settings → About. Seeded with three entries (10-06, 10-07, 10-11).
 
 - 2026-10-11 — **Downloads that stop for good: the torrent engine now recovers by itself.**
   - **Found in a Mac tester's report:** three times the same pattern — every torrent sat still (0–99%) with a

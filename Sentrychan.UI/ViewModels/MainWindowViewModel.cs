@@ -1514,6 +1514,8 @@ public class MainWindowViewModel : ViewModelBase,
         // This used to run twice (the constructor started it as well as the window), so a new
         // user got every first-run dialog and the tutorial twice, stacked on top of each other.
         if (System.Threading.Interlocked.Exchange(ref _initStarted, 1) == 1) return;
+        // Read before the first-run steps below mark themselves done.
+        var usedBefore = await WasUsedBeforeAsync();
         await LoadSeriesAsync();
         await LoadAppearanceAsync();
         if (await MaybeOfferStableCopyAsync()) return; // restarting into the copied library
@@ -1521,6 +1523,7 @@ public class MainWindowViewModel : ViewModelBase,
         await CheckFirstRunAsync();
         await MaybeShowTutorialAsync();
         await MaybeShowSourcesGuideAsync();
+        await MaybeShowWhatsNewAsync(usedBefore);
         await SyncMonitoringStateAsync();
         if (BuildInfo.IsTestBuild) _ = RunFirstStartDiagnosisAsync();
     }
@@ -1601,6 +1604,53 @@ public class MainWindowViewModel : ViewModelBase,
             else ShowToast("Report saved for the developer", file);
         }
         catch (Exception ex) { Console.WriteLine($"[Diagnosis] first-start report failed: {ex}"); }
+    }
+
+    /// <summary>An install that has a library or got past the tutorial — not one opening for the first time.</summary>
+    private async Task<bool> WasUsedBeforeAsync()
+    {
+        if (_dbContextFactory == null) return false;
+        try
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            return await db.Series.AnyAsync() || await db.AppConfigs.AnyAsync(c => c.Key == "TutorialShown");
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Once after an update: the notes that are new since the last start.</summary>
+    private async Task MaybeShowWhatsNewAsync(bool usedBefore)
+    {
+        if (_dbContextFactory == null) return;
+        try
+        {
+            var notes = Sentrychan.UI.Views.Dialogs.WhatsNewDialog.Notes();
+            string? lastSeen;
+            await using (var db = await _dbContextFactory.CreateDbContextAsync())
+                lastSeen = (await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == Sentrychan.Core.Updates.Changelog.SeenKey))?.Value;
+
+            var (show, remember) = Sentrychan.Core.Updates.Changelog.Unseen(notes, lastSeen, usedBefore);
+            // Remembered first: a crash in the window mustn't bring it back at every start.
+            if (remember != null)
+            {
+                await using var db = await _dbContextFactory.CreateDbContextAsync();
+                var row = await db.AppConfigs.FirstOrDefaultAsync(c => c.Key == Sentrychan.Core.Updates.Changelog.SeenKey);
+                if (row == null) db.AppConfigs.Add(new Sentrychan.Core.Models.AppConfig { Key = Sentrychan.Core.Updates.Changelog.SeenKey, Value = remember });
+                else row.Value = remember;
+                await db.SaveChangesAsync();
+            }
+            if (show.Count > 0) await ShowWhatsNewAsync(show, "Since you last opened the app:");
+        }
+        catch (Exception ex) { Console.WriteLine($"[WhatsNew] {ex.Message}"); }
+    }
+
+    /// <summary>Opens the update notes (after an update, or every note from Settings → About).</summary>
+    public async Task ShowWhatsNewAsync(IReadOnlyList<Sentrychan.Core.Updates.ChangelogEntry>? entries = null, string? subtitle = null)
+    {
+        if (GetMainWindow() is not { } owner) return;
+        entries ??= Sentrychan.UI.Views.Dialogs.WhatsNewDialog.Notes();
+        if (entries.Count == 0) return;
+        await new Sentrychan.UI.Views.Dialogs.WhatsNewDialog(entries, subtitle ?? "Every update so far, newest first.").ShowDialog(owner);
     }
 
     /// <summary>

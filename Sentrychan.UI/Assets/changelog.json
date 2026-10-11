@@ -1,0 +1,31 @@
+[
+  {
+    "id": "2026-10-11",
+    "title": "Downloads that fix themselves, and fresher show info",
+    "changes": [
+      "Downloads that stopped for good — stuck at the same percentage, often after the computer slept — now recover on their own: the download engine restarts itself and every download continues where it was.",
+      "Show info now comes from AniList, with MyAnimeList as a backup. Shows that started recently are recognised again, and your library's airing status and episode counts update by themselves (or right away: Settings → Library → Show info → Refresh now).",
+      "Airing Today uses each episode's real airing time, and always lists the shows you follow.",
+      "The sources check no longer calls a working feed useless when its download links end in \"/torrent\".",
+      "This window: after each update, it shows what changed."
+    ]
+  },
+  {
+    "id": "2026-10-07",
+    "title": "Seasons that fit together",
+    "changes": [
+      "A show's seasons are linked, so an episode numbered straight through the whole show (\"- 50\") is matched to the right season and episode.",
+      "In your library, a season's later parts continue that season (Part 2 of season 1 is S01E13 on). A show page can keep them as separate seasons instead.",
+      "On a show page you can say how groups number a season (\"Groups release episode 1 as\"), and the episode tiles show both numbers.",
+      "Show pages open straight away, even for shows with hundreds of episodes."
+    ]
+  },
+  {
+    "id": "2026-10-06",
+    "title": "Your release groups, and steadier feeds",
+    "changes": [
+      "Preferred release groups: automatic downloads wait up to 12 hours for one of your groups before taking another — or only ever use yours. Each show can have its own rule. What you pick yourself in Search or Latest always downloads.",
+      "A feed that fails is tried again later instead of being turned off after a few failures."
+    ]
+  }
+]

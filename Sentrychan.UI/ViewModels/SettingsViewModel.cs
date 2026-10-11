@@ -304,6 +304,15 @@ public class SettingsViewModel : ViewModelBase
     public ReactiveCommand<string, Unit> OpenLinkCommand { get; } =
         ReactiveCommand.Create<string>(Services.AppLinks.Open);
 
+    public ReactiveCommand<Unit, Unit> ShowWhatsNewCommand { get; } =
+        ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime d
+                && d.MainWindow?.DataContext is MainWindowViewModel mvm)
+                await mvm.ShowWhatsNewAsync();
+        });
+
     public ReactiveCommand<Unit, Unit> ShowTutorialCommand { get; } =
         ReactiveCommand.CreateFromTask(async () =>
         {

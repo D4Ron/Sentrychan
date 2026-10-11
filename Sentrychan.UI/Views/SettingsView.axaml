@@ -586,6 +586,7 @@
 
                             <ctrls:SettingsSection Title="Help" Description="Walkthrough and diagnostics.">
                                 <WrapPanel Orientation="Horizontal">
+                                    <Button Content="What's new" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding ShowWhatsNewCommand}"/>
                                     <Button Content="Show tutorial" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding ShowTutorialCommand}"/>
                                     <Button Content="Send a problem report…" Classes="ghost pill" Margin="0,0,10,8" Command="{Binding ProblemReportCommand}"
                                             ToolTip.Tip="Saves one file with logs and details for the developer. Nothing is sent by itself."/>
