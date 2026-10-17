@@ -142,6 +142,7 @@ public sealed class VaultViewModel : ViewModelBase
         ExportKeyCommand     = ReactiveCommand.CreateFromTask(ExportKeyAsync);
         ImportKeyCommand     = ReactiveCommand.CreateFromTask(ImportKeyAsync);
         ClearImageCacheCommand = ReactiveCommand.Create(ClearImageCache);
+        RetryCommand         = ReactiveCommand.CreateFromTask(LoadAsync);
 
         this.WhenAnyValue(x => x.Filter).Skip(1).Throttle(TimeSpan.FromMilliseconds(200))
             .ObserveOn(RxApp.MainThreadScheduler).Subscribe(_ => ApplyFilter());
@@ -175,8 +176,23 @@ public sealed class VaultViewModel : ViewModelBase
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; set => this.RaiseAndSetIfChanged(ref _isBusy, value); }
 
-    public bool NoVideos => _allVideos.Count == 0;
-    public bool NoAlbums => _allGroups.Count == 0;
+    private string? _unavailable;
+    /// <summary>Why the vault can't be shown (its drive is gone, its index unreadable); null when it can.</summary>
+    public string? Unavailable
+    {
+        get => _unavailable;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _unavailable, value);
+            this.RaisePropertyChanged(nameof(IsUnavailable));
+        }
+    }
+    public bool IsUnavailable => _unavailable != null;
+
+    public bool NoVideos => !IsUnavailable && _allVideos.Count == 0;
+    public bool NoAlbums => !IsUnavailable && _allGroups.Count == 0;
+    public bool HasVideos => _allVideos.Count > 0;
+    public bool HasAlbums => _allGroups.Count > 0;
     public bool NoFilterMatch => (_allVideos.Count > 0 || _allGroups.Count > 0) && Videos.Count == 0 && Groups.Count == 0;
 
     public bool UsingBuiltInCode => !SecretPin.IsSet;
@@ -208,14 +224,35 @@ public sealed class VaultViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ExportKeyCommand { get; }
     public ReactiveCommand<Unit, Unit> ImportKeyCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearImageCacheCommand { get; }
+    public ReactiveCommand<Unit, Unit> RetryCommand { get; }
 
     // ── Loading ───────────────────────────────────────────────────────
 
     public async Task LoadAsync()
     {
         if (_vault == null) { Summary = "The vault isn't available."; return; }
-        try { await _vault.EnsureReadyAsync(); }
-        catch (Exception ex) { Summary = $"The vault couldn't be opened: {ex.Message}"; return; }
+        try
+        {
+            await _vault.EnsureReadyAsync();
+            _vault.CheckReachable();
+            Unavailable = null;
+        }
+        catch (Exception ex)
+        {
+            // Empty lists here would read as "everything is gone" — say why nothing can be shown.
+            Unavailable = ex is VaultUnavailableException ? ex.Message : $"The vault couldn't be opened: {ex.Message}";
+            Summary = string.Empty;
+            _allVideos = [];
+            _allGroups = [];
+            ApplyFilter();
+            this.RaisePropertyChanged(nameof(NoVideos));
+            this.RaisePropertyChanged(nameof(NoAlbums));
+            this.RaisePropertyChanged(nameof(HasVideos));
+            this.RaisePropertyChanged(nameof(HasAlbums));
+            VideosHeader = "Videos";
+            MangaHeader = "Manga & images";
+            return;
+        }
 
         var all = _vault.Entries;
 
@@ -237,6 +274,8 @@ public sealed class VaultViewModel : ViewModelBase
         ApplyFilter();
         this.RaisePropertyChanged(nameof(NoVideos));
         this.RaisePropertyChanged(nameof(NoAlbums));
+        this.RaisePropertyChanged(nameof(HasVideos));
+        this.RaisePropertyChanged(nameof(HasAlbums));
         this.RaisePropertyChanged(nameof(UsingBuiltInCode));
 
         VideosHeader = _allVideos.Count > 0 ? $"Videos · {_allVideos.Count}" : "Videos";
@@ -467,9 +506,27 @@ public sealed class VaultViewModel : ViewModelBase
 
     private CancellationTokenSource? _importCts;
 
+    /// <summary>Before an import: the vault must open and its drive answer, or nothing is touched.</summary>
+    private async Task<bool> CanImportAsync()
+    {
+        try
+        {
+            await _vault!.EnsureReadyAsync();
+            _vault.CheckReachable();
+            return true;
+        }
+        catch (Exception)
+        {
+            await LoadAsync();
+            Status = "Nothing was imported, and nothing was removed.";
+            return false;
+        }
+    }
+
     private async Task AddFolderAsync()
     {
         if (_vault == null || TopLevel() is not { } top) return;
+        if (!await CanImportAsync()) return;
         var folders = await top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
             Title = "Choose a folder to move into the vault",
@@ -492,6 +549,7 @@ public sealed class VaultViewModel : ViewModelBase
     private async Task AddFilesAsync()
     {
         if (_vault == null || TopLevel() is not { } top) return;
+        if (!await CanImportAsync()) return;
         var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Choose files to move into the vault",

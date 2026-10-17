@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026-10-17",
+    "title": "Safer with a drive that drops out",
+    "changes": [
+      "When the drive your library is on disconnects, the app now says so plainly instead of showing empty pages that look like everything is gone.",
+      "Files the app moves are only removed from where they were once the new copy is safely written to the disk, so a drive that fails part-way can no longer lose them."
+    ]
+  },
+  {
     "id": "2026-10-11",
     "title": "Downloads that fix themselves, and fresher show info",
     "changes": [

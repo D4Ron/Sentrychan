@@ -77,12 +77,22 @@
             <TextBlock Text="{Binding Status}" Classes="note" Foreground="{DynamicResource TextPrimaryBrush}"
                        IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
+            <!-- The vault exists but can't be read right now (usually its drive dropped) — not "empty". -->
+            <Border Classes="vcard" IsVisible="{Binding IsUnavailable}"
+                    BorderBrush="{DynamicResource StatusAmberBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="The vault can't be opened right now" Classes="h"/>
+                    <TextBlock Text="{Binding Unavailable}" Classes="note" TextWrapping="Wrap"/>
+                    <Button Content="Try again" Classes="ghost" Command="{Binding RetryCommand}" HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
             <TabControl Classes="pills" SelectedIndex="{Binding SelectedTab}">
                 <!-- ── Videos ── -->
                 <TabItem Name="VideosTab" Header="{Binding VideosHeader}">
                     <StackPanel Spacing="8" Margin="0,8,0,0">
                         <TextBox Text="{Binding Filter}" Watermark="Search the vault" MaxWidth="360" HorizontalAlignment="Left"
-                                 IsVisible="{Binding !NoVideos}"/>
+                                 IsVisible="{Binding HasVideos}"/>
                         <Border Classes="vcard" IsVisible="{Binding NoVideos}">
                             <TextBlock Classes="note" Text="No videos yet. Episodes downloaded in this mode land here automatically, encrypted — or use Add a folder… for videos you already have."/>
                         </Border>
@@ -122,7 +132,7 @@
                 <TabItem Name="MangaTab" Header="{Binding MangaHeader}">
                     <StackPanel Spacing="8" Margin="0,8,0,0">
                         <TextBox Text="{Binding Filter}" Watermark="Search the vault" MaxWidth="360" HorizontalAlignment="Left"
-                                 IsVisible="{Binding !NoAlbums}"/>
+                                 IsVisible="{Binding HasAlbums}"/>
                         <Border Classes="vcard" IsVisible="{Binding NoAlbums}">
                             <TextBlock Classes="note" Text="No manga or images yet. Chapters of adult titles you download land here automatically. To bring in images you already have, use Add a folder… — each folder of images becomes an album, and .cbz/.zip comics work too."/>
                         </Border>

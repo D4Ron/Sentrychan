@@ -168,27 +168,119 @@ public sealed class VaultService
         {
             if (_key != null) return;
 
-            _root = await ResolveRootAsync(ct);
-            Directory.CreateDirectory(_root);
+            var root = await ResolveRootAsync(ct);
+            CheckReachable(root, creating: true);
+            Directory.CreateDirectory(root);
             try
             {
-                var dir = new DirectoryInfo(_root);
+                var dir = new DirectoryInfo(root);
                 dir.Attributes |= FileAttributes.Hidden | FileAttributes.System | FileAttributes.NotContentIndexed;
             }
             catch { /* attributes are cosmetic */ }
 
             var key = LoadOrCreateKey();
-            var indexPath = Path.Combine(_root, "index");
-            _index = File.Exists(indexPath)
-                ? JsonSerializer.Deserialize<Index>(VaultFormat.Decrypt(await File.ReadAllBytesAsync(indexPath, ct), key)) ?? new()
-                : new Index();
+            var index = await LoadIndexAsync(root, key, ct);
 
+            _root = root;
+            _index = index;
             _private = NewPrivateSet(_index.PrivateDownloads);
             _key = key;
             _logger.LogInformation("[Vault] Ready ({Count} item(s))", _index.Entries.Count);
         }
         finally { _gate.Release(); }
     }
+
+    /// <summary>
+    /// Throws <see cref="VaultUnavailableException"/> when the vault's folder can't be reached —
+    /// its drive is disconnected or has stopped answering. Anything that writes to the vault
+    /// checks first: an open vault keeps its index in memory after the drive goes away.
+    /// </summary>
+    public void CheckReachable() => CheckReachable(_root, creating: false);
+
+    private static void CheckReachable(string root, bool creating)
+    {
+        if (string.IsNullOrEmpty(root)) return;
+        var drive = Path.GetPathRoot(root);
+        try
+        {
+            if (!string.IsNullOrEmpty(drive) && !drive.StartsWith(@"\\") && !new DriveInfo(drive).IsReady)
+                throw new VaultUnavailableException(root);
+            if (Directory.Exists(root)) return;
+            // A missing vault folder is only created where its parent is there too: a library on a
+            // drive that came back under another letter must not get a fresh, empty vault.
+            var parent = Path.GetDirectoryName(root.TrimEnd(Path.DirectorySeparatorChar));
+            if (!creating || (parent != null && !Directory.Exists(parent) && !IsUnder(root, AppPaths.DataDir)))
+                throw new VaultUnavailableException(root);
+        }
+        catch (VaultUnavailableException) { throw; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            throw new VaultUnavailableException(root, ex);
+        }
+    }
+
+    private static bool IsUnder(string path, string dir) =>
+        (path.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar)
+            .StartsWith(dir.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Reads the index, telling "there is none yet" apart from "it can't be read". The old code
+    /// asked <c>File.Exists</c>, which says false on a read error too: a drive that stopped
+    /// answering gave an empty vault, and the next save would have written that over the real index.
+    /// </summary>
+    private async Task<Index> LoadIndexAsync(string root, byte[] key, CancellationToken ct)
+    {
+        var path = Path.Combine(root, "index");
+        var backup = Path.Combine(root, "index.bak");
+
+        var (index, error) = await TryReadIndexAsync(path, key, ct);
+        if (index != null) return index;
+        if (error is not FileNotFoundException)
+        {
+            // Unreadable rather than absent: an I/O failure means the drive, not the vault.
+            if (error is IOException or UnauthorizedAccessException) throw new VaultUnavailableException(root, error);
+            _logger.LogWarning(error, "[Vault] The index is damaged; trying the previous copy");
+        }
+
+        var (previous, backupError) = await TryReadIndexAsync(backup, key, ct);
+        if (previous != null)
+        {
+            _logger.LogWarning("[Vault] Opened the previous copy of the index ({Count} item(s))", previous.Entries.Count);
+            return previous;
+        }
+        if (backupError is IOException and not FileNotFoundException or UnauthorizedAccessException)
+            throw new VaultUnavailableException(root, backupError);
+
+        if (error is not FileNotFoundException)
+            throw new InvalidDataException("The vault's index is damaged and has no usable previous copy. Nothing was changed.", error);
+
+        // No index at all: a new vault — unless encrypted files are already there, whose names
+        // would be lost for good if a fresh index were saved over them.
+        if (HasBlobs(root))
+            throw new InvalidDataException(
+                "The vault's index is missing but its encrypted files are there. Nothing was changed, so they stay recoverable.");
+        return new Index();
+    }
+
+    private static async Task<(Index? Index, Exception? Error)> TryReadIndexAsync(string path, byte[] key, CancellationToken ct)
+    {
+        byte[] bytes;
+        try { bytes = await File.ReadAllBytesAsync(path, ct); }
+        catch (OperationCanceledException) { throw; }
+        catch (DirectoryNotFoundException ex) { return (null, new FileNotFoundException(ex.Message, path, ex)); }
+        catch (Exception ex) { return (null, ex); }
+
+        // Kept apart from the read: a truncated file ends in EndOfStreamException, an IOException,
+        // which must count as damage, not as a missing drive.
+        try { return (JsonSerializer.Deserialize<Index>(VaultFormat.Decrypt(bytes, key)) ?? new Index(), null); }
+        catch (Exception ex) { return (null, new InvalidDataException("The index can't be decrypted.", ex)); }
+    }
+
+    // Blobs sit in folders named after the first two hex digits of their id.
+    private static bool HasBlobs(string root) =>
+        Directory.EnumerateDirectories(root)
+            .Where(d => Path.GetFileName(d) is { Length: 2 } n && n.All(Uri.IsHexDigit))
+            .Any(d => Directory.EnumerateFiles(d).Any());
 
     private byte[] LoadOrCreateKey()
     {
@@ -247,11 +339,28 @@ public sealed class VaultService
         await _saveGate.WaitAsync(ct);
         try
         {
-            await File.WriteAllBytesAsync(tmp, VaultFormat.Encrypt(json, Key), ct);
-            File.Move(tmp, path, overwrite: true);
+            CheckReachable();
+            await WriteDurablyAsync(tmp, s => s.WriteAsync(VaultFormat.Encrypt(json, Key), ct).AsTask());
+            // The index before this save stays as index.bak — the way back if this one is ever damaged.
+            if (File.Exists(path)) File.Replace(tmp, path, path + ".bak", ignoreMetadataErrors: true);
+            else File.Move(tmp, path);
         }
         finally { _saveGate.Release(); }
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Writes a file and makes sure it reached the disk before returning. Windows otherwise
+    /// accepts the write into its cache and reports success; if the drive drops before the cache
+    /// is written out the data is lost ("Delayed Write Failed") — after the importer has already
+    /// deleted the original. Flushing to disk turns that into an error while the original still exists.
+    /// </summary>
+    private static async Task WriteDurablyAsync(string path, Func<Stream, Task> write)
+    {
+        await using var output = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20);
+        await write(output);
+        await output.FlushAsync();
+        output.Flush(flushToDisk: true);
     }
 
     // ── Adding ────────────────────────────────────────────────────────
@@ -308,11 +417,11 @@ public sealed class VaultService
 
     private async Task WriteBlobAsync(string id, Func<Stream, Task> write)
     {
+        CheckReachable();
         var path = BlobPath(id);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var tmp = path + ".tmp";
-        await using (var output = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20))
-            await write(output);
+        await WriteDurablyAsync(tmp, write);
         File.Move(tmp, path, overwrite: true);
     }
 

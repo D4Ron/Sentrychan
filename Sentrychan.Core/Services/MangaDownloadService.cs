@@ -500,8 +500,9 @@ public class MangaDownloadService : IMangaDownloadService
             await _vault.DescribeCollectionAsync(key, ChapterLabel(chapter), row.Title, chapter.ChapterSort, save: false, ct: ct);
             var pages = Directory.EnumerateFiles(dir).Where(f => !f.EndsWith(".part"))
                 .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+            // The folder goes only after the index listing its pages is saved — never page by page before.
             for (int i = 0; i < pages.Count; i++)
-                await _vault.AddFileAsync(pages[i], $"Page {i + 1}", Vault.VaultKind.Page, key, i, deleteSource: true, ct: ct, save: false);
+                await _vault.AddFileAsync(pages[i], $"Page {i + 1}", Vault.VaultKind.Page, key, i, deleteSource: false, ct: ct, save: false);
             await _vault.FlushAsync(ct);
 
             try { Directory.Delete(dir, recursive: true); } catch { /* leftovers are non-page files */ }

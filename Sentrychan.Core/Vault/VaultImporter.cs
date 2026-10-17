@@ -149,6 +149,8 @@ public sealed class VaultImporter
         VaultImportPlan plan, bool deleteSource, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         await _vault.EnsureReadyAsync(ct);
+        // An open vault keeps working from memory after its drive drops; don't start into a dead one.
+        _vault.CheckReachable();
         var errors = new List<string>();
         int videos = 0, albums = 0, pages = 0;
         var touchedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -167,6 +169,7 @@ public sealed class VaultImporter
                 touchedDirs.Add(Path.GetDirectoryName(path)!);
             }
             catch (OperationCanceledException) { throw; }
+            catch (VaultUnavailableException ex) { return Stopped(ex); }
             catch (Exception ex) { errors.Add($"{Path.GetFileName(path)}: {ex.Message}"); }
         }
 
@@ -181,7 +184,8 @@ public sealed class VaultImporter
                 await _vault.DescribeCollectionAsync(key, album.Title, album.Group, ChapterNumber(album.Title), save: false, ct: ct);
                 pages += album.Archive != null
                     ? await ImportArchiveAsync(album.Archive, key, label, progress, ct)
-                    : await ImportImagesAsync(album.Images, key, deleteSource, label, progress, ct);
+                    : await ImportImagesAsync(album.Images, key, label, progress, ct);
+                // Originals go only once the index that lists their encrypted copies is on disk.
                 await _vault.FlushAsync(ct);
                 albums++;
 
@@ -190,33 +194,41 @@ public sealed class VaultImporter
                     if (deleteSource) TryDelete(album.Archive);
                     touchedDirs.Add(Path.GetDirectoryName(album.Archive)!);
                 }
-                else if (album.Images.Count > 0) touchedDirs.Add(Path.GetDirectoryName(album.Images[0])!);
+                else if (album.Images.Count > 0)
+                {
+                    if (deleteSource) foreach (var f in album.Images) TryDelete(f);
+                    touchedDirs.Add(Path.GetDirectoryName(album.Images[0])!);
+                }
             }
             catch (OperationCanceledException) { await _vault.FlushAsync(CancellationToken.None); throw; }
             catch (Exception ex)
             {
                 // Half an album is worse than none: drop what was added and keep the originals.
-                errors.Add($"{album.Title}: {ex.Message}");
                 try { await _vault.RemoveCollectionAsync(key, CancellationToken.None); } catch { }
+                if (ex is VaultUnavailableException gone) return Stopped(gone);
+                errors.Add($"{album.Title}: {ex.Message}");
             }
         }
 
         if (deleteSource) RemoveEmptyFolders(touchedDirs, plan.Root);
         return new VaultImportResult(videos, albums, pages, errors);
+
+        // The drive went away part-way: everything not yet in the vault stays where it was.
+        VaultImportResult Stopped(VaultUnavailableException ex) =>
+            new(videos, albums, pages, [.. errors, $"Stopped — {ex.Message} Everything not imported yet was left where it was."]);
     }
 
     private async Task<int> ImportImagesAsync(
-        IReadOnlyList<string> images, string key, bool deleteSource, string label, IProgress<string>? progress, CancellationToken ct)
+        IReadOnlyList<string> images, string key, string label, IProgress<string>? progress, CancellationToken ct)
     {
-        // Encrypt every page before removing any original, so a failure part-way through
-        // leaves the folder whole.
+        // Every page is encrypted before any original is removed (by the caller, after the
+        // index is saved), so a failure part-way through leaves the folder whole.
         for (int i = 0; i < images.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
             await _vault.AddFileAsync(images[i], $"Page {i + 1}", VaultKind.Page, key, i, deleteSource: false, ct: ct, save: false);
             progress?.Report($"{label} — page {i + 1} of {images.Count}");
         }
-        if (deleteSource) foreach (var f in images) TryDelete(f);
         return images.Count;
     }
 
